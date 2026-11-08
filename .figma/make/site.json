@@ -1,0 +1,10 @@
+{
+  "description": "A clean frontend experience that helps users navigate content and complete tasks with a simple, intuitive interface.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
