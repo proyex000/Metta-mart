@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Brand, Icon, type IconName } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import type { Role } from "../types";
@@ -71,11 +71,20 @@ export function RoleLayout({ role }: { role: Role }) {
         </nav>
         <div className="role-account">
           <span className="role-avatar">{session?.name.charAt(0)}</span>
-          <div>
-            <b>{session?.name}</b>
-            <small>{session?.email}</small>
-          </div>
-          <button aria-label="Keluar" onClick={() => setConfirm(true)}>
+          <Link
+            className="role-account-link"
+            to={`/${role}/settings`}
+            onClick={() => setMenuOpen(false)}
+            aria-label="Buka pengaturan akun"
+            title="Pengaturan akun"
+          >
+            <div>
+              <b>{session?.name}</b>
+              <small>{session?.email}</small>
+              <small className="role-account-hint">Pengaturan akun</small>
+            </div>
+          </Link>
+          <button aria-label="Keluar" title="Keluar" onClick={() => setConfirm(true)}>
             <Icon name="logout" />
           </button>
         </div>
