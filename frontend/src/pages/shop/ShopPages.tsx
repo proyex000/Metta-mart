@@ -21,7 +21,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
       <section className="shop-profile">
         <span className="role-avatar">AP</span>
         <div>
-          <small>{role === "parent" ? "Anak" : "Siswa"}</small>
+          {role !== "parent" && <small>Siswa</small>}
           <b>Andi Pratama</b>
           <span>Kelas 8A</span>
         </div>
