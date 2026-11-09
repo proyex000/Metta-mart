@@ -640,7 +640,7 @@ export function Notifications() {
   ];
   const filtered = items.filter((notice) => {
     if (filter === 0) return true;
-    if (filter === 1) return notice.title.toLowerCase().includes("diterima") || notice.title.toLowerCase().includes("diterima");
+    if (filter === 1) return notice.title.toLowerCase().includes("diterima");
     if (filter === 2) return notice.title.toLowerCase().includes("dikirim");
     if (filter === 3) return notice.type === "Promo" || notice.type === "Info";
     return notice.title.toLowerCase().includes("stok") || notice.text.toLowerCase().includes("stok");
