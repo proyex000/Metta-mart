@@ -18,15 +18,17 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
             : "Semangat belajar hari ini!"
         }
       />
-      <section className="shop-profile">
-        <span className="role-avatar">AP</span>
-        <div>
-          {role !== "parent" && <small>Siswa</small>}
-          <b>Andi Pratama</b>
-          <span>Kelas 8A</span>
-        </div>
-        <span>›</span>
-      </section>
+      {role !== "parent" && (
+        <section className="shop-profile">
+          <span className="role-avatar">AP</span>
+          <div>
+            <small>Siswa</small>
+            <b>Andi Pratama</b>
+            <span>Kelas 8A</span>
+          </div>
+          <span>›</span>
+        </section>
+      )}
       {role === "parent" && (
         <section className="monthly-card">
           <div>
