@@ -190,12 +190,13 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
     { id: "qris" as const, title: "QRIS", description: "Minta kode QRIS resmi kepada kasir/admin saat pembayaran.", symbol: "QR" },
     { id: "bankTransfer" as const, title: "Transfer bank", description: "Instruksi rekening dan verifikasi diberikan oleh admin.", symbol: "TF" },
   ].filter((method) => paymentSettings[method.id]);
+  const selectedPayment = methods.some((method) => method.id === payment) ? payment : methods[0]?.id;
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
   const change = (id: number, amount: number) =>
     setCounts((current) => ({ ...current, [id]: Math.max(0, (current[id] || 0) + amount) }));
   const submit = () => {
-    if (!total || !methods.some((method) => method.id === payment) || sent) return;
+    if (!total || !selectedPayment || sent) return;
     setSent(true);
     setTimeout(() => navigate(`/${role}/orders`), 1400);
   };
@@ -245,12 +246,12 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         {methods.length ? (
           <div className="payment-method-list">
             {methods.map((method) => (
-              <label className={`payment-method-card ${payment === method.id ? "selected" : ""}`} key={method.id}>
+              <label className={`payment-method-card ${selectedPayment === method.id ? "selected" : ""}`} key={method.id}>
                 <input
                   type="radio"
                   name="payment-method"
                   value={method.id}
-                  checked={payment === method.id}
+                  checked={selectedPayment === method.id}
                   onChange={() => setPayment(method.id)}
                   disabled={sent}
                 />
@@ -259,7 +260,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
                   <strong>{method.title}</strong>
                   <small>{method.description}</small>
                 </span>
-                <span className="payment-method-check" aria-hidden="true">{payment === method.id ? "✓" : ""}</span>
+                <span className="payment-method-check" aria-hidden="true">{selectedPayment === method.id ? "✓" : ""}</span>
               </label>
             ))}
           </div>
@@ -268,19 +269,19 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
             Belum ada metode pembayaran yang diaktifkan. Hubungi admin sekolah.
           </p>
         )}
-        {payment === "qris" && paymentSettings.qris && (
+        {selectedPayment === "qris" && (
           <p className="payment-help">Kode QRIS akan diberikan oleh kasir/admin. Jangan transfer ke kode atau rekening dari sumber yang tidak resmi.</p>
         )}
-        {payment === "bankTransfer" && paymentSettings.bankTransfer && (
+        {selectedPayment === "bankTransfer" && (
           <p className="payment-help">Detail rekening dan konfirmasi pembayaran akan diberikan oleh admin setelah pesanan diterima.</p>
         )}
-        {payment === "cash" && paymentSettings.cash && (
+        {selectedPayment === "cash" && (
           <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di kasir.</p>
         )}
       </section>
       {sent && (
         <p className="payment-success" role="status">
-          Pesanan berhasil dikirim. Metode pembayaran: {methods.find((method) => method.id === payment)?.title}. Lanjutkan konfirmasi pembayaran dengan kasir/admin.
+          Pesanan berhasil dikirim. Metode pembayaran: {methods.find((method) => method.id === selectedPayment)?.title}. Lanjutkan konfirmasi pembayaran dengan kasir/admin.
         </p>
       )}
       <button className="primary wide order-submit" disabled={!total || sent || !methods.length} onClick={submit}>
