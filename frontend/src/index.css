@@ -3090,3 +3090,114 @@ td b {
   .payment-method-copy strong { font-size: 10px; }
   .payment-method-copy small { font-size: 8px; }
 }
+
+
+/* Admin header alignment: keep the avatar and account label evenly spaced */
+.topbar {
+  min-width: 0;
+  gap: 18px;
+}
+.topbar > div:first-child { min-width: 0; }
+.topbar__meta {
+  flex: 0 0 auto;
+  gap: 14px;
+  white-space: nowrap;
+}
+.topbar__meta .avatar {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+}
+.topbar__meta b {
+  margin: 0;
+  line-height: 1.3;
+}
+@media (max-width: 900px) {
+  .topbar__meta { gap: 10px; }
+  .topbar__date, .topbar__time { display: none !important; }
+}
+@media (max-width: 600px) {
+  .topbar { height: auto; min-height: 62px; align-items: center; }
+  .topbar__meta { gap: 8px; }
+  .topbar__meta .avatar { width: 30px; height: 30px; }
+}
+
+/* Editable store logo in Admin > Settings */
+.logo-upload {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.logo-upload .logo-upload__title {
+  align-self: flex-start;
+  color: #31485b;
+  font-size: 11px;
+  font-weight: 700;
+}
+.logo-upload__preview {
+  width: 100%;
+  min-height: 128px;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #fbfcfd;
+  border: 1px dashed #d7e0e6;
+  border-radius: 10px;
+}
+.logo-upload__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 104px;
+  object-fit: contain;
+}
+.logo-upload__choose {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  color: #fff !important;
+  background: var(--red);
+  border-radius: 7px;
+  font-size: 10px !important;
+  font-weight: 600;
+  cursor: pointer;
+}
+.logo-upload__choose input {
+  position: absolute;
+  width: 1px !important;
+  height: 1px;
+  padding: 0 !important;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+.logo-upload .logo-upload__reset {
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  justify-content: center;
+  color: #526575;
+  border-color: #dfe6ea;
+  font-size: 9px;
+}
+.logo-upload > small {
+  color: #7c8c98;
+  font-size: 9px;
+  line-height: 1.55;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.logo-upload > .logo-upload__success { color: #16845b; }
+.logo-upload > .logo-upload__error { color: #c43d3d; }
+
+.topbar__meta > .avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  padding: 0;
+}

@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
@@ -127,12 +127,20 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
+  const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
+
+  useEffect(() => {
+    const syncLogo = () => setLogo(localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
+    window.addEventListener("mettamart-logo-updated", syncLogo);
+    return () => window.removeEventListener("mettamart-logo-updated", syncLogo);
+  }, []);
+
   return (
     <div className={`brand ${compact ? "brand--compact" : ""}`}>
       <img
         className="brand__image"
-        src="/assets/mettamart-logo.png"
-        alt="MettaMart — Sekolah Metta Maitreya"
+        src={logo}
+        alt="Logo MettaMart"
       />
     </div>
   );
@@ -250,13 +258,13 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
         <p>{subtitle}</p>
       </div>
       <div className="topbar__meta">
-        <span>
+        <span className="topbar__date">
           <Icon name="calendar" size={15} /> 12 Oktober 2025
         </span>
-        <span>
+        <span className="topbar__time">
           <Icon name="clock" size={15} /> 10:24
         </span>
-        <span className="avatar">A</span>
+        <span className="avatar" aria-label="Avatar Admin">A</span>
         <b>Admin</b>
       </div>
     </header>
@@ -867,6 +875,49 @@ export function Settings() {
     }
   });
   const [saved, setSaved] = useState(false);
+  const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
+  const [logoMessage, setLogoMessage] = useState("");
+  const [logoError, setLogoError] = useState("");
+  const handleLogoUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setLogoError("");
+    setLogoMessage("");
+    if (!file.type.startsWith("image/")) {
+      setLogoError("Pilih file gambar (PNG, JPG, atau WebP).");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+      setLogoError("Ukuran logo maksimal 1,5 MB.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setLogoError("File logo tidak dapat dibaca.");
+        return;
+      }
+      try {
+        localStorage.setItem("mettamart-store-logo", reader.result);
+        setLogo(reader.result);
+        window.dispatchEvent(new Event("mettamart-logo-updated"));
+        setLogoMessage("Logo berhasil diperbarui di browser ini.");
+      } catch {
+        setLogoError("Logo gagal disimpan. Coba gambar yang ukurannya lebih kecil.");
+      }
+    };
+    reader.onerror = () => setLogoError("File logo tidak dapat dibaca.");
+    reader.readAsDataURL(file);
+  };
+  const resetLogo = () => {
+    localStorage.removeItem("mettamart-store-logo");
+    setLogo("/assets/mettamart-logo.png");
+    window.dispatchEvent(new Event("mettamart-logo-updated"));
+    setLogoMessage("Logo bawaan MettaMart dipulihkan.");
+    setLogoError("");
+  };
   const update = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
     setSaved(false);
@@ -950,9 +1001,18 @@ export function Settings() {
           </div>
         </form>
         <div className="logo-upload">
-          <span>Logo Toko</span>
-          <Brand compact />
-          <small>Logo saat ini</small>
+          <span className="logo-upload__title">Logo Toko</span>
+          <div className="logo-upload__preview">
+            <img src={logo} alt="Pratinjau logo toko" />
+          </div>
+          <label className="logo-upload__choose">
+            Pilih gambar logo
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleLogoUpload} />
+          </label>
+          <button type="button" className="logo-upload__reset" onClick={resetLogo}>Pulihkan logo bawaan</button>
+          <small>Format PNG, JPG, WebP atau GIF. Maksimal 1,5 MB. Tersimpan di browser ini.</small>
+          {logoMessage && <small className="logo-upload__success" role="status">{logoMessage}</small>}
+          {logoError && <small className="logo-upload__error" role="alert">{logoError}</small>}
         </div>
       </div>
     </>
