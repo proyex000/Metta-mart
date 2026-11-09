@@ -19,6 +19,7 @@ import {
   ShopOrders,
   ShopStock,
 } from "../pages/shop/ShopPages";
+import { ShopSettings } from "../pages/shop/ShopSettings";
 import type { Role } from "../types";
 
 function ProtectedRole({ role }: { role: Role }) {
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
       { path: "orders", element: <ShopOrders role="parent" /> },
       { path: "orders/:code", element: <OrderDetail role="parent" /> },
       { path: "notifications", Component: ShopNotifications },
+      { path: "settings", element: <ShopSettings role="parent" /> },
       { path: "*", Component: RoleNotFound },
     ],
   },
@@ -105,6 +107,7 @@ export const router = createBrowserRouter([
       { path: "orders", element: <ShopOrders role="student" /> },
       { path: "orders/:code", element: <OrderDetail role="student" /> },
       { path: "notifications", Component: ShopNotifications },
+      { path: "settings", element: <ShopSettings role="student" /> },
       { path: "*", Component: RoleNotFound },
     ],
   },
