@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Brand, Icon, type IconName } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import type { Role } from "../types";
+import "./RoleLayout.css";
 
 const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> = {
   admin: [
@@ -70,7 +71,6 @@ export function RoleLayout({ role }: { role: Role }) {
           ))}
         </nav>
         <div className="role-account">
-          <span className="role-avatar">{session?.name.charAt(0)}</span>
           <Link
             className="role-account-link"
             to={`/${role}/settings`}
@@ -78,6 +78,7 @@ export function RoleLayout({ role }: { role: Role }) {
             aria-label="Buka pengaturan akun"
             title="Pengaturan akun"
           >
+            <span className="role-avatar">{session?.name.charAt(0)}</span>
             <div>
               <b>{session?.name}</b>
               <small>{session?.email}</small>
