@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Icon, PageTitle } from "../../components/ui";
 import { useAuth } from "../../hooks/useAuth";
@@ -31,7 +31,7 @@ export function ShopSettings({ role }: { role: ShopRole }) {
   const [profileSaved, setProfileSaved] = useState(false);
   const isParent = role === "parent";
 
-  const saveProfile = (event: React.FormEvent<HTMLFormElement>) => {
+  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!profileName.trim() || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(profileEmail.trim())) return;
     updateProfile({ name: profileName, email: profileEmail });
