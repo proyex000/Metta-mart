@@ -3194,3 +3194,10 @@ td b {
 }
 .logo-upload > .logo-upload__success { color: #16845b; }
 .logo-upload > .logo-upload__error { color: #c43d3d; }
+
+.topbar__meta > .avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  padding: 0;
+}
