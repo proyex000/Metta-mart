@@ -622,71 +622,131 @@ export function Orders() {
 }
 
 export function Notifications() {
-  const [items, setItems] = useState(notifications);
+  type Notice = (typeof notifications)[number];
+  const [items, setItems] = useState<Notice[]>(notifications);
   const [filter, setFilter] = useState(0);
+  const [selected, setSelected] = useState<Notice | null>(null);
+  const [showCompose, setShowCompose] = useState(false);
+  const [readItems, setReadItems] = useState<string[]>([]);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftText, setDraftText] = useState("");
+  const [draftType, setDraftType] = useState("Info");
+  const categories = [
+    "Semua Notifikasi",
+    "Pesanan Diterima",
+    "Pesanan Dikirim",
+    "Promo & Info",
+    "Stok Produk",
+  ];
+  const filtered = items.filter((notice) => {
+    if (filter === 0) return true;
+    if (filter === 1) return notice.title.toLowerCase().includes("diterima") || notice.title.toLowerCase().includes("diterima");
+    if (filter === 2) return notice.title.toLowerCase().includes("dikirim");
+    if (filter === 3) return notice.type === "Promo" || notice.type === "Info";
+    return notice.title.toLowerCase().includes("stok") || notice.text.toLowerCase().includes("stok");
+  });
+  const submitNotice = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const next: Notice = {
+      title: draftTitle.trim(),
+      text: draftText.trim(),
+      time: "Baru saja",
+      type: draftType,
+    };
+    if (!next.title || !next.text) return;
+    setItems((current) => [next, ...current]);
+    setFilter(0);
+    setShowCompose(false);
+    setDraftTitle("");
+    setDraftText("");
+    setDraftType("Info");
+  };
+  const markRead = (notice: Notice) => {
+    setReadItems((current) => current.includes(notice.title) ? current : [...current, notice.title]);
+    setSelected(notice);
+  };
   return (
     <>
-      <Header title="Notifikasi" subtitle="Kirim pesan dan informasi kepada pelanggan." />
+      <Header title="Notifikasi" subtitle="Kelola dan lihat informasi untuk pelanggan." />
       <div className="notification-layout">
         <aside className="panel notification-nav">
-          <button
-            className="primary wide"
-            onClick={() =>
-              setItems([
-                {
-                  title: "Informasi baru",
-                  text: "Pesan baru untuk seluruh pelanggan.",
-                  time: "Baru saja",
-                  type: "Info",
-                },
-                ...items,
-              ])
-            }
-          >
+          <button className="primary wide" onClick={() => setShowCompose(true)}>
             <Icon name="plus" size={16} /> Kirim Notifikasi Baru
           </button>
-          {[
-            "Semua Notifikasi",
-            "Pesanan Diterima",
-            "Pesanan Dikirim",
-            "Promo & Info",
-            "Stok Produk",
-          ].map((t, i) => (
-            <button className={i === filter ? "active" : ""} key={t} onClick={() => setFilter(i)}>
-              <Icon name={i === 0 ? "bell" : i < 3 ? "box" : "chart"} />
-              <span>{t}</span>
-              <b>{[24, 8, 7, 5, 4][i]}</b>
+          {categories.map((label, index) => (
+            <button className={index === filter ? "active" : ""} key={label} onClick={() => setFilter(index)}>
+              <Icon name={index === 0 ? "bell" : index < 3 ? "box" : "chart"} />
+              <span>{label}</span>
+              <b>{index === 0 ? items.length : index === 1 ? items.filter((n) => n.title.toLowerCase().includes("diterima")).length : index === 2 ? items.filter((n) => n.title.toLowerCase().includes("dikirim")).length : index === 3 ? items.filter((n) => n.type === "Promo" || n.type === "Info").length : items.filter((n) => n.title.toLowerCase().includes("stok")).length}</b>
             </button>
           ))}
         </aside>
         <section className="panel notification-list">
           <div className="panel__title">
-            <h2>Daftar Notifikasi</h2>
-            <button
-              onClick={() => {
-                setFilter(0);
-                setItems(notifications);
-              }}
-            >
-              Lihat Semua ›
+            <h2>{categories[filter]}</h2>
+            <button type="button" onClick={() => { setFilter(0); setReadItems(items.map((item) => item.title)); }}>
+              Tandai semua dibaca
             </button>
           </div>
-          {items.map((n, i) => (
-            <article key={`${n.title}-${i}`}>
-              <span className="mini-icon">
-                <Icon name={i % 2 ? "box" : "bell"} />
-              </span>
-              <div>
-                <b>{n.title}</b>
-                <p>{n.text}</p>
-              </div>
-              <time>{n.time}</time>
-              <Status>{n.type}</Status>
-              <Icon name="chevron" size={15} />
-            </article>
-          ))}
+          {filtered.length ? filtered.map((notice, index) => {
+            const isRead = readItems.includes(notice.title);
+            return (
+              <button
+                type="button"
+                className={`notification-item ${isRead ? "is-read" : "is-unread"}`}
+                key={`${notice.title}-${index}`}
+                onClick={() => markRead(notice)}
+              >
+                <span className="mini-icon"><Icon name={index % 2 ? "box" : "bell"} /></span>
+                <span className="notification-copy">
+                  <b>{notice.title}</b>
+                  <span>{notice.text}</span>
+                </span>
+                <time>{notice.time}</time>
+                <Status>{notice.type}</Status>
+                <Icon name="chevron" size={15} />
+              </button>
+            );
+          }) : (
+            <div className="notification-empty">
+              <Icon name="bell" size={28} />
+              <b>Belum ada notifikasi</b>
+              <span>Notifikasi untuk kategori ini akan muncul di sini.</span>
+            </div>
+          )}
         </section>
       </div>
+      {showCompose && (
+        <Modal title="Kirim Notifikasi Baru" close={() => setShowCompose(false)}>
+          <form className="notification-compose" onSubmit={submitNotice}>
+            <label>Judul Notifikasi
+              <input required maxLength={90} value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Contoh: Promo alat tulis" />
+            </label>
+            <label>Isi Pesan
+              <textarea required rows={4} maxLength={300} value={draftText} onChange={(event) => setDraftText(event.target.value)} placeholder="Tulis informasi untuk pelanggan..." />
+            </label>
+            <label>Kategori
+              <select value={draftType} onChange={(event) => setDraftType(event.target.value)}>
+                <option value="Info">Info</option>
+                <option value="Promo">Promo</option>
+                <option value="Pesan">Pesanan</option>
+              </select>
+            </label>
+            <button className="primary wide" type="submit">Terbitkan Notifikasi</button>
+          </form>
+        </Modal>
+      )}
+      {selected && (
+        <Modal title="Detail Notifikasi" close={() => setSelected(null)}>
+          <div className="notification-detail">
+            <Status>{selected.type}</Status>
+            <h3>{selected.title}</h3>
+            <p>{selected.text}</p>
+            <time>{selected.time}</time>
+            <button className="primary wide" onClick={() => setSelected(null)}>Tutup</button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }
@@ -924,6 +984,7 @@ function Modal({
 function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }) {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<number[]>([]);
+  const [mobileNotice, setMobileNotice] = useState<(typeof notifications)[number] | null>(null);
   const mobileView =
     view === "dashboard"
       ? "dashboard"
@@ -1084,20 +1145,30 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           </div>
           <div className="mobile-notifications">
             {notifications.map((n, i) => (
-              <article key={n.title}>
+              <button type="button" key={n.title} onClick={() => setMobileNotice(n)}>
                 <span className="mini-icon">
                   <Icon name={i % 2 ? "box" : "bell"} />
                 </span>
-                <div>
+                <span>
                   <b>{n.title}</b>
-                  <p>{n.text}</p>
+                  <small>{n.text}</small>
                   <time>{n.time}</time>
-                </div>
+                </span>
                 <Icon name="chevron" />
-              </article>
+              </button>
             ))}
           </div>
         </main>
+      )}
+      {mobileNotice && (
+        <Modal title="Detail Notifikasi" close={() => setMobileNotice(null)}>
+          <div className="notification-detail">
+            <h3>{mobileNotice.title}</h3>
+            <p>{mobileNotice.text}</p>
+            <time>{mobileNotice.time}</time>
+            <button className="primary wide" onClick={() => setMobileNotice(null)}>Tutup</button>
+          </div>
+        </Modal>
       )}
       <nav className="bottom-nav">
         <button
