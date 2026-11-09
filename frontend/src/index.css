@@ -3208,3 +3208,206 @@ td b {
   flex: 0 0 32px;
   padding: 0;
 }
+
+
+/* Admin settings: consistent spacing, alignment, and responsive layout */
+.role-shell--admin .settings-layout {
+  grid-template-columns: 220px minmax(0, 1fr) 220px;
+  gap: 0;
+  align-items: stretch;
+  min-height: 520px;
+  overflow: hidden;
+}
+.role-shell--admin .settings-layout > aside {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 20px 14px;
+  border-right: 1px solid #e9eef2;
+}
+.role-shell--admin .settings-layout > aside button {
+  min-height: 46px;
+  padding: 10px 12px;
+  gap: 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.role-shell--admin .settings-layout > aside button svg {
+  flex: 0 0 18px;
+}
+.role-shell--admin .settings-layout > form {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 28px clamp(20px, 3vw, 36px);
+}
+.role-shell--admin .settings-layout > form > h2 {
+  margin: 0 0 8px;
+  color: #203348;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.role-shell--admin .settings-layout > form > p {
+  margin: 0 0 20px;
+  color: #7d8b96;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.role-shell--admin .settings-layout > form > label:not(.settings-toggle) {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: #526575;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.role-shell--admin .settings-layout > form input:not([type="checkbox"]),
+.role-shell--admin .settings-layout > form textarea {
+  width: 100%;
+  min-height: 43px;
+  padding: 10px 12px;
+  color: #31485b;
+  background: #fff;
+  border: 1px solid #dfe7ec;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.role-shell--admin .settings-layout > form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+.role-shell--admin .settings-layout > form .settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 68px;
+  margin: 0;
+  padding: 14px 0;
+  border-bottom: 1px solid #edf1f3;
+  color: #526575;
+}
+.role-shell--admin .settings-layout > form .settings-toggle > span {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.role-shell--admin .settings-layout > form .settings-toggle b {
+  color: #31485b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.role-shell--admin .settings-layout > form .settings-toggle small {
+  color: #82909b;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.role-shell--admin .settings-layout > form .settings-toggle input {
+  width: 40px;
+  height: 21px;
+  flex: 0 0 40px;
+  margin: 0;
+  accent-color: var(--red);
+}
+.role-shell--admin .settings-layout > form .settings-form-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 22px;
+}
+.role-shell--admin .settings-layout > form .settings-form-footer .primary {
+  float: none;
+  min-width: 170px;
+  min-height: 42px;
+}
+.role-shell--admin .settings-layout > form .settings-form-footer [role="status"] {
+  color: #16845b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.role-shell--admin .settings-layout > form .settings-help {
+  margin: 2px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.role-shell--admin .settings-layout > .logo-upload {
+  min-width: 0;
+  align-items: stretch;
+  gap: 13px;
+  padding: 22px 18px;
+  border-left: 1px solid #e9eef2;
+}
+.role-shell--admin .settings-layout > .logo-upload .logo-upload__title {
+  font-size: 11px;
+}
+.role-shell--admin .settings-layout > .logo-upload small {
+  font-size: 9px;
+  line-height: 1.6;
+}
+@media (max-width: 1100px) {
+  .role-shell--admin .settings-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+  .role-shell--admin .settings-layout > .logo-upload {
+    display: none;
+  }
+  .role-shell--admin .settings-layout > form {
+    padding: 24px;
+  }
+}
+@media (max-width: 767px) {
+  .role-shell--admin .settings-layout {
+    display: block;
+    overflow: visible;
+  }
+  .role-shell--admin .settings-layout > aside {
+    display: flex;
+    flex-direction: row;
+    gap: 7px;
+    padding: 12px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid #e9eef2;
+    scrollbar-width: thin;
+  }
+  .role-shell--admin .settings-layout > aside button {
+    flex: 0 0 auto;
+    min-height: 40px;
+    width: auto;
+    padding: 9px 12px;
+    white-space: nowrap;
+  }
+  .role-shell--admin .settings-layout > form {
+    padding: 22px 18px;
+  }
+  .role-shell--admin .settings-layout > form .settings-form-footer {
+    margin-top: 24px;
+  }
+}
+@media (max-width: 420px) {
+  .role-shell--admin .settings-layout > aside {
+    padding: 10px;
+  }
+  .role-shell--admin .settings-layout > aside button {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .role-shell--admin .settings-layout > form {
+    padding: 19px 14px;
+  }
+  .role-shell--admin .settings-layout > form .settings-form-footer .primary {
+    width: 100%;
+  }
+}
