@@ -43,8 +43,8 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
     </>
-  ),cd "E:\TUGAS"
-Get-ChildItem -Force
+  ),
+
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
