@@ -1,0 +1,13 @@
+.role-account-link { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; border-radius: 8px; }
+.role-account-link:hover { background: #fff6f3; }
+.role-account-link:focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
+.role-account-link .role-avatar { flex: none; }
+.role-account-hint { margin-top: 3px; color: var(--red) !important; font-weight: 600; }
+@media (max-width: 1023px) {
+  .role-account-link { justify-content: center; }
+  .role-account-link div { display: none; }
+}
+@media (max-width: 767px) {
+  .role-account-link { justify-content: flex-start; }
+  .role-account-link div { display: block; }
+}
