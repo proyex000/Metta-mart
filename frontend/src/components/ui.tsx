@@ -43,7 +43,8 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
     </>
-  ),
+  ),cd "E:\TUGAS"
+Get-ChildItem -Force
   settings: (
     <>
       <circle cx="12" cy="12" r="3" />
@@ -93,21 +94,11 @@ export function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`brand ${compact ? "brand--compact" : ""}`}>
-      <svg className="brand__mark" viewBox="0 0 64 62">
-        <path d="M14 25h39l-5 22H23z" fill="none" stroke="currentColor" strokeWidth="6" />
-        <path
-          d="M19 48h28M23 53h1M43 53h1M20 24 16 9l7-2 4 17M29 24 28 4h8l1 20M39 24l7-17 7 3-7 16"
-          stroke="currentColor"
-          strokeWidth="5"
-          strokeLinecap="round"
-        />
-      </svg>
-      <div>
-        <strong>
-          Metta<span>Mart</span>
-        </strong>
-        <small>Sekolah Metta Maitreya</small>
-      </div>
+      <img
+        className="brand__image"
+        src="/assets/mettamart-logo.png"
+        alt="MettaMart — Sekolah Metta Maitreya"
+      />
     </div>
   );
 }

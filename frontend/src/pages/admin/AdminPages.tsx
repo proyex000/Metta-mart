@@ -128,33 +128,11 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`brand ${compact ? "brand--compact" : ""}`}>
-      <svg className="brand__mark" viewBox="0 0 64 62" aria-hidden="true">
-        <path
-          d="M14 25h39l-5 22H23z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="6"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M19 48h28M23 53h1M43 53h1"
-          stroke="currentColor"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
-        <path
-          d="m20 24-4-15 7-2 4 17M29 24 28 4h8l1 20M39 24l7-17 7 3-7 16"
-          stroke="currentColor"
-          strokeWidth="5"
-          strokeLinecap="round"
-        />
-      </svg>
-      <div>
-        <strong>
-          Metta<span>Mart</span>
-        </strong>
-        <small>Sekolah Metta Maitreya</small>
-      </div>
+      <img
+        className="brand__image"
+        src="/assets/mettamart-logo.png"
+        alt="MettaMart — Sekolah Metta Maitreya"
+      />
     </div>
   );
 }

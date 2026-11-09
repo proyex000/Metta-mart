@@ -170,14 +170,13 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const navigate = useNavigate();
   const [counts, setCounts] = useState<Record<number, number>>({ 1: 1 });
   const [note, setNote] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"qris" | "transfer" | "ewallet" | "cash" | "">("");
   const [sent, setSent] = useState(false);
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
   const change = (id: number, amount: number) =>
     setCounts((current) => ({ ...current, [id]: Math.max(0, (current[id] || 0) + amount) }));
   const submit = () => {
-    if (!total || !paymentMethod) return;
+    if (!total) return;
     setSent(true);
     setTimeout(() => navigate(`/${role}/orders`), 900);
   };
@@ -216,47 +215,9 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           placeholder="Contoh: warna biru, ukuran besar, dll."
         />
       </label>
-      <section className="payment-section" aria-labelledby="payment-title">
-        <div className="payment-section__heading">
-          <div>
-            <h2 id="payment-title">Metode Pembayaran</h2>
-            <p>Pilih metode pembayaran yang akan digunakan.</p>
-          </div>
-          <span className="payment-lock">Pembayaran</span>
-        </div>
-        <div className="payment-options">
-          {([
-            { id: "qris", title: "QRIS", detail: "Bayar dengan aplikasi yang mendukung QRIS", mark: "QR" },
-            { id: "transfer", title: "Transfer Bank", detail: "Transfer melalui rekening bank", mark: "BANK" },
-            { id: "ewallet", title: "E-Wallet", detail: "Gunakan dompet digital", mark: "e-W" },
-            { id: "cash", title: "Tunai", detail: "Bayar langsung saat mengambil pesanan", mark: "Rp" },
-          ] as const).map((method) => (
-            <label
-              className={`payment-option ${paymentMethod === method.id ? "is-selected" : ""}`}
-              key={method.id}
-            >
-              <input
-                type="radio"
-                name="payment-method"
-                value={method.id}
-                checked={paymentMethod === method.id}
-                onChange={() => setPaymentMethod(method.id)}
-              />
-              <span className="payment-option__mark" aria-hidden="true">{method.mark}</span>
-              <span className="payment-option__copy">
-                <strong>{method.title}</strong>
-                <small>{method.detail}</small>
-              </span>
-              <span className="payment-option__indicator" aria-hidden="true" />
-            </label>
-          ))}
-        </div>
-        <p className="payment-note">Pilihan ini dicatat pada tampilan pemesanan. Konfirmasi dan pemrosesan pembayaran otomatis memerlukan integrasi sistem pembayaran.</p>
-      </section>
-      <button className="primary wide order-submit" disabled={!total || !paymentMethod || sent} onClick={submit}>
-        {sent ? "Pesanan berhasil dikirim" : "Konfirmasi Pesanan"}
+      <button className="primary wide order-submit" disabled={!total || sent} onClick={submit}>
+        {sent ? "Pesanan berhasil dikirim" : "Kirim Pesanan"}
       </button>
-      {!paymentMethod && total > 0 && <p className="payment-validation">Pilih metode pembayaran untuk melanjutkan.</p>}
     </>
   );
 }
