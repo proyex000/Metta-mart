@@ -15,7 +15,7 @@ const defaultPreferences = {
 };
 
 export function ShopSettings({ role }: { role: ShopRole }) {
-  const { session } = useAuth();
+  const { session, updateProfile } = useAuth();
   const storageKey = `mettamart-settings-${role}`;
   const [preferences, setPreferences] = useState(() => {
     try {
@@ -26,7 +26,17 @@ export function ShopSettings({ role }: { role: ShopRole }) {
     }
   });
   const [saved, setSaved] = useState(false);
+  const [profileName, setProfileName] = useState(session?.name || "");
+  const [profileEmail, setProfileEmail] = useState(session?.email || "");
+  const [profileSaved, setProfileSaved] = useState(false);
   const isParent = role === "parent";
+
+  const saveProfile = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!profileName.trim() || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(profileEmail.trim())) return;
+    updateProfile({ name: profileName, email: profileEmail });
+    setProfileSaved(true);
+  };
 
   const updatePreference = (key: keyof typeof defaultPreferences, checked: boolean) => {
     const next = { ...preferences, [key]: checked };
@@ -62,19 +72,23 @@ export function ShopSettings({ role }: { role: ShopRole }) {
               <p>Informasi akun yang digunakan untuk masuk.</p>
             </div>
           </div>
-          <div className="shop-settings-field">
-            <span>Nama lengkap</span>
-            <strong>{session?.name || "—"}</strong>
-          </div>
-          <div className="shop-settings-field">
-            <span>Email akun</span>
-            <strong>{session?.email || "—"}</strong>
-          </div>
-          <div className="shop-settings-field">
-            <span>Jenis akun</span>
-            <strong>{isParent ? "Orang Tua" : "Siswa"}</strong>
-          </div>
-          <p className="shop-settings-note">Untuk mengubah data akun, silakan hubungi administrator sekolah.</p>
+          <form className="shop-settings-profile-form" onSubmit={saveProfile}>
+            <label className="shop-settings-field">
+              <span>Nama lengkap</span>
+              <input required value={profileName} onChange={(event) => setProfileName(event.target.value)} />
+            </label>
+            <label className="shop-settings-field">
+              <span>Email akun</span>
+              <input required type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} />
+            </label>
+            <div className="shop-settings-field">
+              <span>Jenis akun</span>
+              <strong>{isParent ? "Orang Tua" : "Siswa"}</strong>
+            </div>
+            <button className="shop-settings-save-button" type="submit">Simpan profil</button>
+            {profileSaved && <p className="shop-settings-save-state" role="status">Profil diperbarui untuk sesi ini.</p>}
+            <p className="shop-settings-note">Data profil tersimpan di browser pada prototipe ini. Sinkronisasi server memerlukan API backend.</p>
+          </form>
         </section>
 
         <section className="shop-settings-card">
