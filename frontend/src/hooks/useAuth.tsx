@@ -6,6 +6,7 @@ type AuthValue = {
   session: Session | null;
   login: (role: Role, identifier: string, password: string) => Promise<void>;
   logout: () => void;
+  updateProfile: (updates: { name: string; email: string }) => void;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -20,6 +21,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout: () => {
         clearSession();
         setSession(null);
+      },
+      updateProfile: (updates) => {
+        setSession((current) => {
+          if (!current) return current;
+          const next = { ...current, name: updates.name.trim(), email: updates.email.trim() };
+          localStorage.setItem("mettamart-demo-session", JSON.stringify(next));
+          return next;
+        });
       },
     }),
     [session],

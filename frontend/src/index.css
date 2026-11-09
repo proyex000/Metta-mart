@@ -2563,3 +2563,25 @@ td b {
     overflow: hidden;
   }
 }
+
+/* Functional settings panels */
+.settings-layout aside button { width: 100%; }
+.settings-layout form { min-width: 0; }
+.settings-layout form > p { margin: 4px 0 14px; color: #7d8b96; font-size: 11px; line-height: 1.6; }
+.settings-layout form label { display: grid; gap: 7px; margin: 13px 0; color: #526575; font-size: 11px; font-weight: 600; }
+.settings-layout form input:not([type="checkbox"]), .settings-layout form textarea { width: 100%; min-height: 39px; padding: 9px 11px; color: #31485b; background: #fff; border: 1px solid #e0e7eb; border-radius: 7px; font: inherit; font-weight: 400; }
+.settings-layout form textarea { min-height: 82px; resize: vertical; }
+.settings-layout form .settings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 0; border-bottom: 1px solid #edf1f3; }
+.settings-toggle span { display: grid; gap: 4px; }
+.settings-toggle b { color: #31485b; font-size: 11px; }
+.settings-toggle small { color: #82909b; font-size: 9px; font-weight: 400; }
+.settings-toggle input { width: 35px; height: 19px; flex: none; accent-color: #e34b4f; }
+.settings-form-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
+.settings-form-footer [role="status"] { color: #16845b; font-size: 10px; }
+.settings-help { padding: 10px 12px; background: #fff8e9; border-radius: 7px; }
+.shop-settings-profile-form .shop-settings-field { margin: 0; }
+@media (max-width: 767px) {
+  .role-shell--admin .settings-layout aside { display: flex; gap: 6px; margin: 0; padding: 12px; overflow-x: auto; border-bottom: 1px solid #edf1f3; }
+  .role-shell--admin .settings-layout aside button { width: auto; min-width: max-content; padding: 9px 11px; }
+  .role-shell--admin .settings-layout form { padding: 16px; }
+}

@@ -27,3 +27,8 @@
 .shop-settings-managed,.shop-settings-active { flex: none; padding: 5px 8px; color: #647687; background: #f1f4f6; border-radius: 20px; font-size: 8px; }
 .shop-settings-active { color: #16845b; background: #eaf8f1; }
 @media (max-width: 767px) { .shop-settings-grid { grid-template-columns: 1fr; } .shop-settings-security { grid-column: auto; } .shop-settings-profile { padding: 15px; gap: 10px; } .shop-settings-avatar { width: 45px; height: 45px; font-size: 17px; } .shop-settings-profile h2 { font-size: 13px; } .shop-settings-role { font-size: 8px; } .shop-settings-back { font-size: 9px; } }
+
+.shop-settings-profile-form { display: grid; gap: 4px; }
+.shop-settings-profile-form .shop-settings-field input { width: 100%; min-height: 38px; padding: 8px 10px; color: #31485b; background: #fff; border: 1px solid #dfe6ea; border-radius: 7px; font: inherit; font-size: 11px; }
+.shop-settings-save-button { justify-self: start; margin-top: 10px; padding: 10px 15px; color: #fff; background: var(--red); border: 0; border-radius: 7px; font-size: 10px; font-weight: 600; cursor: pointer; }
+.shop-settings-profile-form .shop-settings-note { margin-top: 8px; }
