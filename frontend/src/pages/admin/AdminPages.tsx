@@ -776,60 +776,120 @@ export function Reports() {
 }
 
 export function Settings() {
-  const [saved, setSaved] = useState(false);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  type SettingsTab = "store" | "account" | "payment" | "shipping" | "notifications";
+  type Preferences = {
+    storeName: string; description: string; address: string; email: string; phone: string;
+    adminName: string; adminEmail: string;
+    cash: boolean; qris: boolean; bankTransfer: boolean;
+    deliveryEnabled: boolean; pickupEnabled: boolean; shippingFee: string; estimatedDelivery: string;
+    orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
   };
+  const defaults: Preferences = {
+    storeName: "MettaMart",
+    description: "Toko perlengkapan sekolah dan kebutuhan sehari-hari.",
+    address: "Jl. Metta Maitreya No. 123, Pekanbaru",
+    email: "mettamart@sekolahmetta.id",
+    phone: "0812 3456 7890",
+    adminName: "Admin",
+    adminEmail: "admin@mettamart.id",
+    cash: true, qris: true, bankTransfer: false,
+    deliveryEnabled: true, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
+    orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
+  };
+  const [tab, setTab] = useState<SettingsTab>("store");
+  const [values, setValues] = useState<Preferences>(() => {
+    try {
+      return { ...defaults, ...JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") };
+    } catch {
+      return defaults;
+    }
+  });
+  const [saved, setSaved] = useState(false);
+  const update = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    setValues((current) => ({ ...current, [key]: value }));
+    setSaved(false);
+  };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
+    setSaved(true);
+  };
+  const tabs: { id: SettingsTab; label: string; icon: IconName }[] = [
+    { id: "store", label: "Informasi Toko", icon: "home" },
+    { id: "account", label: "Akun Admin", icon: "users" },
+    { id: "payment", label: "Metode Pembayaran", icon: "bag" },
+    { id: "shipping", label: "Pengiriman", icon: "truck" },
+    { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
+  ];
+  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" = "text") => (
+    <label key={key}>
+      {label}
+      <input type={type} value={String(values[key])} onChange={(event) => update(key, event.target.value as Preferences[typeof key])} />
+    </label>
+  );
+  const toggle = (label: string, key: keyof Preferences, description: string) => (
+    <label className="settings-toggle" key={key}>
+      <span><b>{label}</b><small>{description}</small></span>
+      <input type="checkbox" checked={Boolean(values[key])} onChange={(event) => update(key, event.target.checked as Preferences[typeof key])} />
+    </label>
+  );
   return (
     <>
-      <Header title="Pengaturan" subtitle="Kelola informasi akun dan pengaturan sistem." />
+      <Header title="Pengaturan" subtitle="Kelola konfigurasi operasional MettaMart." />
       <div className="settings-layout panel">
         <aside>
-          {[
-            "Informasi Toko",
-            "Akun Admin",
-            "Metode Pembayaran",
-            "Pengiriman",
-            "Notifikasi Sistem",
-          ].map((x, i) => (
-            <button className={i === 0 ? "active" : ""} key={x}>
-              <Icon name={i === 0 ? "home" : i === 1 ? "users" : i === 3 ? "truck" : "bell"} />
-              {x}
+          {tabs.map((item) => (
+            <button type="button" className={tab === item.id ? "active" : ""} key={item.id} onClick={() => { setTab(item.id); setSaved(false); }}>
+              <Icon name={item.icon} />{item.label}
             </button>
           ))}
         </aside>
         <form onSubmit={submit}>
-          <h2>Informasi Toko</h2>
-          <label>
-            Nama Toko
-            <input defaultValue="MettaMart" />
-          </label>
-          <label>
-            Deskripsi
-            <textarea defaultValue="Toko perlengkapan sekolah dan kebutuhan sehari-hari." />
-          </label>
-          <label>
-            Alamat
-            <input defaultValue="Jl. Metta Maitreya No. 123, Jakarta Barat" />
-          </label>
-          <label>
-            Email
-            <input defaultValue="mettamart@sekolahmetta.id" />
-          </label>
-          <label>
-            No. Telepon
-            <input defaultValue="0812 3456 7890" />
-          </label>
-          <button className="primary">{saved ? "Perubahan Tersimpan" : "Simpan Perubahan"}</button>
+          {tab === "store" && <>
+            <h2>Informasi Toko</h2>
+            {field("Nama Toko", "storeName")}
+            <label>Deskripsi<textarea value={values.description} onChange={(event) => update("description", event.target.value)} /></label>
+            {field("Alamat", "address")}
+            {field("Email", "email", "email")}
+            {field("No. Telepon", "phone", "tel")}
+          </>}
+          {tab === "account" && <>
+            <h2>Akun Admin</h2>
+            <p>Ubah nama dan email tampilan admin yang digunakan pada panel ini.</p>
+            {field("Nama Admin", "adminName")}
+            {field("Email Admin", "adminEmail", "email")}
+            <p className="settings-help">Kata sandi demo masih dikelola oleh sistem autentikasi prototipe. Jangan masukkan kata sandi baru di sini.</p>
+          </>}
+          {tab === "payment" && <>
+            <h2>Metode Pembayaran</h2>
+            <p>Aktifkan metode pembayaran yang dapat dipilih pelanggan.</p>
+            {toggle("Tunai di kasir", "cash", "Pembayaran langsung saat mengambil pesanan.")}
+            {toggle("QRIS", "qris", "Pembayaran menggunakan QRIS.")}
+            {toggle("Transfer bank", "bankTransfer", "Transfer manual yang perlu diverifikasi admin.")}
+          </>}
+          {tab === "shipping" && <>
+            <h2>Pengiriman & Pengambilan</h2>
+            {toggle("Aktifkan pengiriman", "deliveryEnabled", "Pesanan dapat diantar sesuai ketentuan toko.")}
+            {toggle("Ambil di toko", "pickupEnabled", "Pelanggan dapat mengambil pesanan di toko.")}
+            {field("Biaya pengiriman (Rp)", "shippingFee")}
+            {field("Estimasi pengiriman", "estimatedDelivery")}
+          </>}
+          {tab === "notifications" && <>
+            <h2>Notifikasi Sistem</h2>
+            {toggle("Pesanan baru", "orderAlerts", "Beri tahu admin saat ada pesanan masuk.")}
+            {toggle("Stok menipis", "lowStockAlerts", "Peringatan saat stok produk rendah.")}
+            {toggle("Promo dan pengumuman", "promoAlerts", "Izinkan pengumuman promo ke pelanggan.")}
+            {toggle("Laporan mingguan", "weeklyReport", "Simpan preferensi ringkasan mingguan.")}
+          </>}
+          <div className="settings-form-footer">
+            <button type="submit" className="primary">Simpan Pengaturan</button>
+            {saved && <span role="status">Pengaturan tersimpan di browser ini.</span>}
+          </div>
         </form>
         <div className="logo-upload">
           <span>Logo Toko</span>
           <Brand compact />
-          <button>
-            <Icon name="edit" size={14} /> Ubah Logo
-          </button>
+          <small>Logo saat ini</small>
         </div>
       </div>
     </>
