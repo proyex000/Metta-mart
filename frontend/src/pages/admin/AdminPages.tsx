@@ -1,4 +1,5 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -776,6 +777,7 @@ export function Reports() {
 }
 
 export function Settings() {
+  const { session, updateProfile } = useAuth();
   type SettingsTab = "store" | "account" | "payment" | "shipping" | "notifications";
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
@@ -790,8 +792,8 @@ export function Settings() {
     address: "Jl. Metta Maitreya No. 123, Pekanbaru",
     email: "mettamart@sekolahmetta.id",
     phone: "0812 3456 7890",
-    adminName: "Admin",
-    adminEmail: "admin@mettamart.id",
+    adminName: session?.name || "Admin",
+    adminEmail: session?.email || "admin@mettamart.id",
     cash: true, qris: true, bankTransfer: false,
     deliveryEnabled: true, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
     orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
@@ -812,6 +814,7 @@ export function Settings() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
+    if (tab === "account") updateProfile({ name: values.adminName, email: values.adminEmail });
     setSaved(true);
   };
   const tabs: { id: SettingsTab; label: string; icon: IconName }[] = [
