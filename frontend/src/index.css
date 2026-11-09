@@ -3018,3 +3018,75 @@ td b {
   }
   .recent-order { grid-template-columns: 32px minmax(0, 1fr) auto; }
 }
+
+
+/* Checkout payment method selector */
+.payment-section {
+  margin: 22px 0 18px;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.payment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.payment-heading h2 { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.4; }
+.payment-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.payment-method-list { display: grid; gap: 10px; }
+.payment-method-card {
+  display: grid;
+  grid-template-columns: 18px 42px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e5e9ed;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.payment-method-card:hover { border-color: #e9a3a3; }
+.payment-method-card.selected { border-color: var(--red); background: #fff8f6; }
+.payment-method-card > input { width: 16px; height: 16px; margin: 0; accent-color: var(--red); }
+.payment-method-symbol {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--red);
+  background: #fff0ed;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.payment-method-copy { min-width: 0; display: grid; gap: 4px; }
+.payment-method-copy strong { color: var(--ink); font-size: 11px; line-height: 1.4; }
+.payment-method-copy small { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.payment-method-check { color: var(--red); font-size: 17px; font-weight: 800; text-align: center; }
+.payment-help,
+.payment-unavailable,
+.payment-success,
+.payment-disclaimer {
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 1.6;
+}
+.payment-help { color: #705c35; background: #fff8e9; }
+.payment-unavailable { color: #9b3838; background: #fff0ef; }
+.payment-success { color: #176b4a; background: #eaf8f1; }
+.payment-disclaimer { padding: 0; color: var(--muted); background: transparent; }
+@media (max-width: 767px) {
+  .payment-section { margin: 18px 0 14px; padding: 14px; }
+  .payment-method-card { grid-template-columns: 17px 36px minmax(0, 1fr) 18px; gap: 8px; padding: 10px; }
+  .payment-method-symbol { width: 35px; height: 35px; }
+  .payment-method-copy strong { font-size: 10px; }
+  .payment-method-copy small { font-size: 8px; }
+}
