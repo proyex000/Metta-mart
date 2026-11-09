@@ -2778,7 +2778,7 @@ td b {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.shop-strip article > span:not(.status) {
+.shop-strip article > span:not(.product-art):not(.status) {
   grid-column: 2;
   min-width: 0;
   line-height: 1.4;
