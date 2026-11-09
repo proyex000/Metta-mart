@@ -171,18 +171,37 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [counts, setCounts] = useState<Record<number, number>>({ 1: 1 });
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
+  const paymentSettings = useMemo(() => {
+    const defaults = { cash: true, qris: true, bankTransfer: false };
+    try {
+      const saved = JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}");
+      return {
+        cash: typeof saved.cash === "boolean" ? saved.cash : defaults.cash,
+        qris: typeof saved.qris === "boolean" ? saved.qris : defaults.qris,
+        bankTransfer: typeof saved.bankTransfer === "boolean" ? saved.bankTransfer : defaults.bankTransfer,
+      };
+    } catch {
+      return defaults;
+    }
+  }, []);
+  const methods = [
+    { id: "cash" as const, title: "Tunai di kasir", description: "Bayar langsung saat mengambil pesanan.", symbol: "Rp" },
+    { id: "qris" as const, title: "QRIS", description: "Minta kode QRIS resmi kepada kasir/admin saat pembayaran.", symbol: "QR" },
+    { id: "bankTransfer" as const, title: "Transfer bank", description: "Instruksi rekening dan verifikasi diberikan oleh admin.", symbol: "TF" },
+  ].filter((method) => paymentSettings[method.id]);
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
   const change = (id: number, amount: number) =>
     setCounts((current) => ({ ...current, [id]: Math.max(0, (current[id] || 0) + amount) }));
   const submit = () => {
-    if (!total) return;
+    if (!total || !methods.some((method) => method.id === payment) || sent) return;
     setSent(true);
-    setTimeout(() => navigate(`/${role}/orders`), 900);
+    setTimeout(() => navigate(`/${role}/orders`), 1400);
   };
   return (
     <>
-      <PageTitle title="Pesan Barang" subtitle="Pilih jumlah barang yang ingin dipesan." />
+      <PageTitle title="Pesan Barang" subtitle="Pilih jumlah barang dan metode pembayaran." />
       <section className="order-summary-card">
         <div>
           <small>Total Belanja</small>
@@ -200,9 +219,9 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
               <span>{money(product.price)}</span>
             </div>
             <div className="quantity">
-              <button onClick={() => change(product.id, -1)}>−</button>
+              <button type="button" aria-label={`Kurangi ${product.name}`} onClick={() => change(product.id, -1)}>−</button>
               <b>{counts[product.id] || 0}</b>
-              <button onClick={() => change(product.id, 1)}>+</button>
+              <button type="button" aria-label={`Tambah ${product.name}`} onClick={() => change(product.id, 1)}>+</button>
             </div>
           </article>
         ))}
@@ -215,9 +234,59 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           placeholder="Contoh: warna biru, ukuran besar, dll."
         />
       </label>
-      <button className="primary wide order-submit" disabled={!total || sent} onClick={submit}>
+      <section className="payment-section" aria-labelledby="payment-heading">
+        <div className="payment-heading">
+          <div>
+            <h2 id="payment-heading">Metode Pembayaran</h2>
+            <p>Pilih cara pembayaran untuk pesanan ini.</p>
+          </div>
+          <Icon name="bag" size={22} />
+        </div>
+        {methods.length ? (
+          <div className="payment-method-list">
+            {methods.map((method) => (
+              <label className={`payment-method-card ${payment === method.id ? "selected" : ""}`} key={method.id}>
+                <input
+                  type="radio"
+                  name="payment-method"
+                  value={method.id}
+                  checked={payment === method.id}
+                  onChange={() => setPayment(method.id)}
+                  disabled={sent}
+                />
+                <span className="payment-method-symbol" aria-hidden="true">{method.symbol}</span>
+                <span className="payment-method-copy">
+                  <strong>{method.title}</strong>
+                  <small>{method.description}</small>
+                </span>
+                <span className="payment-method-check" aria-hidden="true">{payment === method.id ? "✓" : ""}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="payment-unavailable" role="status">
+            Belum ada metode pembayaran yang diaktifkan. Hubungi admin sekolah.
+          </p>
+        )}
+        {payment === "qris" && paymentSettings.qris && (
+          <p className="payment-help">Kode QRIS akan diberikan oleh kasir/admin. Jangan transfer ke kode atau rekening dari sumber yang tidak resmi.</p>
+        )}
+        {payment === "bankTransfer" && paymentSettings.bankTransfer && (
+          <p className="payment-help">Detail rekening dan konfirmasi pembayaran akan diberikan oleh admin setelah pesanan diterima.</p>
+        )}
+        {payment === "cash" && paymentSettings.cash && (
+          <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di kasir.</p>
+        )}
+      </section>
+      {sent && (
+        <p className="payment-success" role="status">
+          Pesanan berhasil dikirim. Metode pembayaran: {methods.find((method) => method.id === payment)?.title}. Lanjutkan konfirmasi pembayaran dengan kasir/admin.
+        </p>
+      )}
+      <button className="primary wide order-submit" disabled={!total || sent || !methods.length} onClick={submit}>
         {sent ? "Pesanan berhasil dikirim" : "Kirim Pesanan"}
       </button>
+      <p className="payment-disclaimer">Pembayaran di aplikasi ini masih berupa simulasi pilihan metode. QRIS, transfer, dan konfirmasi transaksi belum terhubung ke payment gateway.</p>
     </>
   );
 }
