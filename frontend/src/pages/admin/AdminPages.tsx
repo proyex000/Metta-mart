@@ -984,6 +984,7 @@ function Modal({
 function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }) {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<number[]>([]);
+  const [mobileNotice, setMobileNotice] = useState<(typeof notifications)[number] | null>(null);
   const mobileView =
     view === "dashboard"
       ? "dashboard"
@@ -1144,20 +1145,30 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           </div>
           <div className="mobile-notifications">
             {notifications.map((n, i) => (
-              <article key={n.title}>
+              <button type="button" key={n.title} onClick={() => setMobileNotice(n)}>
                 <span className="mini-icon">
                   <Icon name={i % 2 ? "box" : "bell"} />
                 </span>
-                <div>
+                <span>
                   <b>{n.title}</b>
-                  <p>{n.text}</p>
+                  <small>{n.text}</small>
                   <time>{n.time}</time>
-                </div>
+                </span>
                 <Icon name="chevron" />
-              </article>
+              </button>
             ))}
           </div>
         </main>
+      )}
+      {mobileNotice && (
+        <Modal title="Detail Notifikasi" close={() => setMobileNotice(null)}>
+          <div className="notification-detail">
+            <h3>{mobileNotice.title}</h3>
+            <p>{mobileNotice.text}</p>
+            <time>{mobileNotice.time}</time>
+            <button className="primary wide" onClick={() => setMobileNotice(null)}>Tutup</button>
+          </div>
+        </Modal>
       )}
       <nav className="bottom-nav">
         <button
