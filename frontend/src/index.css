@@ -2702,3 +2702,319 @@ td b {
   .mobile-notifications article { display: contents; }
   .mobile-notifications { gap: 10px; }
 }
+
+
+/* Full-page layout normalization: parent, student, and admin workspaces */
+.role-shell,
+.role-content,
+.role-content > *,
+.role-content section,
+.role-content article {
+  min-width: 0;
+}
+.role-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+.role-page-title {
+  min-height: 0;
+  margin: 0 0 22px;
+  gap: 12px 20px;
+}
+.role-page-title > div { min-width: 0; }
+.role-page-title h1 { line-height: 1.3; overflow-wrap: anywhere; }
+.role-page-title p { line-height: 1.6; }
+.shop-profile { gap: 14px; margin-bottom: 18px; }
+.shop-profile > div { min-width: 0; }
+.shop-profile > div b { line-height: 1.4; }
+.monthly-card { margin-top: 0; }
+.shop-search { width: 100%; margin: 18px 0 0; }
+.section-heading {
+  min-width: 0;
+  margin: 24px 0 12px;
+  gap: 12px;
+}
+.section-heading h2 { min-width: 0; line-height: 1.4; }
+.section-heading a { flex: none; white-space: nowrap; }
+.role-content .category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.role-content .category-grid a {
+  min-width: 0;
+  min-height: 112px;
+  padding: 16px 10px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.shop-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+}
+.shop-strip article {
+  min-width: 0;
+  min-height: 190px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  grid-template-rows: auto auto auto 1fr;
+  align-items: center;
+  gap: 7px 12px;
+}
+.shop-strip article > .product-art {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  justify-self: center;
+  align-self: center;
+  margin: 0;
+}
+.shop-strip article > b {
+  min-width: 0;
+  grid-column: 2;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.shop-strip article > span:not(.status) {
+  grid-column: 2;
+  min-width: 0;
+  line-height: 1.4;
+}
+.shop-strip article > .status {
+  grid-column: 2;
+  justify-self: start;
+  align-self: start;
+}
+.shop-strip article > a {
+  grid-column: 1 / -1;
+  align-self: end;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 0;
+}
+.recent-order {
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  gap: 12px;
+}
+.recent-order > div { min-width: 0; }
+.recent-order b { overflow-wrap: anywhere; }
+.shop-promo { margin-top: 22px; gap: 14px; }
+.shop-promo > div { min-width: 0; }
+.shop-promo p { line-height: 1.6; }
+.shop-product-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+.shop-product-grid article {
+  min-width: 0;
+  min-height: 108px;
+  padding: 14px;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 8px 12px;
+}
+.shop-product-grid article > .product-art {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  justify-self: center;
+}
+.shop-product-grid article > div {
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+.shop-product-grid article > div b { line-height: 1.45; overflow-wrap: anywhere; }
+.shop-product-grid article > .status {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+}
+.shop-product-grid article > a {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  align-self: center;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.shop-tabs {
+  max-width: 100%;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+.shop-tabs button { flex: 0 0 auto; }
+.shop-orders {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+.shop-orders article { min-width: 0; display: grid; gap: 10px; }
+.shop-orders article > div { min-width: 0; gap: 10px; }
+.shop-orders article > div > b { min-width: 0; overflow-wrap: anywhere; }
+.shop-orders article p { min-width: 0; line-height: 1.5; }
+.shop-orders footer { min-width: 0; gap: 12px; flex-wrap: wrap; }
+.shop-orders footer strong { white-space: nowrap; }
+.order-summary-card { margin-bottom: 20px; }
+.subheading { margin: 0 0 12px; line-height: 1.4; }
+.order-builder { margin: 0 0 18px; padding: 4px 16px; }
+.order-builder article { min-width: 0; gap: 14px; padding: 10px 0; }
+.order-builder article > div:nth-child(2) { min-width: 0; display: grid; gap: 5px; }
+.order-builder article > div:nth-child(2) b { overflow-wrap: anywhere; }
+.quantity { flex: none; }
+.note-field { display: grid; gap: 8px; margin: 16px 0; }
+.note-field textarea { width: 100%; min-height: 90px; padding: 11px 12px; resize: vertical; }
+.order-submit { min-height: 44px; }
+.detail-card { min-width: 0; padding: 20px; }
+.detail-head { min-width: 0; gap: 12px; }
+.detail-head > div { min-width: 0; flex: 1; }
+.detail-head > div b { overflow-wrap: anywhere; }
+.detail-product { min-width: 0; gap: 12px; padding: 12px 0; }
+.detail-product > div { min-width: 0; flex: 1; }
+.detail-product b { overflow-wrap: anywhere; }
+.shop-notices { min-width: 0; gap: 12px; }
+.shop-notices button { min-width: 0; grid-template-columns: 38px minmax(0, 1fr) 14px; }
+.shop-notices button > div { min-width: 0; }
+.shop-notices button b,
+.shop-notices button p { overflow-wrap: anywhere; line-height: 1.5; }
+
+/* Admin page grids and tables must shrink without overlapping their neighbors */
+.role-shell--admin .stat-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.role-shell--admin .stat-card { min-width: 0; gap: 12px; }
+.role-shell--admin .stat-card > div { min-width: 0; }
+.role-shell--admin .stat-card strong { line-height: 1.2; }
+.role-shell--admin .dashboard-grid,
+.role-shell--admin .report-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 18px;
+}
+.role-shell--admin .panel,
+.role-shell--admin .table-panel { min-width: 0; }
+.role-shell--admin .desktop-table {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.role-shell--admin table { min-width: 680px; }
+.role-shell--admin .toolbar {
+  grid-template-columns: minmax(180px, 1fr) minmax(130px, 160px) minmax(130px, 150px) auto;
+}
+.role-shell--admin .toolbar > * { min-width: 0; }
+.role-shell--admin .panel__title { gap: 10px; }
+.role-shell--admin .panel__title h2 { line-height: 1.45; }
+.role-shell--admin .latest__row {
+  grid-template-columns: 30px minmax(0, 1fr) auto minmax(60px, auto);
+  gap: 9px;
+}
+.role-shell--admin .latest__row > div { min-width: 0; }
+.role-shell--admin .latest__row b { overflow-wrap: anywhere; }
+.role-shell--admin .settings-layout { min-width: 0; }
+.role-shell--admin .settings-layout form { min-width: 0; }
+.role-shell--admin .settings-layout form label { min-width: 0; }
+.role-shell--admin .form-row { min-width: 0; gap: 14px; }
+.role-shell--admin .form-row > * { min-width: 0; }
+.role-shell--admin .modal,
+.role-shell--admin .modal-content { max-width: 100%; }
+
+/* Medium screens */
+@media (max-width: 1100px) {
+  .role-shell--admin .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .role-shell--admin .toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .role-shell--admin .toolbar .search { grid-column: 1 / -1; }
+  .shop-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .role-content .category-grid { gap: 10px; }
+}
+@media (max-width: 767px) {
+  .role-content { padding: 20px 16px 92px; }
+  .role-page-title { margin-bottom: 18px; }
+  .role-page-title h1 { font-size: 19px; }
+  .role-page-title p { font-size: 9px; }
+  .shop-profile { margin-bottom: 14px; padding: 12px 14px; }
+  .monthly-card { min-height: 82px; padding: 14px; }
+  .shop-search { margin-top: 14px; }
+  .section-heading { margin: 21px 0 11px; }
+  .role-content .category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .role-content .category-grid a { min-height: 96px; padding: 12px 8px; }
+  .shop-strip { grid-template-columns: 1fr; gap: 10px; }
+  .shop-strip article { min-height: 0; padding: 14px; }
+  .shop-strip article > a { margin-top: 3px; }
+  .recent-order {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 9px;
+    padding: 11px;
+  }
+  .recent-order > strong { display: none; }
+  .shop-product-grid { grid-template-columns: 1fr; gap: 10px; }
+  .shop-product-grid article { min-height: 96px; padding: 12px; }
+  .shop-orders { grid-template-columns: 1fr; gap: 10px; }
+  .shop-orders article { padding: 14px; }
+  .detail-card { padding: 15px; }
+  .role-shell--admin .dashboard-grid,
+  .role-shell--admin .report-grid { grid-template-columns: 1fr; gap: 12px; }
+  .role-shell--admin .stat-grid { gap: 10px; }
+  .role-shell--admin .stat-card { padding: 13px; }
+  .role-shell--admin .toolbar { grid-template-columns: 1fr; gap: 9px; }
+  .role-shell--admin .toolbar .search { grid-column: auto; }
+  .role-shell--admin .table-panel { padding: 14px; }
+  .role-shell--admin .chart-panel,
+  .role-shell--admin .latest { height: auto; min-height: 280px; }
+  .role-shell--admin .latest__row {
+    min-height: 58px;
+    height: auto;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    padding: 8px 0;
+  }
+  .role-shell--admin .latest__row > span:last-child { display: none; }
+  .role-shell--admin .latest__row .status { white-space: normal; text-align: center; }
+  .role-shell--admin .form-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .role-content { padding-inline: 12px; }
+  .role-shell--admin .stat-grid { grid-template-columns: 1fr; }
+  .shop-profile { gap: 10px; }
+  .shop-profile .role-avatar { width: 40px; height: 40px; }
+  .shop-tabs { margin-inline: -2px; }
+  .shop-tabs button { min-width: max-content; padding-inline: 12px; }
+  .shop-product-grid article {
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 7px 10px;
+  }
+  .shop-product-grid article > .product-art { grid-row: 1 / 3; }
+  .shop-product-grid article > div { grid-column: 2; grid-row: 1 / 3; }
+  .shop-product-grid article > .status {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: start;
+    margin-left: 50px;
+  }
+  .shop-product-grid article > a {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    justify-self: stretch;
+    margin-left: 50px;
+  }
+  .recent-order { grid-template-columns: 32px minmax(0, 1fr) auto; }
+}
