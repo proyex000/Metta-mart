@@ -1,6 +1,6 @@
 import type { CategoryId } from "../data/categories";
 
-export type Role = "admin" | "cashier" | "parent" | "student";
+export type Role = "admin" | "parent" | "student";
 
 export type Session = {
   role: Role;
@@ -24,5 +24,5 @@ export type Order = {
   date: string;
   customer: string;
   total: number;
-  status: "Menunggu Konfirmasi" | "Diproses" | "Dikirim" | "Selesai";
+  status: "Menunggu Konfirmasi" | "Diproses" | "Siap Diambil" | "Selesai";
 };
