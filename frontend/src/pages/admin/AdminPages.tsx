@@ -5,6 +5,7 @@ import { productService, stockLabel, useProducts } from "../../services/products
 import type { Product } from "../../types";
 import { adminOrderAction, adminPaymentAction, fetchAdminDashboard, fetchAdminSalesReport, fetchOrders, type AdminDashboardSummary, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
+import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -704,131 +705,66 @@ export function Orders() {
 }
 
 export function Notifications() {
-  type Notice = (typeof notifications)[number];
-  const [items, setItems] = useState<Notice[]>(notifications);
-  const [filter, setFilter] = useState(0);
-  const [selected, setSelected] = useState<Notice | null>(null);
-  const [showCompose, setShowCompose] = useState(false);
-  const [readItems, setReadItems] = useState<string[]>([]);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftText, setDraftText] = useState("");
-  const [draftType, setDraftType] = useState("Info");
-  const categories = [
-    "Semua Notifikasi",
-    "Pesanan Diterima",
-    "Pesanan Siap Diambil",
-    "Promo & Info",
-    "Stok Produk",
-  ];
-  const filtered = items.filter((notice) => {
-    if (filter === 0) return true;
-    if (filter === 1) return notice.title.toLowerCase().includes("diterima");
-    if (filter === 2) return notice.title.toLowerCase().includes("siap diambil");
-    if (filter === 3) return notice.type === "Promo" || notice.type === "Info";
-    return notice.title.toLowerCase().includes("stok") || notice.text.toLowerCase().includes("stok");
-  });
-  const submitNotice = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const next: Notice = {
-      title: draftTitle.trim(),
-      text: draftText.trim(),
-      time: "Baru saja",
-      type: draftType,
-    };
-    if (!next.title || !next.text) return;
-    setItems((current) => [next, ...current]);
-    setFilter(0);
-    setShowCompose(false);
-    setDraftTitle("");
-    setDraftText("");
-    setDraftType("Info");
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sentMessage, setSentMessage] = useState("");
+  useEffect(() => {
+    fetchNotifications().then(setItems)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Notifikasi gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+  const markRead = async (notice: AppNotification) => {
+    if (notice.is_read) return;
+    try {
+      await markNotificationRead(notice.id);
+      setItems((current) => current.map((item) => item.id === notice.id ? { ...item, is_read: true } : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Notifikasi gagal diperbarui.");
+    }
   };
-  const markRead = (notice: Notice) => {
-    setReadItems((current) => current.includes(notice.title) ? current : [...current, notice.title]);
-    setSelected(notice);
+  const send = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!title.trim() || !message.trim() || sending) return;
+    setSending(true); setError(""); setSentMessage("");
+    try {
+      const result = await broadcastNotification({ title: title.trim(), message: message.trim(), kind: "announcement" });
+      setSentMessage(`Pengumuman berhasil dikirim ke ${result.sent_to} akun siswa dan orang tua.`);
+      setTitle(""); setMessage("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Pengumuman gagal dikirim.");
+    } finally { setSending(false); }
   };
   return (
     <>
-      <Header title="Notifikasi" subtitle="Kelola dan lihat informasi untuk pelanggan." />
-      <div className="notification-layout">
-        <aside className="panel notification-nav">
-          <button className="primary wide" onClick={() => setShowCompose(true)}>
-            <Icon name="plus" size={16} /> Kirim Notifikasi Baru
-          </button>
-          {categories.map((label, index) => (
-            <button className={index === filter ? "active" : ""} key={label} onClick={() => setFilter(index)}>
-              <Icon name={index === 0 ? "bell" : index < 3 ? "box" : "chart"} />
-              <span>{label}</span>
-              <b>{index === 0 ? items.length : index === 1 ? items.filter((n) => n.title.toLowerCase().includes("diterima")).length : index === 2 ? items.filter((n) => n.title.toLowerCase().includes("dikirim")).length : index === 3 ? items.filter((n) => n.type === "Promo" || n.type === "Info").length : items.filter((n) => n.title.toLowerCase().includes("stok")).length}</b>
+      <Header title="Notifikasi" subtitle="Pantau aktivitas pesanan dan kirim pengumuman kepada siswa serta orang tua." />
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      <section className="panel table-panel">
+        <div className="panel__title"><h2>Kirim Pengumuman</h2></div>
+        <form className="notification-compose" onSubmit={send}>
+          <label>Judul<input value={title} maxLength={180} onChange={(event) => setTitle(event.target.value)} required placeholder="Contoh: Jadwal koperasi selama ujian" /></label>
+          <label>Pesan<textarea value={message} maxLength={500} onChange={(event) => setMessage(event.target.value)} required placeholder="Tulis informasi untuk siswa dan orang tua." /></label>
+          <button className="primary" type="submit" disabled={sending || !title.trim() || !message.trim()}>{sending ? "Mengirim..." : "Kirim ke Siswa & Orang Tua"}</button>
+          {sentMessage && <p role="status">{sentMessage}</p>}
+        </form>
+      </section>
+      <section className="panel table-panel">
+        <div className="panel__title"><h2>Aktivitas Notifikasi Admin</h2><small>Pesanan dan pembayaran</small></div>
+        {loading && <p>Memuat...</p>}
+        {!loading && !items.length && <p className="table-foot">Belum ada aktivitas notifikasi.</p>}
+        <div className="shop-notices">
+          {items.map((notice) => (
+            <button className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => markRead(notice)}>
+              <span className="mini-icon"><Icon name={notice.kind === "payment" ? "bag" : "bell"} /></span>
+              <div><b>{notice.title}</b><p>{notice.message}</p><time>{new Date(notice.created_at).toLocaleString("id-ID")}</time></div>
+              {!notice.is_read && <span>Baru</span>}
             </button>
           ))}
-        </aside>
-        <section className="panel notification-list">
-          <div className="panel__title">
-            <h2>{categories[filter]}</h2>
-            <button type="button" onClick={() => { setFilter(0); setReadItems(items.map((item) => item.title)); }}>
-              Tandai semua dibaca
-            </button>
-          </div>
-          {filtered.length ? filtered.map((notice, index) => {
-            const isRead = readItems.includes(notice.title);
-            return (
-              <button
-                type="button"
-                className={`notification-item ${isRead ? "is-read" : "is-unread"}`}
-                key={`${notice.title}-${index}`}
-                onClick={() => markRead(notice)}
-              >
-                <span className="mini-icon"><Icon name={index % 2 ? "box" : "bell"} /></span>
-                <span className="notification-copy">
-                  <b>{notice.title}</b>
-                  <span>{notice.text}</span>
-                </span>
-                <time>{notice.time}</time>
-                <Status>{notice.type}</Status>
-                <Icon name="chevron" size={15} />
-              </button>
-            );
-          }) : (
-            <div className="notification-empty">
-              <Icon name="bell" size={28} />
-              <b>Belum ada notifikasi</b>
-              <span>Notifikasi untuk kategori ini akan muncul di sini.</span>
-            </div>
-          )}
-        </section>
-      </div>
-      {showCompose && (
-        <Modal title="Kirim Notifikasi Baru" close={() => setShowCompose(false)}>
-          <form className="notification-compose" onSubmit={submitNotice}>
-            <label>Judul Notifikasi
-              <input required maxLength={90} value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Contoh: Promo alat tulis" />
-            </label>
-            <label>Isi Pesan
-              <textarea required rows={4} maxLength={300} value={draftText} onChange={(event) => setDraftText(event.target.value)} placeholder="Tulis informasi untuk pelanggan..." />
-            </label>
-            <label>Kategori
-              <select value={draftType} onChange={(event) => setDraftType(event.target.value)}>
-                <option value="Info">Info</option>
-                <option value="Promo">Promo</option>
-                <option value="Pesan">Pesanan</option>
-              </select>
-            </label>
-            <button className="primary wide" type="submit">Terbitkan Notifikasi</button>
-          </form>
-        </Modal>
-      )}
-      {selected && (
-        <Modal title="Detail Notifikasi" close={() => setSelected(null)}>
-          <div className="notification-detail">
-            <Status>{selected.type}</Status>
-            <h3>{selected.title}</h3>
-            <p>{selected.text}</p>
-            <time>{selected.time}</time>
-            <button className="primary wide" onClick={() => setSelected(null)}>Tutup</button>
-          </div>
-        </Modal>
-      )}
+        </div>
+      </section>
     </>
   );
 }
