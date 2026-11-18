@@ -1,43 +1,47 @@
-# Metta-Mart Backend — Phase 1
+# Metta-Mart Backend
 
-Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOnly, CSRF, dan mysqlclient untuk koneksi MySQL/TiDB.
+Backend menggunakan Django, Django REST Framework, session cookie HttpOnly, CSRF, dan database MySQL-compatible (TiDB) untuk deployment. SQLite hanya untuk pengembangan lokal.
 
-## Persiapan Windows
+## Setup Windows
 
 1. Buka PowerShell di folder `backend`.
-2. Buat virtual environment: `py -m venv .venv`
-3. Aktifkan: `.venv\\Scripts\\Activate.ps1`
-4. Install: `py -m pip install -r requirements.txt`
-5. Salin konfigurasi: `Copy-Item .env.example .env`
-6. Buat secret key baru dan isi `DJANGO_SECRET_KEY` di `.env`.
-7. Untuk pengembangan lokal, SQLite aktif secara default.
-8. Terapkan migrasi: `py manage.py migrate`
-9. Buat admin pertama: `py manage.py createsuperuser`
-10. Jalankan: `py manage.py runserver 8000`
-11. Jalankan tes: `py manage.py test`
+2. Buat virtual environment: `py -m venv .venv`.
+3. Aktifkan: `.venv\\Scripts\\Activate.ps1`.
+4. Install: `py -m pip install -r requirements.txt`.
+5. Salin `.env.example` menjadi `.env`, lalu isi secret key lokal.
+6. Untuk lokal, gunakan `DB_ENGINE=sqlite`. Untuk TiDB, isi `DB_ENGINE=mysql` dan kredensial dari dashboard TiDB.
+7. Migrasi: `py manage.py migrate`.
+8. Buat admin pertama: `py manage.py createsuperuser`.
+9. Jalankan: `py manage.py runserver 8000`.
+10. Tes: `py manage.py test`.
 
-## Endpoint
+## Endpoint yang tersedia
 
-- `GET /api/auth/csrf/` — menyiapkan cookie CSRF.
-- `POST /api/auth/login/` — login dengan `identifier` dan `password`.
-- `POST /api/auth/logout/` — logout.
-- `GET /api/auth/me/` — sesi pengguna aktif.
-- `POST /api/auth/register/` — registrasi mandiri hanya untuk role student dan parent.
-- `GET/POST /api/admin/users/` — daftar/buat akun, khusus admin.
-- `GET /api/admin/audit-logs/` — audit log, khusus admin.
-- `GET/POST /api/admin/settings/` — baca/buat pengaturan global, khusus admin.
-- `GET/PATCH /api/admin/settings/<key>/` — baca/perbarui satu pengaturan, khusus admin.
+- Auth: `GET /api/auth/csrf/`, `POST /api/auth/login/`, `POST /api/auth/logout/`, `GET/PATCH /api/auth/me/`, `POST /api/auth/register/`.
+- Admin users: `GET/POST /api/admin/users/`.
+- Store settings and audit: `/api/admin/settings/`, `/api/admin/audit-logs/`.
+- Catalog: `GET/POST /api/categories/`, `GET/PATCH/DELETE /api/categories/{id}/`, `GET/POST /api/products/`, `GET/PATCH/DELETE /api/products/{id}/`.
+- Inventory: `POST /api/products/{id}/stock-adjustments/`, `GET /api/admin/stock-movements/`.
+- Orders: `POST /api/orders/checkout/`, `GET /api/orders/`, `GET /api/orders/{code}/`, `POST /api/orders/{code}/actions/`.
 
-Siswa menggunakan NISN 10 digit sebagai identifier. Orang tua menggunakan email. Admin dan kasir dibuat oleh admin, bukan melalui registrasi publik. Akun orang tua dan siswa independen; tidak ada model atau endpoint relasi keduanya.
+## Order flow
 
-## Frontend
+Online checkout is available to Student and Parent accounts. The server recalculates prices, checks stock, reserves inventory in a database transaction, snapshots item names/prices, and records stock movement and status history. Customers can only read their own orders. Admin and Cashier can read the order queue; only Admin can accept/reject orders or verify QRIS payment. Admin/Cashier can move accepted orders through processing and fulfillment.
 
-Frontend harus memakai `credentials: "include"`, meminta `/api/auth/csrf/` sebelum POST/PATCH/DELETE, dan mengirim token CSRF di header `X-CSRFToken`. Isi `CORS_ALLOWED_ORIGINS` dan `DJANGO_CSRF_TRUSTED_ORIGINS` sesuai origin frontend. Untuk frontend dan API yang benar-benar beda site, set kedua cookie SameSite ke `None` dan Secure ke `true`; konfigurasi reverse proxy satu-site lebih disarankan karena kebijakan third-party cookie browser dapat membatasi cookie lintas-site.
+- Cash: order enters `pending_review`; payment remains unpaid until staff completes handoff.
+- Static store QRIS: order enters `awaiting_payment`; payment remains `pending_verification` until an Admin checks the merchant transaction record and verifies it. The application does not infer payment success from the customer device or a QR image.
+- Reject/cancel releases reserved stock. If a QRIS payment was already verified, payment becomes `refund_pending`; an actual refund must be performed outside this system and reconciled by staff.
+- QRIS pending orders expire after 20 minutes. Run `py manage.py expire_qris_orders` periodically (for example, every 5 minutes using a scheduler) to expire them and release stock.
 
-## Database
+## Important deployment requirements / known gaps
 
-SQLite hanya untuk pengembangan lokal dan smoke test. Untuk deployment, set `DB_ENGINE=mysql` dan isi kredensial TiDB/MySQL di environment. Jangan commit file `.env`, database, atau credential.
+- The QRIS image/merchant account is not configured by code. Admin still needs a verified store QRIS asset and a safe public setting/upload workflow.
+- Static QRIS verification is manual. Automatic confirmation requires an official QRIS payment provider, merchant API credentials, signed webhook verification, and provider reconciliation.
+- GoSend/GrabExpress live booking and fare quotes require official partner/API credentials. Do not expose credentials in frontend code.
+- Configure TiDB/MySQL before production. Test transaction/locking behavior on the same database engine used in production; SQLite is not a substitute for concurrency tests.
+- Configure HTTPS, production secret key, allowed hosts, CSRF/CORS origins, secure cookies, backups, logging, and scheduled expiry jobs before deployment.
+- Frontend still contains prototype order/product views until the commerce API integration phase is completed. Do not treat this backend phase alone as a complete user-facing store.
 
-## Batas Phase 1
+## Security
 
-Phase ini menyediakan fondasi identitas, sesi, role, audit, dan pengaturan global. POS, stok, katalog persisten, checkout, pembayaran, dan pengiriman dibangun pada phase berikutnya. Jangan menganggap endpoint yang belum dibuat sebagai integrasi siap produksi.
+Never commit `.env`, database files, provider credentials, QRIS merchant secrets, or private keys. Production startup fails if `DJANGO_SECRET_KEY` is missing while debug mode is disabled. Keep server-side role checks enabled; client-side route guards are only a usability layer.
