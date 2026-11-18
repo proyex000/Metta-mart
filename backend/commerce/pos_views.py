@@ -49,7 +49,7 @@ class CurrentShiftView(APIView):
 
 
 class OpenShiftView(APIView):
-    permission_classes = [IsAdminOrCashier]
+    permission_classes = [IsAdminRole]
 
     def post(self, request):
         try:
@@ -69,7 +69,7 @@ class OpenShiftView(APIView):
 
 
 class CloseShiftView(APIView):
-    permission_classes = [IsAdminOrCashier]
+    permission_classes = [IsAdminRole]
 
     def post(self, request):
         try:
@@ -95,7 +95,7 @@ class CloseShiftView(APIView):
 
 
 class CashMovementView(APIView):
-    permission_classes = [IsAdminOrCashier]
+    permission_classes = [IsAdminRole]
 
     def post(self, request):
         kind = request.data.get("kind")
@@ -120,7 +120,7 @@ class CashMovementView(APIView):
 
 
 class POSCheckoutView(APIView):
-    permission_classes = [IsAdminOrCashier]
+    permission_classes = [IsAdminRole]
 
     def post(self, request):
         serializer = CheckoutSerializer(data={**request.data, "fulfillment": "pickup", "payment_method": "cash"})
