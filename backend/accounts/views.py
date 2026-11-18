@@ -29,6 +29,8 @@ class LoginView(APIView):
 
     def post(self, request):
         identifier = str(request.data.get("identifier", "")).strip()
+        if "@" in identifier:
+            identifier = identifier.lower()
         password = request.data.get("password", "")
         if not identifier or not isinstance(password, str):
             raise AuthenticationFailed("Identitas atau password tidak valid.")
@@ -77,7 +79,6 @@ class RegisterView(generics.GenericAPIView):
 class AdminUserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminRole]
     queryset = User.objects.all().order_by("full_name")
-    serializer_class = AdminCreateUserSerializer
 
     def get_serializer_class(self):
         if self.request.method == "GET":
@@ -86,10 +87,4 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save()
-        AuditLog.objects.create(
-            actor=self.request.user,
-            event="user.created",
-            target_type="user",
-            target_id=str(user.pk),
-            metadata={"role": user.role},
-        )
+        AuditLog.objects.create(actor=self.request.user, event="user.created", target_type="user", target_id=str(user.pk), metadata={"role": user.role})
