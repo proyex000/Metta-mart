@@ -83,11 +83,15 @@ class AdminOrderActionView(APIView):
         elif action == "ready" and order.status == Order.Status.ACCEPTED:
             order.status, order.ready_at = Order.Status.READY, now
         elif action == "complete-pickup" and order.status == Order.Status.READY:
+            if order.payment_method != Order.PaymentMethod.CASH and order.payment_status != Order.PaymentStatus.PAID:
+                raise ValidationError({"payment_status": "Pembayaran transfer/QRIS harus diverifikasi sebelum barang diserahkan."})
             order.status, order.completed_at = Order.Status.COMPLETED, now
             if order.payment_method == Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.UNPAID:
                 order.payment_status = Order.PaymentStatus.PAID
                 PaymentEvent.objects.create(order=order, actor=request.user, event="cash_collected", note="Tunai diterima saat pengambilan.")
         elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED):
+            if order.payment_status == Order.PaymentStatus.PAID:
+                raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan melalui alur biasa."})
             for item in order.items.all():
                 Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
             order.status, order.cancelled_at = Order.Status.CANCELLED, now
@@ -106,6 +110,8 @@ class AdminPaymentActionView(APIView):
         order = Order.objects.select_for_update().filter(code=code).first()
         if not order:
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
+        if order.status == Order.Status.CANCELLED:
+            raise ValidationError({"payment_status": "Pembayaran pesanan yang dibatalkan tidak dapat diverifikasi."})
         if action == "verify" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
             order.payment_status = Order.PaymentStatus.PAID
         elif action == "reject" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
@@ -123,6 +129,8 @@ class PaymentSubmissionView(APIView):
         order = Order.objects.filter(code=code, customer=request.user).first()
         if not order:
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
+        if order.status == Order.Status.CANCELLED:
+            raise ValidationError({"payment": "Pesanan yang dibatalkan tidak dapat menerima konfirmasi pembayaran."})
         if order.payment_method == Order.PaymentMethod.CASH:
             raise ValidationError({"payment": "Pembayaran tunai dikonfirmasi admin saat penyerahan."})
         if order.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED):
