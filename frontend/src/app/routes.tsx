@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import {
   Dashboard,
   Notifications,
+  POS,
   Orders,
   Reports,
   Settings,
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "stock", Component: Stock },
+      { path: "pos", Component: POS },
       { path: "orders", Component: Orders },
       { path: "notifications", Component: Notifications },
       { path: "reports", Component: Reports },
