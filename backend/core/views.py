@@ -117,6 +117,9 @@ class NotificationListView(APIView):
     def post(self, request):
         if request.user.role != "admin":
             return Response({"detail": "Hanya admin yang dapat mengirim pengumuman."}, status=status.HTTP_403_FORBIDDEN)
+        preferences = StoreSetting.objects.filter(key="notification_preferences").first()
+        if preferences and isinstance(preferences.value, dict) and not preferences.value.get("announcements_enabled", True):
+            return Response({"detail": "Pengiriman pengumuman sedang dinonaktifkan."}, status=status.HTTP_400_BAD_REQUEST)
         title = str(request.data.get("title", "")).strip()
         message = str(request.data.get("message", "")).strip()
         kind = str(request.data.get("kind", "announcement")).strip()
