@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AdminInventoryMovementListView, AdminOrderActionView, AdminDashboardView, AdminOrderListView, AdminPaymentActionView, AdminSalesReportView, OrderDetailView, OrderListCreateView, PaymentSubmissionView, ProductDetailView, ProductListCreateView
+from .views import AdminPOSCheckoutView, AdminInventoryMovementListView, AdminOrderActionView, AdminDashboardView, AdminOrderListView, AdminPaymentActionView, AdminSalesReportView, OrderDetailView, OrderListCreateView, PaymentSubmissionView, ProductDetailView, ProductListCreateView
 
 urlpatterns = [
     path("products/", ProductListCreateView.as_view(), name="products"),
