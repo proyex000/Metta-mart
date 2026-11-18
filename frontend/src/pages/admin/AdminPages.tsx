@@ -683,14 +683,14 @@ export function Orders() {
   const exportCsv = () => {
     const escapeCell = (value: unknown) => {
       const raw = String(value ?? "");
-      const safe = /^[=+@\\-\\t\\r]/.test(raw) ? "'" + raw : raw;
+      const safe = /^[=+@\-\t\r]/.test(raw) ? "'" + raw : raw;
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const rows = [
       ["Kode", "Tanggal", "Pelanggan", "Penerima", "Kanal", "Metode", "Status Pesanan", "Status Pembayaran", "Total", "Nama Pengirim", "Bank/E-wallet", "Akhir Rekening"],
       ...shown.map((order) => [order.code, new Date(order.created_at).toLocaleString("id-ID"), order.customer_name, order.beneficiary_name || "", order.sales_channel, order.payment_method, adminOrderStatus(order.status), adminPaymentStatus(order.payment_status), order.total, order.payment_sender_name, order.payment_source, order.payment_account_last4]),
     ];
-    const csv = "\\uFEFF" + rows.map((row) => row.map(escapeCell).join(",")).join("\\r\\n");
+    const csv = "\uFEFF" + rows.map((row) => row.map(escapeCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const anchor = document.createElement("a");
     anchor.href = url;
