@@ -56,3 +56,26 @@ export type AdminSalesReport = {
 export function fetchAdminSalesReport() {
   return apiRequest<AdminSalesReport>("/admin/reports/summary/");
 }
+
+export type AdminDashboardSummary = {
+  products: number;
+  orders_pending: number;
+  orders_processing: number;
+  orders_ready: number;
+  customers: number;
+  low_stock: { id: number; name: string; stock: number }[];
+  today_revenue: number;
+  daily: { date: string; revenue: number; orders: number }[];
+  recent_orders: {
+    code: string;
+    customer_name: string;
+    total: number;
+    status: CommerceOrder["status"];
+    payment_status: CommerceOrder["payment_status"];
+    created_at: string;
+  }[];
+};
+
+export function fetchAdminDashboard() {
+  return apiRequest<AdminDashboardSummary>("/admin/dashboard/");
+}
