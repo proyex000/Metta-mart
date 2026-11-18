@@ -3,7 +3,6 @@ from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from core.models import StoreSetting
-from accounts.models import User
 from .models import InventoryMovement, Order, OrderItem, Product
 
 
