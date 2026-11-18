@@ -17,6 +17,7 @@ import { fetchStorefrontSettings } from "../../services/settings";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
+  const navigate = useNavigate();
   const products = useProducts();
   const base = `/${role}`;
   return (
@@ -189,7 +190,6 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
-  const navigate = useNavigate();
   const products = useProducts();
   const [params] = useSearchParams();
   const [counts, setCounts] = useState<Record<number, number>>(() => {
