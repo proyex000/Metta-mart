@@ -208,6 +208,7 @@ class CommerceApiTests(TestCase):
         self.client.force_authenticate(user=self.admin)
         response = self.client.post("/api/admin/pos/checkout/", {
             "payment_method": "cash",
+            "cash_received": 20000,
             "items": [{"product_id": self.product.id, "quantity": 3}],
         }, format="json")
         self.assertEqual(response.status_code, 201)
@@ -215,6 +216,9 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.data["payment_status"], Order.PaymentStatus.PAID)
         self.assertEqual(response.data["sales_channel"], "pos")
         self.assertEqual(response.data["customer_name"], "Penjualan POS")
+        self.assertEqual(response.data["cash_received"], 20000)
+        self.assertEqual(response.data["change_due"], 5000)
+        self.assertEqual(InventoryMovement.objects.get(reason="pos_sale").quantity_delta, -3)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
 
