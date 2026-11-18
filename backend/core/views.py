@@ -1,3 +1,4 @@
+from datetime import datetime
 from rest_framework import generics
 from accounts.permissions import IsAdminRole
 from .models import AuditLog, StoreSetting
@@ -56,8 +57,9 @@ class StorefrontSettingsView(APIView):
         for key, value in request.data.items():
             if not isinstance(value, dict):
                 raise ValidationError({key: "Nilai pengaturan harus berupa objek."})
-            current = DEFAULT_STORE_SETTINGS[key]
-            if set(value.keys()) - set(current.keys()):
+            existing = StoreSetting.objects.filter(key=key).first()
+            current = existing.value if existing else DEFAULT_STORE_SETTINGS[key]
+            if set(value.keys()) - set(DEFAULT_STORE_SETTINGS[key].keys()):
                 raise ValidationError({key: "Terdapat kolom pengaturan yang tidak dikenal."})
             merged = {**current, **value}
             if key == "operating_hours":
@@ -66,10 +68,20 @@ class StorefrontSettingsView(APIView):
                 for field in ("open_time", "close_time"):
                     if not isinstance(merged[field], str):
                         raise ValidationError({key: "Jam operasional harus berupa teks HH:MM."})
-                    if merged[field] and (len(merged[field]) != 5 or merged[field][2] != ":"):
-                        raise ValidationError({key: "Gunakan format jam HH:MM."})
+                    if merged[field]:
+                        try:
+                            datetime.strptime(merged[field], "%H:%M")
+                        except (TypeError, ValueError):
+                            raise ValidationError({key: "Gunakan format jam HH:MM yang valid."})
+                if merged["open_time"] and merged["close_time"] and merged["open_time"] >= merged["close_time"]:
+                    raise ValidationError({key: "Jam tutup harus setelah jam buka."})
             if key == "payment_methods" and any(not isinstance(merged[field], bool) for field in ("cash", "bank_transfer", "qris")):
                 raise ValidationError({key: "Status metode pembayaran harus berupa boolean."})
+            if key == "payment_instructions":
+                if any(not isinstance(merged[field], str) for field in ("bank_name", "account_name", "account_number", "qris_note")):
+                    raise ValidationError({key: "Instruksi pembayaran harus berupa teks."})
+            if key == "pickup_instructions" and not isinstance(merged["message"], str):
+                raise ValidationError({key: "Instruksi pengambilan harus berupa teks."})
             StoreSetting.objects.update_or_create(key=key, defaults={"value": merged, "updated_by": request.user})
         AuditLog.objects.create(actor=request.user, event="store.settings_updated", target_type="store", metadata={"keys": list(request.data.keys())})
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
