@@ -74,16 +74,12 @@ export const router = createBrowserRouter([
       { index: true, Component: CommerceDashboard },
       { path: "stock", Component: Stock },
       { path: "orders", Component: CommerceOrders },
+      { path: "pos", Component: CashierPOS },
       { path: "notifications", element: <NotificationCenter role="admin" /> },
       { path: "reports", Component: Reports },
       { path: "settings", Component: Settings },
       { path: "*", Component: RoleNotFound },
     ],
-  },
-  {
-    path: "/cashier",
-    element: <ProtectedRole role="cashier" />,
-    children: [{ index: true, Component: CashierPOS }, { path: "*", Component: RoleNotFound }],
   },
   {
     path: "/parent",
