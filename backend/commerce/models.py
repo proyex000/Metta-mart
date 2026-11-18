@@ -35,6 +35,7 @@ class InventoryMovement(models.Model):
         ("manual_adjustment", "Penyesuaian manual"),
         ("order_reserved", "Dipesan pelanggan"),
         ("order_cancelled", "Pesanan dibatalkan"),
+        ("pos_sale", "Penjualan langsung POS"),
     ]
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="stock_movements")
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements")
