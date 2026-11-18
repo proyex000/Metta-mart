@@ -11,6 +11,7 @@ export type CommerceOrder = {
   id: number;
   code: string;
   customer_name: string;
+  beneficiary_name: string | null;
   status: "pending" | "accepted" | "ready_for_pickup" | "completed" | "cancelled";
   payment_method: "cash" | "bank_transfer" | "qris";
   payment_status: "unpaid" | "pending_verification" | "paid" | "failed" | "refunded";
@@ -26,7 +27,7 @@ export type CommerceOrder = {
 };
 export type PaymentMethod = CommerceOrder["payment_method"];
 
-export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string }) {
+export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; student_id?: number }) {
   return apiRequest<CommerceOrder>("/orders/", { method: "POST", body: JSON.stringify(input) });
 }
 export function fetchOrders() {
