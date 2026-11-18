@@ -204,8 +204,9 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [submitError, setSubmitError] = useState("");
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
   const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
+  const [paymentInstructions, setPaymentInstructions] = useState({ bank_name: "", account_name: "", account_number: "", qris_note: "" });
   useEffect(() => {
-    fetchStorefrontSettings().then((settings) => setPaymentSettings(settings.payment_methods)).catch(() => undefined);
+    fetchStorefrontSettings().then((settings) => { setPaymentSettings(settings.payment_methods); setPaymentInstructions(settings.payment_instructions); }).catch(() => undefined);
   }, []);
   const methods = [
     { id: "cash" as const, title: "Tunai", description: "Bayar tunai saat pengambilan di koperasi.", symbol: "Rp", enabled: paymentSettings.cash },
@@ -319,10 +320,10 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           </p>
         )}
         {selectedPayment === "qris" && (
-          <p className="payment-help">Kode QRIS akan diberikan oleh kasir/admin. Jangan transfer ke kode atau rekening dari sumber yang tidak resmi.</p>
+          <p className="payment-help">{paymentInstructions.qris_note || "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin."} Jangan gunakan kode dari sumber yang tidak resmi.</p>
         )}
         {selectedPayment === "bankTransfer" && (
-          <p className="payment-help">Detail rekening dan konfirmasi pembayaran akan diberikan oleh admin setelah pesanan diterima.</p>
+          <p className="payment-help">{paymentInstructions.bank_name ? `Bank: ${paymentInstructions.bank_name}. ` : ""}{paymentInstructions.account_name ? `Atas nama: ${paymentInstructions.account_name}. ` : ""}{paymentInstructions.account_number ? `Nomor rekening: ${paymentInstructions.account_number}.` : "Detail rekening belum diatur admin."} Setelah transfer, kirim referensi pembayaran pada detail pesanan.</p>
         )}
         {selectedPayment === "cash" && (
           <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di kasir.</p>
