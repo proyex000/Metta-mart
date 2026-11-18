@@ -309,8 +309,10 @@ class AdminDashboardView(APIView):
             "daily": daily,
             "recent_orders": [{
                 "code": order.code,
-                "customer_name": order.customer.full_name,
+                "customer_name": "Penjualan POS" if order.sales_channel == "pos" else order.customer.full_name,
+                "beneficiary_name": order.beneficiary.full_name if order.beneficiary_id else None,
                 "total": order.total,
+                "sales_channel": order.sales_channel,
                 "status": order.status,
                 "payment_status": order.payment_status,
                 "created_at": order.created_at,
