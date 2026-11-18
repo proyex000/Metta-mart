@@ -7,10 +7,10 @@ export type ApiProduct = {
 };
 
 export type ApiOrderItem = { id: number; product: number | null; product_name: string; sku: string; unit: string; unit_price: number; quantity: number; line_total: number };
-export type ApiPayment = { method: "cash" | "qris"; status: string; amount: number; cash_received: number | null; change_due: number; reference: string; paid_at: string | null; verified_by_name: string | null; verification_note: string };
+export type ApiPayment = { method: "cash" | "bank_transfer" | "qris"; status: string; amount: number; cash_received: number | null; change_due: number; reference: string; payment_reference: string; paid_at: string | null; verified_by_name: string | null; verification_note: string };
 export type ApiOrder = {
   id: number; code: string; customer: number | null; customer_name: string; customer_identifier: string; created_by_name?: string | null;
-  status: string; fulfillment: "pickup" | "delivery"; delivery_address: string; customer_note: string;
+  status: string; fulfillment: "pickup"; delivery_address: string; customer_note: string;
   admin_note: string; subtotal: number; delivery_fee: number; total: number; expires_at: string | null;
   items: ApiOrderItem[]; payment: ApiPayment; status_history: { from_status: string; to_status: string; note: string; actor_name: string | null; created_at: string }[];
   created_at: string; updated_at: string;
@@ -50,7 +50,7 @@ export async function listOrders(statusFilter?: string, page = 1) {
 export async function getOrder(code: string) {
   return apiRequest<ApiOrder>(`/orders/${encodeURIComponent(code)}/`);
 }
-export async function createCheckout(input: { items: { product_id: number; quantity: number }[]; fulfillment: "pickup" | "delivery"; delivery_address?: string; customer_note?: string; payment_method: "cash" | "qris" }) {
+export async function createCheckout(input: { items: { product_id: number; quantity: number }[]; fulfillment: "pickup"; customer_note?: string; payment_method: "cash" | "bank_transfer" | "qris" }) {
   return apiRequest<ApiOrder>("/orders/checkout/", { method: "POST", body: JSON.stringify(input) });
 }
 export async function orderAction(code: string, action: string, note = "") {
@@ -61,7 +61,7 @@ export function pageResults<T>(value: Page<T> | T[]): T[] {
   return Array.isArray(value) ? value : value.results;
 }
 
-export type CheckoutConfig = { cash_enabled: boolean; qris_enabled: boolean; qris_image_url: string; pickup_enabled: boolean; delivery_enabled: boolean; delivery_fee: number };
+export type CheckoutConfig = { cash_enabled: boolean; bank_transfer_enabled: boolean; bank_name: string; bank_account_name: string; bank_account_number: string; qris_enabled: boolean; qris_image_url: string; pickup_enabled: boolean; operating_days: string[]; opening_time: string; closing_time: string; pickup_instructions: string };
 export async function getCheckoutConfig() {
   return apiRequest<CheckoutConfig>("/store/checkout-config/");
 }
