@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from core.models import StoreSetting
 from .models import Order, OrderItem, Product
 
 
@@ -38,6 +39,13 @@ class OrderCreateSerializer(serializers.Serializer):
     items = serializers.ListField(child=serializers.DictField(), allow_empty=False)
     payment_method = serializers.ChoiceField(choices=Order.PaymentMethod.choices)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_payment_method(self, value):
+        setting = StoreSetting.objects.filter(key="payment_methods").first()
+        enabled = setting.value if setting else {"cash": True, "bank_transfer": True, "qris": True}
+        if not enabled.get(value, False):
+            raise serializers.ValidationError("Metode pembayaran ini sedang tidak tersedia.")
+        return value
 
     def validate_items(self, value):
         cleaned = []
