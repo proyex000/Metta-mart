@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
-import { adminOrderAction, adminPaymentAction, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchOrders, type AdminDashboardSummary, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
+import { adminOrderAction, adminPaymentAction, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchInventoryMovements, fetchOrders, type AdminDashboardSummary, type InventoryMovementRow, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 import { createFamilyLink, deleteFamilyLink, fetchAdminAccounts, fetchFamilyLinks, type AdminAccount, type FamilyLink } from "../../services/family";
@@ -411,6 +411,10 @@ export function Stock() {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyProductForm);
   const [error, setError] = useState("");
+  const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
+  const [movementError, setMovementError] = useState("");
+  const reloadMovements = () => fetchInventoryMovements().then(setMovements).catch((reason) => setMovementError(reason instanceof Error ? reason.message : "Riwayat stok gagal dimuat."));
+  useEffect(() => { reloadMovements(); }, []);
   const filtered = items.filter((p) => {
     const needle = query.trim().toLowerCase();
     return (
@@ -453,6 +457,7 @@ export function Stock() {
       if (editing === "new") await productService.create(input);
       else await productService.update(editing.id, input);
       setEditing(null);
+      await reloadMovements();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Produk gagal disimpan.");
     }
@@ -558,6 +563,14 @@ export function Stock() {
           Menampilkan {filtered.length} dari {items.length} produk
         </p>
       </div>
+      <section className="panel table-panel">
+        <div className="panel__title"><h2>Riwayat Pergerakan Stok</h2><small>Catatan perubahan stok terbaru</small></div>
+        {movementError && <p className="auth-error" role="alert">{movementError}</p>}
+        {!movements.length && !movementError && <p className="table-foot">Belum ada pergerakan stok.</p>}
+        {movements.length > 0 && <div className="desktop-table"><table><thead><tr><th>Waktu</th><th>Produk</th><th>Perubahan</th><th>Jenis</th><th>Referensi</th><th>Admin</th></tr></thead><tbody>
+          {movements.slice(0, 20).map((movement) => <tr key={movement.id}><td>{new Date(movement.created_at).toLocaleString("id-ID")}</td><td>{movement.product_name}</td><td className={movement.quantity_delta < 0 ? "danger" : ""}>{movement.quantity_delta > 0 ? "+" : ""}{movement.quantity_delta}</td><td>{{ initial_stock: "Stok awal", manual_adjustment: "Penyesuaian", order_reserved: "Pesanan online", order_cancelled: "Pembatalan", pos_sale: "Penjualan POS" }[movement.reason]}</td><td>{movement.reference || "—"}</td><td>{movement.actor_name || "Sistem"}</td></tr>)}
+        </tbody></table></div>}
+      </section>
       {editing && (
         <Modal title={editing === "new" ? "Tambah Produk" : "Ubah Produk"} close={() => setEditing(null)}>
           <form onSubmit={save} noValidate>
