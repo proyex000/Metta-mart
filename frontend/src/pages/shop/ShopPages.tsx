@@ -14,6 +14,7 @@ import { refreshProducts, stockLabel, useProducts } from "../../services/product
 import type { Role } from "../../types";
 import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings } from "../../services/settings";
+import { fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
@@ -443,26 +444,42 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 export function ShopNotifications() {
-  const [read, setRead] = useState<number[]>([]);
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState<number | null>(null);
+  useEffect(() => {
+    fetchNotifications().then(setItems)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Notifikasi gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+  const openNotice = async (notice: AppNotification) => {
+    if (notice.is_read || working === notice.id) return;
+    setWorking(notice.id);
+    try {
+      await markNotificationRead(notice.id);
+      setItems((current) => current.map((item) => item.id === notice.id ? { ...item, is_read: true } : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Status notifikasi gagal diperbarui.");
+    } finally { setWorking(null); }
+  };
   return (
     <>
-      <PageTitle title="Notifikasi" subtitle="Informasi terbaru dari MettaMart." />
+      <PageTitle title="Notifikasi" subtitle="Informasi pesanan dan pengumuman dari koperasi." />
+      {loading && <p>Memuat notifikasi...</p>}
+      {error && <p className="payment-unavailable" role="alert">{error}</p>}
+      {!loading && !error && !items.length && <div className="empty-state"><h2>Belum ada notifikasi</h2><p>Informasi terbaru dari koperasi akan muncul di sini.</p></div>}
       <section className="shop-notices">
-        {notices.map((notice, index) => (
-          <button
-            className={read.includes(index) ? "read" : ""}
-            key={notice.title}
-            onClick={() => setRead([...new Set([...read, index])])}
-          >
-            <span className="mini-icon">
-              <Icon name={index % 2 ? "box" : "bell"} />
-            </span>
+        {items.map((notice) => (
+          <button className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => openNotice(notice)}>
+            <span className="mini-icon"><Icon name={notice.kind === "payment" ? "bag" : "bell"} /></span>
             <div>
               <b>{notice.title}</b>
-              <p>{notice.text}</p>
-              <time>{notice.time}</time>
+              <p>{notice.message}</p>
+              <time>{new Date(notice.created_at).toLocaleString("id-ID")}</time>
+              {notice.target_code && <small>Pesanan {notice.target_code}</small>}
             </div>
-            <span>›</span>
+            {!notice.is_read && <span aria-label="Belum dibaca">Baru</span>}
           </button>
         ))}
       </section>
