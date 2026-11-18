@@ -19,7 +19,8 @@ def notify_user(user, title, message, kind="info", target_code=""):
 
 def notify_admins(title, message, kind="order", target_code=""):
     preferences = StoreSetting.objects.filter(key="notification_preferences").first()
-    if preferences and isinstance(preferences.value, dict) and not preferences.value.get("order_alerts", True):
+    preference_key = "low_stock_alerts" if kind == "stock" else "order_alerts"
+    if preferences and isinstance(preferences.value, dict) and not preferences.value.get(preference_key, True):
         return
     User = get_user_model()
     Notification.objects.bulk_create([
