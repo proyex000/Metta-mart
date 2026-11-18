@@ -3493,3 +3493,35 @@ td b {
   outline: 2px solid var(--red);
   outline-offset: 2px;
 }
+
+.top-products-list {
+  display: grid;
+  gap: 0.75rem;
+}
+.top-products-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e8eef2;
+}
+.top-products-list > div:last-child {
+  border-bottom: 0;
+}
+.top-products-list span {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.top-products-list span b {
+  overflow-wrap: anywhere;
+}
+.top-products-list small {
+  color: #718096;
+  font-size: 0.78rem;
+}
+.top-products-list strong {
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
