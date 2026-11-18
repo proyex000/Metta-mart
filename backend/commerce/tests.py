@@ -142,6 +142,38 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.data["products"], 1)
         self.assertEqual(response.data["orders_pending"], 1)
         self.assertEqual(response.data["customers"], 2)
-        self.assertEqual(response.data["low_stock"], [])
+        self.assertEqual(response.data["low_stock"], [{"id": self.product.id, "name": "Buku Tulis", "stock": 8}])
         self.assertEqual(len(response.data["daily"]), 7)
         self.assertEqual(response.data["recent_orders"][0]["code"], Order.objects.latest("created_at").code)
+
+    def test_order_creation_notifies_admin_and_order_updates_notify_customer(self):
+        from core.models import Notification
+        created = self.create_order("cash")
+        code = created.data["code"]
+        admin_notice = Notification.objects.get(recipient=self.admin, target_code=code)
+        self.assertIn("Pesanan baru", admin_notice.title)
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        customer_notice = Notification.objects.get(recipient=self.student, target_code=code)
+        self.assertEqual(customer_notice.title, "Pesanan sedang diproses")
+
+    def test_notification_read_is_limited_to_recipient(self):
+        from core.models import Notification
+        notice = Notification.objects.create(recipient=self.student, title="Tes", message="Tes")
+        self.client.force_authenticate(user=self.other_student)
+        denied = self.client.post(f"/api/notifications/{notice.id}/read/", {}, format="json")
+        self.assertEqual(denied.status_code, 404)
+        self.client.force_authenticate(user=self.student)
+        read = self.client.post(f"/api/notifications/{notice.id}/read/", {}, format="json")
+        self.assertEqual(read.status_code, 200)
+        notice.refresh_from_db()
+        self.assertIsNotNone(notice.read_at)
+
+    def test_admin_can_broadcast_announcement_to_students_and_parents_only(self):
+        from core.models import Notification
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post("/api/notifications/", {"title": "Info koperasi", "message": "Jam buka berubah."}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["sent_to"], 2)
+        self.assertEqual(Notification.objects.filter(title="Info koperasi").count(), 2)
