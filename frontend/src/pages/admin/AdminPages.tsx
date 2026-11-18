@@ -1138,17 +1138,36 @@ export function Settings() {
           {tab === "payment" && <>
             <h2>Metode Pembayaran</h2>
             <p>Aktifkan metode pembayaran yang dapat dipilih pelanggan.</p>
-            {toggle("Tunai di kasir", "cash", "Pembayaran langsung saat mengambil pesanan.")}
-            {toggle("QRIS toko", "qris", "Pembayaran menggunakan QRIS statis milik toko; verifikasi dilakukan Admin.")}
+            {toggle("Tunai", "cash", "Pembayaran tunai dilakukan saat pengambilan.")}
+            {toggle("Transfer bank", "bankTransfer", "Transfer ke rekening resmi koperasi; admin memeriksa referensi secara manual.")}
+            {field("Nama Bank", "bankName")}
+            {field("Nama Pemilik Rekening", "bankAccountName")}
+            {field("Nomor Rekening", "bankAccountNumber")}
+            {toggle("QRIS toko", "qris", "Pembayaran menggunakan QRIS statis; verifikasi dilakukan Admin.")}
             {field("URL gambar QRIS toko", "qrisImageUrl")}
-            <p className="settings-help">QRIS baru bisa dipilih pelanggan setelah URL gambar QRIS diisi dan opsi QRIS diaktifkan. Verifikasi tetap manual melalui aplikasi merchant.</p>
+            <p className="settings-help">Transfer bank aktif setelah nomor rekening disimpan. QRIS aktif setelah URL QRIS resmi disimpan. Keduanya tetap memerlukan verifikasi admin.</p>
           </>}
-          {tab === "shipping" && <>
-            <h2>Pengiriman & Pengambilan</h2>
-            {toggle("Aktifkan pengiriman", "deliveryEnabled", "Pesanan dapat diantar sesuai ketentuan toko.")}
-            {toggle("Ambil di toko", "pickupEnabled", "Pelanggan dapat mengambil pesanan di toko.")}
-            {field("Biaya pengiriman (Rp)", "shippingFee")}
-            {field("Estimasi pengiriman", "estimatedDelivery")}
+          {tab === "pickup" && <>
+            <h2>Jam Operasional & Pengambilan</h2>
+            <p>Pemesanan online tetap dapat dilakukan kapan saja. Jam ini hanya mengatur konfirmasi penyerahan pesanan yang sudah siap diambil.</p>
+            {toggle("Aktifkan pengambilan", "pickupEnabled", "Nonaktifkan sementara jika koperasi tidak melayani pengambilan.")}
+            <div className="settings-day-picker">
+              <span>Hari Operasional</span>
+              {[
+                ["mon", "Senin"], ["tue", "Selasa"], ["wed", "Rabu"], ["thu", "Kamis"],
+                ["fri", "Jumat"], ["sat", "Sabtu"], ["sun", "Minggu"],
+              ].map(([day, label]) => (
+                <label key={day}>
+                  <input type="checkbox" checked={values.operatingDays.split(",").includes(day)} onChange={(event) => {
+                    const current = values.operatingDays.split(",").filter(Boolean);
+                    update("operatingDays", (event.target.checked ? [...current, day] : current.filter((item) => item !== day)).join(","));
+                  }} />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div className="form-row">{field("Jam buka", "openingTime", "time")}{field("Jam tutup", "closingTime", "time")}</div>
+            <label>Instruksi pengambilan<textarea value={values.pickupInstructions} onChange={(event) => update("pickupInstructions", event.target.value)} /></label>
           </>}
           {tab === "notifications" && <>
             <h2>Notifikasi Sistem</h2>
@@ -1160,7 +1179,7 @@ export function Settings() {
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
             {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
-            {saved && <span role="status">Pengaturan operasional pembayaran dan pengiriman tersimpan di server. Preferensi lainnya masih tersimpan di browser ini.</span>}
+            {saved && <span role="status">Pengaturan pembayaran dan pengambilan tersimpan di server. Preferensi lainnya masih tersimpan di browser ini.</span>}
           </div>
         </form>
         <div className="logo-upload">
