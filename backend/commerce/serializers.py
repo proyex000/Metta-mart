@@ -3,7 +3,7 @@ from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from core.models import StoreSetting
-from .models import Order, OrderItem, Product
+from .models import InventoryMovement, Order, OrderItem, Product
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -86,5 +86,6 @@ class OrderCreateSerializer(serializers.Serializer):
             updated = Product.objects.filter(pk=product.pk, stock__gte=row["quantity"]).update(stock=F("stock") - row["quantity"])
             if not updated:
                 raise ValidationError({"items": f"Stok {product.name} baru saja berubah. Muat ulang katalog."})
+            InventoryMovement.objects.create(product=product, actor=self.context["request"].user, quantity_delta=-row["quantity"], reason="order_reserved", reference=order.code)
             OrderItem.objects.create(order=order, product=product, product_name=product.name, unit_price=product.price, quantity=row["quantity"], line_total=product.price * row["quantity"])
         return order
