@@ -1,9 +1,11 @@
 from django.urls import path
 from .config_views import CheckoutConfigAdminView, CheckoutConfigView
 from .pos_views import CashMovementView, CloseShiftView, CurrentShiftView, OpenShiftView, POSCheckoutView
+from .report_views import SalesReportView
 from .views import CategoryDetailView, CategoryListCreateView, CheckoutView, OrderActionView, OrderDetailView, OrderListView, ProductDetailView, ProductListCreateView, StockAdjustmentView, StockMovementListView
 
 urlpatterns = [
+    path("admin/reports/sales/", SalesReportView.as_view(), name="admin-sales-report"),
     path("pos/shifts/current/", CurrentShiftView.as_view(), name="pos-current-shift"),
     path("pos/shifts/open/", OpenShiftView.as_view(), name="pos-open-shift"),
     path("pos/shifts/close/", CloseShiftView.as_view(), name="pos-close-shift"),

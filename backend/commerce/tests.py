@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
-from .models import CashierShift, Category, Order, Payment, Product, StockMovement
+from .models import CashierShift, Category, Order, OrderItem, Payment, Product, StockMovement
 
 
 class CommerceApiTests(TestCase):
@@ -24,6 +24,22 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"][0]["stock"], 10)
         self.assertNotIn("cost_price", response.data["results"][0])
+
+    def test_admin_sales_report_aggregates_only_paid_completed_orders(self):
+        completed = Order.objects.create(customer=self.student, fulfillment=Order.Fulfillment.PICKUP, status=Order.Status.COMPLETED, subtotal=10000, total=10000)
+        OrderItem.objects.create(order=completed, product=self.product, product_name=self.product.name, unit_price=5000, quantity=2, line_total=10000)
+        Payment.objects.create(order=completed, method=Payment.Method.CASH, status=Payment.Status.PAID, amount=10000, reference=completed.code, paid_at=timezone.now())
+        pending = Order.objects.create(customer=self.student, fulfillment=Order.Fulfillment.PICKUP, status=Order.Status.PENDING_REVIEW, subtotal=9000, total=9000)
+        Payment.objects.create(order=pending, method=Payment.Method.CASH, status=Payment.Status.UNPAID, amount=9000, reference=pending.code)
+        self.client.force_authenticate(self.student)
+        self.assertEqual(self.client.get("/api/admin/reports/sales/").status_code, 403)
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/admin/reports/sales/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total_sales"], 10000)
+        self.assertEqual(response.data["orders_count"], 1)
+        self.assertEqual(response.data["average_order"], 10000)
+        self.assertEqual(response.data["category_sales"][0]["category"], self.category.name)
 
     def test_admin_can_see_product_cost_price(self):
         self.product.cost_price = 2500
