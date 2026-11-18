@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
-import { adminOrderAction, adminPaymentAction, fetchOrders, type CommerceOrder } from "../../services/commerce";
+import { adminOrderAction, adminPaymentAction, fetchAdminSalesReport, fetchOrders, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
@@ -847,86 +847,76 @@ export function Notifications() {
 }
 
 export function Reports() {
-  const bars = [45, 32, 64, 48, 59, 78, 46, 76];
+  const [report, setReport] = useState<AdminSalesReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchAdminSalesReport()
+      .then(setReport)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Laporan gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const maxDailyRevenue = Math.max(1, ...(report?.daily.map((day) => day.total) ?? [0]));
+  const periodLabel = report
+    ? `${new Date(`${report.period.from}T00:00:00`).toLocaleDateString("id-ID")} – ${new Date(`${report.period.to}T00:00:00`).toLocaleDateString("id-ID")}`
+    : "";
+
   return (
     <>
-      <Header title="Laporan" subtitle="Lihat ringkasan data penjualan dan aktivitas toko." />
-      <section className="report-summary">
-        <article>
-          <span className="mini-icon">
-            <Icon name="chart" />
-          </span>
-          <div>
-            <small>Total Penjualan</small>
-            <strong>Rp 4.820.000</strong>
-            <em>↑ 12% dari periode sebelumnya</em>
-          </div>
-        </article>
-        <article>
-          <span className="mini-icon">
-            <Icon name="bag" />
-          </span>
-          <div>
-            <small>Jumlah Pesanan</small>
-            <strong>86</strong>
-            <em>↑ 12% dari periode sebelumnya</em>
-          </div>
-        </article>
-        <article>
-          <span className="mini-icon">
-            <Icon name="bag" />
-          </span>
-          <div>
-            <small>Rata-rata Transaksi</small>
-            <strong>Rp 56.047</strong>
-            <em>↑ 8% dari periode sebelumnya</em>
-          </div>
-        </article>
-      </section>
-      <section className="report-grid">
-        <article className="panel">
-          <div className="panel__title">
-            <h2>Grafik Penjualan</h2>
-            <select>
-              <option>7 Hari Terakhir</option>
-            </select>
-          </div>
-          <div className="bar-chart">
-            {bars.map((h, i) => (
-              <div key={i}>
-                <i style={{ height: `${h}%` }} />
-                <small>{i + 5} Okt</small>
-              </div>
-            ))}
-          </div>
-        </article>
-        <article className="panel">
-          <div className="panel__title">
-            <h2>Penjualan per Kategori</h2>
-          </div>
-          <div className="donut-wrap">
-            <div className="donut">
-              <span>
-                Total<b>Rp 4,82jt</b>
-              </span>
-            </div>
-            <ul>
-              <li>
-                <i /> Alat Tulis <b>45%</b>
-              </li>
-              <li>
-                <i /> Minuman <b>25%</b>
-              </li>
-              <li>
-                <i /> Makanan <b>15%</b>
-              </li>
-              <li>
-                <i /> Lainnya <b>15%</b>
-              </li>
-            </ul>
-          </div>
-        </article>
-      </section>
+      <Header title="Laporan" subtitle="Ringkasan penjualan dari pesanan yang sudah selesai dan pembayarannya lunas." />
+      {loading && <div className="panel"><p>Memuat laporan dari server...</p></div>}
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {report && (
+        <>
+          <section className="report-summary">
+            <article>
+              <span className="mini-icon"><Icon name="chart" /></span>
+              <div><small>Penjualan Hari Ini</small><strong>{money(report.today.revenue)}</strong><em>{report.today.orders} transaksi selesai</em></div>
+            </article>
+            <article>
+              <span className="mini-icon"><Icon name="bag" /></span>
+              <div><small>Penjualan Bulan Ini</small><strong>{money(report.month.revenue)}</strong><em>{report.month.orders} transaksi lunas</em></div>
+            </article>
+            <article>
+              <span className="mini-icon"><Icon name="bag" /></span>
+              <div><small>Rata-rata Transaksi Bulan Ini</small><strong>{money(report.month.average_order)}</strong><em>Per transaksi selesai</em></div>
+            </article>
+          </section>
+          <section className="report-grid">
+            <article className="panel">
+              <div className="panel__title"><h2>Penjualan 7 Hari Terakhir</h2><small>{periodLabel}</small></div>
+              {report.daily.every((day) => day.total === 0) ? (
+                <p className="table-foot">Belum ada penjualan selesai dalam 7 hari terakhir.</p>
+              ) : (
+                <div className="bar-chart">
+                  {report.daily.map((day) => (
+                    <div key={day.date} title={`${money(day.total)} · ${day.orders} transaksi`}>
+                      <i style={{ height: `${Math.max(4, day.total / maxDailyRevenue * 100)}%` }} />
+                      <small>{new Date(`${day.date}T00:00:00`).toLocaleDateString("id-ID", { weekday: "short" })}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+            <article className="panel">
+              <div className="panel__title"><h2>Produk Terlaris Bulan Ini</h2></div>
+              {report.top_products.length ? (
+                <div className="top-products-list">
+                  {report.top_products.map((product) => (
+                    <div key={product.product_name}>
+                      <span><b>{product.product_name}</b><small>{product.quantity} unit terjual</small></span>
+                      <strong>{money(product.revenue)}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="table-foot">Belum ada produk terjual pada periode ini.</p>}
+            </article>
+          </section>
+          <p className="table-foot">Laporan hanya menghitung pesanan yang sudah dikonfirmasi selesai dan berstatus lunas. Pesanan dibatalkan atau belum diambil tidak dihitung sebagai penjualan.</p>
+        </>
+      )}
     </>
   );
 }
