@@ -84,6 +84,9 @@ class AdminOrderActionView(APIView):
             order.status, order.ready_at = Order.Status.READY, now
         elif action == "complete-pickup" and order.status == Order.Status.READY:
             order.status, order.completed_at = Order.Status.COMPLETED, now
+            if order.payment_method == Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.UNPAID:
+                order.payment_status = Order.PaymentStatus.PAID
+                PaymentEvent.objects.create(order=order, actor=request.user, event="cash_collected", note="Tunai diterima saat pengambilan.")
         elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED):
             for item in order.items.all():
                 Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
@@ -98,13 +101,14 @@ class AdminOrderActionView(APIView):
 class AdminPaymentActionView(APIView):
     permission_classes = [CommerceAdminOnly]
 
+    @transaction.atomic
     def post(self, request, code, action):
-        order = Order.objects.filter(code=code).first()
+        order = Order.objects.select_for_update().filter(code=code).first()
         if not order:
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
-        if action == "verify" and order.payment_status == Order.PaymentStatus.PENDING:
+        if action == "verify" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
             order.payment_status = Order.PaymentStatus.PAID
-        elif action == "reject" and order.payment_status == Order.PaymentStatus.PENDING:
+        elif action == "reject" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
             order.payment_status = Order.PaymentStatus.FAILED
         else:
             raise ValidationError({"payment_status": "Verifikasi pembayaran tidak valid."})
