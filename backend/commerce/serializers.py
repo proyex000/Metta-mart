@@ -33,11 +33,16 @@ class OrderReadSerializer(serializers.ModelSerializer):
     def get_customer_name(self, obj):
         return "Penjualan POS" if obj.sales_channel == "pos" else obj.customer.full_name
     beneficiary_name = serializers.CharField(source="beneficiary.full_name", read_only=True, allow_null=True)
+    change_due = serializers.SerializerMethodField()
+
+    def get_change_due(self, obj):
+        return obj.cash_received - obj.total if obj.cash_received is not None else None
+
     items = OrderItemReadSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "note", "subtotal", "total", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "note", "subtotal", "total", "cash_received", "change_due", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
