@@ -57,7 +57,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "note", "subtotal", "total", "cash_received", "change_due", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
