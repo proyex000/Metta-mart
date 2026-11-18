@@ -1,6 +1,6 @@
 from django.db import transaction
 from django.db.models import F, Sum, Count
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import ValidationError
@@ -203,12 +203,12 @@ class AdminSalesReportView(APIView):
         today_summary = today_orders.aggregate(total=Sum("total"), count=Count("id"))
         month_summary = month_orders.aggregate(total=Sum("total"), count=Count("id"))
         daily_rows = month_orders.filter(
-            completed_at__date__gte=today - timezone.timedelta(days=6)
+            completed_at__date__gte=today - timedelta(days=6)
         ).values("completed_at__date").annotate(total=Sum("total"), count=Count("id")).order_by("completed_at__date")
         daily_by_date = {row["completed_at__date"].isoformat(): row for row in daily_rows}
         daily = []
         for offset in range(6, -1, -1):
-            day = today - timezone.timedelta(days=offset)
+            day = today - timedelta(days=offset)
             row = daily_by_date.get(day.isoformat(), {})
             daily.append({
                 "date": day.isoformat(),
