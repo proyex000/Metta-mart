@@ -23,6 +23,15 @@ class CommerceApiTests(TestCase):
         response = self.client.get("/api/products/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"][0]["stock"], 10)
+        self.assertNotIn("cost_price", response.data["results"][0])
+
+    def test_admin_can_see_product_cost_price(self):
+        self.product.cost_price = 2500
+        self.product.save(update_fields=("cost_price",))
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/products/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["cost_price"], 2500)
 
     def test_student_cannot_change_product(self):
         self.client.force_authenticate(self.student)

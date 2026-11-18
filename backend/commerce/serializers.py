@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from accounts.models import User
 from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
 
 
@@ -9,6 +10,13 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated or request.user.role != User.Role.ADMIN:
+            fields.pop("cost_price", None)
+        return fields
+
     category_slug = serializers.SlugRelatedField(source="category", slug_field="slug", queryset=Category.objects.filter(is_active=True))
     category_name = serializers.CharField(source="category.name", read_only=True)
 
