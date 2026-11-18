@@ -1,6 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
+from core.models import StoreSetting
 from .models import Order, Product
 
 
@@ -63,3 +64,32 @@ class CommerceApiTests(TestCase):
         completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
         self.assertEqual(completed.status_code, 200)
         self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
+
+    def test_bank_transfer_requires_manual_verification_before_pickup(self):
+        response = self.create_order("bank_transfer")
+        self.assertEqual(response.status_code, 201)
+        code = response.data["code"]
+        self.client.force_authenticate(user=self.student)
+        submitted = self.client.post(f"/api/orders/{code}/payment-submission/", {"note": "Referensi transfer TEST-001"}, format="json")
+        self.assertEqual(submitted.status_code, 200)
+        self.assertEqual(submitted.data["payment_status"], Order.PaymentStatus.PENDING)
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
+        blocked = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
+        self.assertEqual(blocked.status_code, 400)
+        verified = self.client.post(f"/api/admin/orders/{code}/payment/verify/", {"note": "Cocok dengan mutasi rekening"}, format="json")
+        self.assertEqual(verified.status_code, 200)
+        self.assertEqual(verified.data["payment_status"], Order.PaymentStatus.PAID)
+        completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
+        self.assertEqual(completed.status_code, 200)
+
+    def test_disabled_payment_method_is_rejected_by_backend(self):
+        StoreSetting.objects.create(key="payment_methods", value={"cash": True, "bank_transfer": False, "qris": True})
+        response = self.create_order("bank_transfer")
+        self.assertEqual(response.status_code, 400)
+
+    def test_ordering_is_not_blocked_by_empty_operating_hours(self):
+        StoreSetting.objects.create(key="operating_hours", value={"days": [], "open_time": "", "close_time": ""})
+        response = self.create_order("cash")
+        self.assertEqual(response.status_code, 201)
