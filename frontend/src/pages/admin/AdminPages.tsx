@@ -955,6 +955,13 @@ export function Settings() {
   };
   const [tab, setTab] = useState<SettingsTab>("store");
   const [settingsLoadError, setSettingsLoadError] = useState("");
+  const [values, setValues] = useState<Preferences>(() => {
+    try {
+      return { ...defaults, ...JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") };
+    } catch {
+      return defaults;
+    }
+  });
   useEffect(() => {
     fetchStorefrontSettings().then((settings) => setValues((current) => ({
       ...current,
@@ -967,13 +974,6 @@ export function Settings() {
       pickupMessage: settings.pickup_instructions.message,
     }))).catch((reason) => setSettingsLoadError(reason instanceof Error ? reason.message : "Pengaturan server gagal dimuat."));
   }, []);
-  const [values, setValues] = useState<Preferences>(() => {
-    try {
-      return { ...defaults, ...JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") };
-    } catch {
-      return defaults;
-    }
-  });
   const [saved, setSaved] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
   const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
