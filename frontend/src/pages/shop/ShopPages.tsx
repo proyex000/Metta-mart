@@ -10,7 +10,7 @@ import {
 } from "../../data/categories";
 import { money, notices } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
-import { stockLabel, useProducts } from "../../services/products";
+import { refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
 import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings } from "../../services/settings";
@@ -197,6 +197,14 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
     const product = products.find((item) => item.id === id);
     return product && product.stock > 0 ? { [product.id]: 1 } : {};
   });
+  // Products load asynchronously; initialize a deep-linked product after the API response arrives.
+  useEffect(() => {
+    const id = Number(params.get("product"));
+    if (!Number.isInteger(id) || id <= 0) return;
+    const product = products.find((item) => item.id === id);
+    if (!product || product.stock < 1) return;
+    setCounts((current) => Object.keys(current).length ? current : { [product.id]: 1 });
+  }, [params, products]);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -235,6 +243,8 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       });
       setCreatedCode(order.code);
       setSent(true);
+      // Keep the catalogue stock in sync without turning a successful order into a false error.
+      refreshProducts().catch(() => undefined);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Pesanan gagal dibuat. Coba lagi.");
     } finally {
