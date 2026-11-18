@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
@@ -14,6 +14,28 @@ from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Pro
 from .permissions import IsAdminOrReadOnly
 from .notifications import notify_admins, notify_user
 from .serializers import CategorySerializer, CheckoutSerializer, OrderSerializer, ProductSerializer, StockMovementSerializer
+
+def pickup_is_open(now=None):
+    setting = StoreSetting.objects.filter(key="checkout").first()
+    config = setting.value if setting and isinstance(setting.value, dict) else {}
+    days = config.get("operating_days", [])
+    opening_time = config.get("opening_time", "")
+    closing_time = config.get("closing_time", "")
+    if not config.get("pickup_enabled", True) or not opening_time or not closing_time:
+        return False
+    local_now = timezone.localtime(now or timezone.now())
+    day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    if day_codes[local_now.weekday()] not in days:
+        return False
+    try:
+        opening = datetime.strptime(opening_time, "%H:%M").time()
+        closing = datetime.strptime(closing_time, "%H:%M").time()
+    except (TypeError, ValueError):
+        return False
+    current = local_now.time().replace(tzinfo=None)
+    return opening <= current <= closing
+
+
 
 
 def record_order_status(order, new_status, actor, note=""):
@@ -191,18 +213,13 @@ class CheckoutView(APIView):
         fulfillment = data["fulfillment"]
         if payment_method == Payment.Method.CASH and not config.get("cash_enabled", True):
             raise ValidationError({"payment_method": "Pembayaran tunai sedang dinonaktifkan."})
+        if payment_method == Payment.Method.BANK_TRANSFER and not (config.get("bank_transfer_enabled") and config.get("bank_account_number")):
+            raise ValidationError({"payment_method": "Transfer bank belum dikonfigurasi oleh admin."})
         if payment_method == Payment.Method.QRIS and not (config.get("qris_enabled") and config.get("qris_image_url")):
             raise ValidationError({"payment_method": "QRIS toko belum dikonfigurasi oleh admin."})
-        if fulfillment == Order.Fulfillment.PICKUP and not config.get("pickup_enabled", True):
-            raise ValidationError({"fulfillment": "Pengambilan di toko sedang dinonaktifkan."})
-        if fulfillment == Order.Fulfillment.DELIVERY and not config.get("delivery_enabled", False):
-            raise ValidationError({"fulfillment": "Pengiriman belum diaktifkan oleh admin."})
-        try:
-            delivery_fee = int(config.get("delivery_fee", 0)) if fulfillment == Order.Fulfillment.DELIVERY else 0
-        except (TypeError, ValueError):
-            raise ValidationError({"fulfillment": "Konfigurasi biaya pengiriman tidak valid."})
-        if delivery_fee < 0:
-            raise ValidationError({"fulfillment": "Konfigurasi biaya pengiriman tidak valid."})
+        if fulfillment != Order.Fulfillment.PICKUP or not config.get("pickup_enabled", True):
+            raise ValidationError({"fulfillment": "Pemesanan online hanya tersedia dengan pengambilan di koperasi."})
+        delivery_fee = 0
         item_ids = [item["product_id"] for item in data["items"]]
         quantities = {item["product_id"]: item["quantity"] for item in data["items"]}
         with transaction.atomic():
