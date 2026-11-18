@@ -41,6 +41,8 @@ DEFAULT_STORE_SETTINGS = {
     "payment_methods": {"cash": True, "bank_transfer": True, "qris": True},
     "payment_instructions": {"bank_name": "", "account_name": "", "account_number": "", "qris_note": ""},
     "pickup_instructions": {"message": "Pengambilan dilakukan di koperasi sekolah saat jam operasional setelah pesanan berstatus Siap Diambil."},
+    "store_profile": {"name": "MettaMart", "description": "Koperasi sekolah", "address": "", "email": "", "phone": ""},
+    "notification_preferences": {"order_alerts": True, "low_stock_alerts": True, "announcements_enabled": True},
 }
 
 
@@ -85,6 +87,13 @@ class StorefrontSettingsView(APIView):
                     raise ValidationError({key: "Instruksi pembayaran harus berupa teks."})
             if key == "pickup_instructions" and not isinstance(merged["message"], str):
                 raise ValidationError({key: "Instruksi pengambilan harus berupa teks."})
+            if key == "store_profile":
+                if any(not isinstance(merged[field], str) for field in ("name", "description", "address", "email", "phone")):
+                    raise ValidationError({key: "Informasi koperasi harus berupa teks."})
+                if not merged["name"].strip() or len(merged["name"]) > 120:
+                    raise ValidationError({key: "Nama koperasi wajib diisi dan maksimal 120 karakter."})
+            if key == "notification_preferences" and any(not isinstance(merged[field], bool) for field in ("order_alerts", "low_stock_alerts", "announcements_enabled")):
+                raise ValidationError({key: "Preferensi notifikasi harus berupa boolean."})
             StoreSetting.objects.update_or_create(key=key, defaults={"value": merged, "updated_by": request.user})
         AuditLog.objects.create(actor=request.user, event="store.settings_updated", target_type="store", metadata={"keys": list(request.data.keys())})
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
