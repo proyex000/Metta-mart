@@ -316,3 +316,67 @@ class AdminDashboardView(APIView):
                 "created_at": order.created_at,
             } for order in recent],
         })
+
+class AdminPOSCheckoutView(APIView):
+    permission_classes = [CommerceAdminOnly]
+
+    @transaction.atomic
+    def post(self, request):
+        rows = request.data.get("items")
+        method = request.data.get("payment_method", "cash")
+        if method not in Order.PaymentMethod.values:
+            raise ValidationError({"payment_method": "Metode pembayaran POS tidak valid."})
+        if not isinstance(rows, list) or not rows:
+            raise ValidationError({"items": "Tambahkan minimal satu produk ke transaksi."})
+        setting = StoreSetting.objects.filter(key="payment_methods").first()
+        enabled = setting.value if setting and isinstance(setting.value, dict) else {"cash": True, "bank_transfer": True, "qris": True}
+        if not enabled.get(method, False):
+            raise ValidationError({"payment_method": "Metode pembayaran ini sedang dinonaktifkan."})
+        now = timezone.now()
+        if not pickup_is_open(now):
+            raise ValidationError({"operating_hours": "Transaksi POS hanya dapat dilakukan saat koperasi buka. Atur jam operasional terlebih dahulu."})
+        cleaned = []
+        seen = set()
+        for row in rows:
+            try:
+                product_id, quantity = int(row.get("product_id")), int(row.get("quantity"))
+            except (AttributeError, TypeError, ValueError):
+                raise ValidationError({"items": "Produk dan jumlah harus valid."})
+            if product_id in seen or quantity < 1:
+                raise ValidationError({"items": "Produk tidak boleh duplikat dan jumlah minimal 1."})
+            seen.add(product_id)
+            cleaned.append({"product_id": product_id, "quantity": quantity})
+        products = {
+            product.id: product
+            for product in Product.objects.select_for_update().filter(id__in=[row["product_id"] for row in cleaned], is_active=True).order_by("id")
+        }
+        if len(products) != len(cleaned):
+            raise ValidationError({"items": "Satu atau lebih produk tidak tersedia."})
+        total = 0
+        for row in cleaned:
+            product = products[row["product_id"]]
+            if product.stock < row["quantity"]:
+                raise ValidationError({"items": f"Stok {product.name} tidak mencukupi."})
+            total += product.price * row["quantity"]
+        note = str(request.data.get("note", "")).strip()[:500]
+        order = Order.objects.create(
+            customer=request.user,
+            sales_channel="pos",
+            status=Order.Status.COMPLETED,
+            payment_method=method,
+            payment_status=Order.PaymentStatus.PAID,
+            note=note,
+            subtotal=total,
+            total=total,
+            accepted_at=now,
+            ready_at=now,
+            completed_at=now,
+        )
+        for row in cleaned:
+            product = products[row["product_id"]]
+            Product.objects.filter(pk=product.pk, stock__gte=row["quantity"]).update(stock=F("stock") - row["quantity"])
+            InventoryMovement.objects.create(product=product, actor=request.user, quantity_delta=-row["quantity"], reason="order_reserved", reference=f"POS:{order.code}")
+            OrderItem.objects.create(order=order, product=product, product_name=product.name, unit_price=product.price, quantity=row["quantity"], line_total=product.price * row["quantity"])
+        PaymentEvent.objects.create(order=order, actor=request.user, event="pos_sale", note="Pembayaran diterima dan dikonfirmasi admin pada POS.")
+        AuditLog.objects.create(actor=request.user, event="pos.checkout", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": total, "payment_method": method})
+        return Response(OrderReadSerializer(order).data, status=status.HTTP_201_CREATED)
