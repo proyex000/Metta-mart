@@ -8,6 +8,7 @@ urlpatterns = [
     path("orders/<str:code>/", OrderDetailView.as_view(), name="order-detail"),
     path("orders/<str:code>/payment-submission/", PaymentSubmissionView.as_view(), name="payment-submission"),
     path("admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("admin/pos/checkout/", AdminPOSCheckoutView.as_view(), name="admin-pos-checkout"),
     path("admin/orders/", AdminOrderListView.as_view(), name="admin-orders"),
     path("admin/reports/summary/", AdminSalesReportView.as_view(), name="admin-sales-report"),
     path("admin/inventory-movements/", AdminInventoryMovementListView.as_view(), name="admin-inventory-movements"),
