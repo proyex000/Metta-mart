@@ -4,7 +4,7 @@ import { PageTitle, Status } from "../../components/ui";
 import { listOrders, listProducts, pageResults, type ApiOrder } from "../../services/commerce";
 
 const money = (value: number) => "Rp " + value.toLocaleString("id-ID");
-const labels: Record<string, string> = { awaiting_payment: "Menunggu pembayaran", pending_review: "Menunggu konfirmasi", accepted: "Diterima", processing: "Diproses", ready: "Siap diambil", out_for_delivery: "Dalam pengiriman", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan", expired: "Kedaluwarsa" };
+const labels: Record<string, string> = { awaiting_payment: "Menunggu pembayaran", pending_review: "Menunggu konfirmasi", accepted: "Diterima", processing: "Diproses", ready: "Siap diambil", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan", expired: "Kedaluwarsa" };
 const dateTime = (value: string) => new Date(value).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
 
 export function Dashboard() {
@@ -21,16 +21,16 @@ export function Dashboard() {
     let active = true;
     const load = async () => {
       try {
-        const [products, orders, awaiting, review, accepted, processing, ready, delivery, lowStock] = await Promise.all([
+        const [products, orders, awaiting, review, accepted, processing, ready, lowStock] = await Promise.all([
           listProducts(), listOrders(), listOrders("awaiting_payment"), listOrders("pending_review"),
-          listOrders("accepted"), listOrders("processing"), listOrders("ready"), listOrders("out_for_delivery"),
+          listOrders("accepted"), listOrders("processing"), listOrders("ready"),
           listProducts({ lowStock: true }),
         ]);
         if (!active) return;
         setProductsCount(Array.isArray(products) ? products.length : products.count);
         setOrdersCount(Array.isArray(orders) ? orders.length : orders.count);
         setPendingCount((Array.isArray(awaiting) ? awaiting.length : awaiting.count) + (Array.isArray(review) ? review.length : review.count));
-        setActiveCount([accepted, processing, ready, delivery].reduce((sum, value) => sum + (Array.isArray(value) ? value.length : value.count), 0));
+        setActiveCount([accepted, processing, ready].reduce((sum, value) => sum + (Array.isArray(value) ? value.length : value.count), 0));
         setLowStockCount(Array.isArray(lowStock) ? lowStock.length : lowStock.count);
         setRecent(pageResults(orders).slice(0, 6));
         setError("");
@@ -47,7 +47,7 @@ export function Dashboard() {
     { label: "Produk Aktif", value: productsCount, note: "Dari katalog backend" },
     { label: "Total Pesanan", value: ordersCount, note: "Seluruh status pesanan" },
     { label: "Perlu Tindakan", value: pendingCount, note: "Pembayaran / konfirmasi" },
-    { label: "Sedang Diproses", value: activeCount, note: "Diterima sampai dikirim" },
+    { label: "Sedang Diproses", value: activeCount, note: "Diterima sampai siap diambil" },
   ];
   return <>
     <PageTitle title="Dashboard Admin" subtitle="Ringkasan operasional dari data server." />
