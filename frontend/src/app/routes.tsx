@@ -1,12 +1,12 @@
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import {
   Notifications,
-  Reports,
   Settings,
   Stock,
 } from "../pages/admin/AdminPages";
 import { Brand } from "../components/ui";
 import { Orders as CommerceOrders } from "../pages/admin/OrderManagement";
+import { Reports } from "../pages/admin/AdminReports";
 import { Dashboard as CommerceDashboard } from "../pages/admin/AdminDashboard";
 import { CashierPOS } from "../pages/cashier/CashierPOS";
 import { useAuth } from "../hooks/useAuth";
