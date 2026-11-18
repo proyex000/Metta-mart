@@ -9,7 +9,10 @@ class UserManager(BaseUserManager):
     def create_user(self, identifier, password=None, **extra_fields):
         if not identifier:
             raise ValueError("Identifier wajib diisi.")
-        user = self.model(identifier=self.normalize_email(identifier) if "@" in identifier else identifier, **extra_fields)
+        identifier = identifier.strip()
+        if "@" in identifier:
+            identifier = identifier.lower()
+        user = self.model(identifier=identifier, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
@@ -39,7 +42,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
 
     objects = UserManager()
-
     USERNAME_FIELD = "identifier"
     REQUIRED_FIELDS = ["full_name"]
 
