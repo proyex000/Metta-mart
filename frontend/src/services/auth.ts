@@ -1,35 +1,39 @@
-import { demoAccounts } from "../data/mock";
-import type { Role, Session } from "../types";
+import {
+  fetchCurrentSession,
+  loginApi,
+  logoutApi,
+  registerApi,
+  updateProfileApi,
+  type AuthSession,
+} from "./api";
 
-const SESSION_KEY = "mettamart-demo-session";
+export type { AuthSession };
 
-export async function mockLogin(
-  role: Role,
+export async function restoreSession(): Promise<AuthSession | null> {
+  return fetchCurrentSession();
+}
+
+export async function login(
+  role: AuthSession["role"],
   identifier: string,
   password: string,
-): Promise<Session> {
-  await new Promise((resolve) => setTimeout(resolve, 650));
-  const account = demoAccounts[role];
-  if (
-    identifier.trim().toLowerCase() !== account.identifier.toLowerCase() ||
-    password !== account.password
-  ) {
-    throw new Error("Kredensial tidak valid. Gunakan akun demo yang tersedia.");
-  }
-  const session = { role, name: account.name, email: account.identifier };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
+): Promise<AuthSession> {
+  return loginApi(role, identifier, password);
 }
 
-export function restoreSession(): Session | null {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null") as Session | null;
-  } catch {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
+export async function register(input: {
+  role: "student" | "parent";
+  identifier: string;
+  fullName: string;
+  password: string;
+}): Promise<AuthSession> {
+  return registerApi(input);
 }
 
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+export async function clearSession(): Promise<void> {
+  await logoutApi();
+}
+
+export async function updateProfile(input: { name: string; email: string }): Promise<AuthSession> {
+  return updateProfileApi(input);
 }
