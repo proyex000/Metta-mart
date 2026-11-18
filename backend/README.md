@@ -32,7 +32,7 @@ Siswa menggunakan NISN 10 digit sebagai identifier. Orang tua menggunakan email.
 
 ## Frontend
 
-Saat frontend dan backend berjalan di origin berbeda pada localhost, frontend harus memakai `credentials: "include"`, meminta `/api/auth/csrf/` sebelum POST/PATCH/DELETE, dan mengirim token CSRF di header `X-CSRFToken`. Isi `CORS_ALLOWED_ORIGINS` dan `DJANGO_CSRF_TRUSTED_ORIGINS` sesuai origin frontend.
+Frontend harus memakai `credentials: "include"`, meminta `/api/auth/csrf/` sebelum POST/PATCH/DELETE, dan mengirim token CSRF di header `X-CSRFToken`. Isi `CORS_ALLOWED_ORIGINS` dan `DJANGO_CSRF_TRUSTED_ORIGINS` sesuai origin frontend. Untuk frontend dan API yang benar-benar beda site, set kedua cookie SameSite ke `None` dan Secure ke `true`; konfigurasi reverse proxy satu-site lebih disarankan karena kebijakan third-party cookie browser dapat membatasi cookie lintas-site.
 
 ## Database
 
