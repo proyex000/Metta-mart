@@ -1,14 +1,32 @@
 from django.db import transaction
 from django.db.models import F
+from datetime import datetime
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from core.models import AuditLog
+from core.models import AuditLog, StoreSetting
 from .models import Order, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
 from .serializers import OrderCreateSerializer, OrderReadSerializer, ProductSerializer
+
+def pickup_is_open(now):
+    setting = StoreSetting.objects.filter(key="operating_hours").first()
+    hours = setting.value if setting and isinstance(setting.value, dict) else {}
+    days = hours.get("days", [])
+    open_time, close_time = hours.get("open_time", ""), hours.get("close_time", "")
+    if not open_time or not close_time:
+        return False
+    local_now = timezone.localtime(now)
+    day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    if day_codes[local_now.weekday()] not in days:
+        return False
+    opening = datetime.strptime(open_time, "%H:%M").time()
+    closing = datetime.strptime(close_time, "%H:%M").time()
+    return opening <= local_now.time().replace(tzinfo=None) <= closing
+
+
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
@@ -48,6 +66,8 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return OrderCreateSerializer if self.request.method == "POST" else OrderReadSerializer
 
     def create(self, request, *args, **kwargs):
+        if request.user.role not in ("student", "parent"):
+            return Response({"detail": "Pembuatan pesanan mandiri hanya tersedia untuk siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
@@ -83,6 +103,8 @@ class AdminOrderActionView(APIView):
         elif action == "ready" and order.status == Order.Status.ACCEPTED:
             order.status, order.ready_at = Order.Status.READY, now
         elif action == "complete-pickup" and order.status == Order.Status.READY:
+            if not pickup_is_open(now):
+                raise ValidationError({"pickup": "Pengambilan hanya dapat dikonfirmasi pada hari dan jam operasional koperasi. Atur jam operasional terlebih dahulu."})
             if order.payment_method != Order.PaymentMethod.CASH and order.payment_status != Order.PaymentStatus.PAID:
                 raise ValidationError({"payment_status": "Pembayaran transfer/QRIS harus diverifikasi sebelum barang diserahkan."})
             order.status, order.completed_at = Order.Status.COMPLETED, now
