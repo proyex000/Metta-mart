@@ -855,8 +855,13 @@ export function POS() {
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<CommerceOrder | null>(null);
   useEffect(() => {
-    fetchStorefrontSettings().then((settings) => setEnabled(settings.payment_methods))
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
+    fetchStorefrontSettings().then((settings) => {
+      setEnabled(settings.payment_methods);
+      if (!settings.payment_methods[paymentMethod]) {
+        const first = (["cash", "bank_transfer", "qris"] as const).find((method) => settings.payment_methods[method]);
+        if (first) setPaymentMethod(first);
+      }
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
   }, []);
   const selected = products.filter((product) => (counts[product.id] || 0) > 0);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
