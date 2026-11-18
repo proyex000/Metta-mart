@@ -40,6 +40,8 @@ export function RoleLayout({ role }: { role: Role }) {
   const exit = async () => {
     try {
       await logout();
+    } catch {
+      // Local auth state is cleared even if the server session has already expired.
     } finally {
       navigate("/login", { replace: true, state: { message: "Anda berhasil keluar." } });
     }
