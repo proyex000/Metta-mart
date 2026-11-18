@@ -1,5 +1,6 @@
 from datetime import datetime
-from rest_framework import generics
+from django.utils import timezone
+from rest_framework import generics, permissions, status
 from accounts.permissions import IsAdminRole
 from .models import AuditLog, StoreSetting
 from .serializers import AuditLogSerializer, StoreSettingSerializer
@@ -30,6 +31,8 @@ class StoreSettingDetailView(generics.RetrieveUpdateAPIView):
 from rest_framework import permissions, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import Notification
 from rest_framework.views import APIView
 
 
@@ -86,3 +89,30 @@ class StorefrontSettingsView(APIView):
         AuditLog.objects.create(actor=request.user, event="store.settings_updated", target_type="store", metadata={"keys": list(request.data.keys())})
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
         return Response({key: saved.get(key, value) for key, value in DEFAULT_STORE_SETTINGS.items()})
+
+class NotificationListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        rows = Notification.objects.filter(recipient=request.user)[:100]
+        return Response([{
+            "id": row.id,
+            "title": row.title,
+            "message": row.message,
+            "kind": row.kind,
+            "target_code": row.target_code,
+            "is_read": row.read_at is not None,
+            "created_at": row.created_at,
+        } for row in rows])
+
+class NotificationReadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, notification_id):
+        row = Notification.objects.filter(pk=notification_id, recipient=request.user).first()
+        if not row:
+            return Response({"detail": "Notifikasi tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+        if row.read_at is None:
+            row.read_at = timezone.now()
+            row.save(update_fields=["read_at"])
+        return Response({"id": row.id, "is_read": True})
