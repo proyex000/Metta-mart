@@ -44,3 +44,15 @@ export function adminOrderAction(code: string, action: "accept" | "ready" | "com
 export function adminPaymentAction(code: string, action: "verify" | "reject", note = "") {
   return apiRequest<CommerceOrder>(`/admin/orders/${encodeURIComponent(code)}/payment/${action}/`, { method: "POST", body: JSON.stringify({ note }) });
 }
+
+export type AdminSalesReport = {
+  period: { from: string; to: string };
+  today: { revenue: number; orders: number };
+  month: { revenue: number; orders: number; average_order: number };
+  daily: { date: string; total: number; orders: number }[];
+  top_products: { product_name: string; quantity: number; revenue: number }[];
+};
+
+export function fetchAdminSalesReport() {
+  return apiRequest<AdminSalesReport>("/admin/reports/summary/");
+}
