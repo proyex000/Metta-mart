@@ -8,7 +8,7 @@ import {
   isCategoryId,
   type CategoryId,
 } from "../../data/categories";
-import { money, notices, orders } from "../../data/mock";
+import { money, notices } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
 import { stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
@@ -17,7 +17,6 @@ import { fetchStorefrontSettings } from "../../services/settings";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
-  const navigate = useNavigate();
   const products = useProducts();
   const base = `/${role}`;
   return (
