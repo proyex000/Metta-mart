@@ -29,7 +29,6 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
         ADMIN = "admin", "Admin"
-        CASHIER = "cashier", "Kasir"
         STUDENT = "student", "Siswa"
         PARENT = "parent", "Orang tua"
 
