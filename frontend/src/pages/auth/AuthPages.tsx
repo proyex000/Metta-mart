@@ -8,13 +8,12 @@ const roleCopy: Record<Role, { title: string; identifier: string; helper: string
   student: { title: "Siswa", identifier: "NISN (10 digit)", helper: "Login / Daftar sebagai siswa" },
   parent: { title: "Orang Tua", identifier: "Email", helper: "Login / Daftar sebagai orang tua" },
   admin: { title: "Admin", identifier: "Email", helper: "Login sebagai administrator" },
-  cashier: { title: "Kasir", identifier: "Email / ID akun", helper: "Login sebagai petugas koperasi" },
 };
 
-const publicRoles: Exclude<Role, "admin" | "cashier">[] = ["student", "parent"];
+const publicRoles: Exclude<Role, "admin">[] = ["student", "parent"];
 
 function validRole(value: string | undefined): value is Role {
-  return value === "admin" || value === "cashier" || value === "parent" || value === "student";
+  return value === "admin" || value === "parent" || value === "student";
 }
 
 export function RoleChooser() {
@@ -38,7 +37,7 @@ export function RoleChooser() {
             </Link>
           ))}
         </div>
-        <small className="demo-warning">Akun admin dan kasir dibuat oleh administrator koperasi.</small>
+        <small className="demo-warning">Akun admin dibuat oleh administrator koperasi.</small>
       </div>
     </div>
   );
