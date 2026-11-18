@@ -4,6 +4,7 @@ import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryI
 import { productService, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
 import { adminOrderAction, adminPaymentAction, fetchOrders, type CommerceOrder } from "../../services/commerce";
+import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -932,12 +933,12 @@ export function Reports() {
 
 export function Settings() {
   const { session, updateProfile } = useAuth();
-  type SettingsTab = "store" | "account" | "payment" | "shipping" | "notifications";
+  type SettingsTab = "store" | "account" | "payment" | "pickup" | "notifications";
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
     cash: boolean; qris: boolean; bankTransfer: boolean;
-    deliveryEnabled: boolean; pickupEnabled: boolean; shippingFee: string; estimatedDelivery: string;
+    operatingDays: string; openTime: string; closeTime: string; pickupMessage: string;
     orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
   };
   const defaults: Preferences = {
@@ -948,11 +949,24 @@ export function Settings() {
     phone: "0812 3456 7890",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
-    cash: true, qris: true, bankTransfer: false,
-    deliveryEnabled: true, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
+    cash: true, qris: true, bankTransfer: true,
+    operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
     orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
+  const [settingsLoadError, setSettingsLoadError] = useState("");
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => setValues((current) => ({
+      ...current,
+      cash: settings.payment_methods.cash,
+      qris: settings.payment_methods.qris,
+      bankTransfer: settings.payment_methods.bank_transfer,
+      operatingDays: settings.operating_hours.days.join(","),
+      openTime: settings.operating_hours.open_time,
+      closeTime: settings.operating_hours.close_time,
+      pickupMessage: settings.pickup_instructions.message,
+    }))).catch((reason) => setSettingsLoadError(reason instanceof Error ? reason.message : "Pengaturan server gagal dimuat."));
+  }, []);
   const [values, setValues] = useState<Preferences>(() => {
     try {
       return { ...defaults, ...JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") };
@@ -1021,14 +1035,28 @@ export function Settings() {
         return;
       }
     }
-    localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
-    setSaved(true);
+    try {
+      if (tab === "payment") {
+        await updateStorefrontSettings({ payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer } });
+      } else if (tab === "pickup") {
+        const days = values.operatingDays.split(",").map((day) => day.trim()).filter(Boolean);
+        await updateStorefrontSettings({
+          operating_hours: { days, open_time: values.openTime, close_time: values.closeTime },
+          pickup_instructions: { message: values.pickupMessage },
+        });
+      }
+      localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
+      setSaved(true);
+    } catch (reason) {
+      setSaved(false);
+      setProfileSaveError(reason instanceof Error ? reason.message : "Pengaturan gagal disimpan ke server.");
+    }
   };
   const tabs: { id: SettingsTab; label: string; icon: IconName }[] = [
     { id: "store", label: "Informasi Toko", icon: "home" },
     { id: "account", label: "Akun Admin", icon: "users" },
     { id: "payment", label: "Metode Pembayaran", icon: "bag" },
-    { id: "shipping", label: "Pengiriman", icon: "truck" },
+    { id: "pickup", label: "Jam Operasional & Pengambilan", icon: "clock" },
     { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
   ];
   const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" = "text") => (
@@ -1077,12 +1105,12 @@ export function Settings() {
             {toggle("QRIS", "qris", "Pembayaran menggunakan QRIS.")}
             {toggle("Transfer bank", "bankTransfer", "Transfer manual yang perlu diverifikasi admin.")}
           </>}
-          {tab === "shipping" && <>
-            <h2>Pengiriman & Pengambilan</h2>
-            {toggle("Aktifkan pengiriman", "deliveryEnabled", "Pesanan dapat diantar sesuai ketentuan toko.")}
-            {toggle("Ambil di toko", "pickupEnabled", "Pelanggan dapat mengambil pesanan di toko.")}
-            {field("Biaya pengiriman (Rp)", "shippingFee")}
-            {field("Estimasi pengiriman", "estimatedDelivery")}
+          {tab === "pickup" && <>
+            <h2>Jam Operasional & Pengambilan</h2>
+            <p>Pemesanan tetap dapat dilakukan kapan saja. Jam ini hanya mengatur kapan pesanan yang sudah siap boleh diambil.</p>
+            {field("Hari operasional (mon,tue,wed,thu,fri,sat,sun)", "operatingDays")}
+            <div className="form-row">{field("Jam buka (HH:MM)", "openTime")}{field("Jam tutup (HH:MM)", "closeTime")}</div>
+            <label>Instruksi pengambilan<textarea value={values.pickupMessage} onChange={(event) => update("pickupMessage", event.target.value)} /></label>
           </>}
           {tab === "notifications" && <>
             <h2>Notifikasi Sistem</h2>
@@ -1091,10 +1119,11 @@ export function Settings() {
             {toggle("Promo dan pengumuman", "promoAlerts", "Izinkan pengumuman promo ke pelanggan.")}
             {toggle("Laporan mingguan", "weeklyReport", "Simpan preferensi ringkasan mingguan.")}
           </>}
+          {settingsLoadError && <p className="auth-error" role="alert">{settingsLoadError}</p>}
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
             {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
-            {saved && <span role="status">Pengaturan tersimpan di browser ini.</span>}
+            {saved && <span role="status">{tab === "payment" || tab === "pickup" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
           </div>
         </form>
         <div className="logo-upload">
