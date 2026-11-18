@@ -47,9 +47,10 @@ class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
 
     def perform_create(self, serializer):
+        note = serializer.validated_data.get("stock_note", "").strip()
         product = serializer.save()
         if product.stock:
-            InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=product.stock, reason="initial_stock")
+            InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=product.stock, reason="initial_stock", reference=note)
 
     def get_queryset(self):
         qs = Product.objects.all()
@@ -69,10 +70,11 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     @transaction.atomic
     def perform_update(self, serializer):
         previous_stock = serializer.instance.stock
+        note = serializer.validated_data.get("stock_note", "").strip()
         product = serializer.save()
         delta = product.stock - previous_stock
         if delta:
-            InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment")
+            InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment", reference=note)
 
     def perform_destroy(self, instance):
         if instance.order_items.exists():
