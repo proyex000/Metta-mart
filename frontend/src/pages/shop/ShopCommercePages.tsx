@@ -5,14 +5,13 @@ import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryI
 import { useProducts, stockLabel } from "../../services/products";
 import { useAuth } from "../../hooks/useAuth";
 import { apiRequest } from "../../services/api";
-import { createCheckout, getOrder, listOrders, orderAction, pageResults, type ApiOrder } from "../../services/commerce";
+import { createCheckout, getOrder, listOrders, orderAction, pageResults, submitPaymentReference, type ApiOrder, type CheckoutConfig } from "../../services/commerce";
 import type { Role } from "../../types";
 
 const money = (value: number) => "Rp " + value.toLocaleString("id-ID");
 const formatDate = (value: string) => new Date(value).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
-const labels: Record<string, string> = { awaiting_payment: "Menunggu pembayaran", pending_review: "Menunggu konfirmasi", accepted: "Diterima", processing: "Diproses", ready: "Siap diambil", out_for_delivery: "Dalam pengiriman", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan", expired: "Kedaluwarsa" };
-type CheckoutConfig = { cash_enabled: boolean; qris_enabled: boolean; qris_image_url: string; pickup_enabled: boolean; delivery_enabled: boolean; delivery_fee: number };
-const defaultConfig: CheckoutConfig = { cash_enabled: true, qris_enabled: false, qris_image_url: "", pickup_enabled: true, delivery_enabled: false, delivery_fee: 0 };
+const labels: Record<string, string> = { awaiting_payment: "Menunggu pembayaran", pending_review: "Menunggu konfirmasi", accepted: "Diterima", processing: "Diproses", ready: "Siap diambil", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan", expired: "Kedaluwarsa" };
+const defaultConfig: CheckoutConfig = { cash_enabled: true, bank_transfer_enabled: false, bank_name: "", bank_account_name: "", bank_account_number: "", qris_enabled: false, qris_image_url: "", pickup_enabled: true, operating_days: [], opening_time: "", closing_time: "", pickup_instructions: "" };
 
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
