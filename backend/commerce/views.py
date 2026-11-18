@@ -212,14 +212,27 @@ class PaymentSubmissionView(APIView):
             raise ValidationError({"payment": "Pembayaran tunai dikonfirmasi admin saat penyerahan."})
         if order.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED):
             raise ValidationError({"payment": "Status pembayaran tidak dapat diubah."})
-        note = str(request.data.get("note", "")).strip()[:500]
-        if not note:
-            raise ValidationError({"note": "Isi referensi atau keterangan pembayaran untuk diperiksa admin."})
+        sender_name = str(request.data.get("sender_name", "")).strip()[:120]
+        payment_source = str(request.data.get("payment_source", "")).strip()[:80]
+        account_last4 = str(request.data.get("account_last4", "")).strip()
+        if not sender_name:
+            raise ValidationError({"sender_name": "Nama pemilik rekening/e-wallet wajib diisi."})
+        if not payment_source:
+            raise ValidationError({"payment_source": "Nama bank atau e-wallet asal wajib diisi."})
+        if account_last4 and (len(account_last4) != 4 or not account_last4.isdigit()):
+            raise ValidationError({"account_last4": "Isi tepat 4 digit terakhir rekening, atau kosongkan jika tidak ada."})
+        note = str(request.data.get("note", "")).strip()[:300]
+        order.payment_sender_name = sender_name
+        order.payment_source = payment_source
+        order.payment_account_last4 = account_last4
         order.payment_status = Order.PaymentStatus.PENDING
-        order.save(update_fields=["payment_status", "updated_at"])
-        PaymentEvent.objects.create(order=order, actor=request.user, event="submitted", note=note)
+        order.save(update_fields=["payment_sender_name", "payment_source", "payment_account_last4", "payment_status", "updated_at"])
+        event_note = f"Pengirim: {sender_name}; sumber: {payment_source}; rekening akhir: {account_last4 or '-'}"
+        if note:
+            event_note += f"; catatan: {note}"
+        PaymentEvent.objects.create(order=order, actor=request.user, event="submitted", note=event_note[:500])
         AuditLog.objects.create(actor=request.user, event="payment.submitted", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
-        notify_admins("Konfirmasi pembayaran masuk", f"{request.user.full_name} mengirim konfirmasi pembayaran untuk {order.code}.", kind="payment", target_code=order.code)
+        notify_admins("Konfirmasi pembayaran masuk", f"{request.user.full_name} mengirim identitas pembayaran untuk {order.code} atas nama {sender_name} ({payment_source}).", kind="payment", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
 
 
@@ -244,8 +257,9 @@ class AdminSalesReportView(APIView):
         month_orders = paid_orders.filter(completed_at__date__gte=month_start, completed_at__date__lte=today)
         today_summary = today_orders.aggregate(total=Sum("total"), count=Count("id"))
         month_summary = month_orders.aggregate(total=Sum("total"), count=Count("id"))
-        daily_rows = month_orders.filter(
-            completed_at__date__gte=today - timedelta(days=6)
+        daily_rows = paid_orders.filter(
+            completed_at__date__gte=today - timedelta(days=6),
+            completed_at__date__lte=today,
         ).values("completed_at__date").annotate(total=Sum("total"), count=Count("id")).order_by("completed_at__date")
         daily_by_date = {row["completed_at__date"].isoformat(): row for row in daily_rows}
         daily = []
