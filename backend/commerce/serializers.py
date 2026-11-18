@@ -96,7 +96,6 @@ class InventoryMovementSerializer(serializers.ModelSerializer):
     actor_name = serializers.CharField(source="actor.full_name", read_only=True, default=None)
 
     class Meta:
-        from .models import InventoryMovement
         model = InventoryMovement
         fields = ("id", "product", "product_name", "actor", "actor_name", "quantity_delta", "reason", "reference", "created_at")
         read_only_fields = fields
