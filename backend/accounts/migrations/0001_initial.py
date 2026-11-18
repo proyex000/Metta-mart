@@ -1,4 +1,5 @@
 import django.utils.timezone
+import accounts.models
 from django.db import migrations, models
 
 class Migration(migrations.Migration):
@@ -23,5 +24,6 @@ class Migration(migrations.Migration):
                 ("user_permissions", models.ManyToManyField(blank=True, help_text="Specific permissions for this user.", related_name="user_set", related_query_name="user", to="auth.permission", verbose_name="user permissions")),
             ],
             options={"verbose_name": "user", "verbose_name_plural": "users", "abstract": False},
+            managers=[("objects", accounts.models.UserManager())],
         ),
     ]
