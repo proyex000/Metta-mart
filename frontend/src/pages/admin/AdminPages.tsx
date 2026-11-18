@@ -394,12 +394,13 @@ export function Dashboard() {
   );
 }
 
-type ProductForm = { name: string; category: CategoryId; price: string; stock: string };
+type ProductForm = { name: string; category: CategoryId; price: string; stock: string; stockNote: string };
 const emptyProductForm: ProductForm = {
   name: "",
   category: categories[0].id,
   price: "",
   stock: "",
+  stockNote: "",
 };
 type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
 
@@ -436,6 +437,7 @@ export function Stock() {
       category: product.category,
       price: String(product.price),
       stock: String(product.stock),
+      stockNote: "",
     });
     setError("");
     setEditing(product);
@@ -447,11 +449,16 @@ export function Stock() {
       setError("Harga dan stok wajib diisi.");
       return;
     }
+    if (editing !== "new" && Number(form.stock) !== editing.stock && !form.stockNote.trim()) {
+      setError("Isi alasan perubahan stok untuk mencatat riwayat persediaan.");
+      return;
+    }
     const input = {
       name: form.name,
       category: form.category,
       price: Number(form.price),
       stock: Number(form.stock),
+      stock_note: form.stockNote,
     };
     try {
       if (editing === "new") await productService.create(input);
@@ -624,6 +631,10 @@ export function Stock() {
                 value={form.price}
                 onChange={(e) => setForm({ ...form, price: e.target.value })}
               />
+            </label>
+            <label>
+              Alasan perubahan stok (wajib jika stok berubah)
+              <input value={form.stockNote} maxLength={80} onChange={(e) => setForm({ ...form, stockNote: e.target.value })} placeholder="Contoh: barang masuk dari pemasok" />
             </label>
             <button className="primary wide">Simpan Produk</button>
           </form>
