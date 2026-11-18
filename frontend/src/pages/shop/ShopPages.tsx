@@ -326,7 +326,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           <p className="payment-help">{paymentInstructions.bank_name ? `Bank: ${paymentInstructions.bank_name}. ` : ""}{paymentInstructions.account_name ? `Atas nama: ${paymentInstructions.account_name}. ` : ""}{paymentInstructions.account_number ? `Nomor rekening: ${paymentInstructions.account_number}.` : "Detail rekening belum diatur admin."} Setelah transfer, kirim referensi pembayaran pada detail pesanan.</p>
         )}
         {selectedPayment === "cash" && (
-          <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di kasir.</p>
+          <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di koperasi.</p>
         )}
       </section>
       {sent && (
