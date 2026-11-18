@@ -3,7 +3,7 @@ from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from core.models import StoreSetting
-from accounts.models import ParentStudentLink, User
+from accounts.models import User
 from .models import InventoryMovement, Order, OrderItem, Product
 
 
@@ -64,21 +64,6 @@ class OrderCreateSerializer(serializers.Serializer):
     items = serializers.ListField(child=serializers.DictField(), allow_empty=False)
     payment_method = serializers.ChoiceField(choices=Order.PaymentMethod.choices)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
-    student_id = serializers.IntegerField(required=False, allow_null=True)
-
-    def validate_student_id(self, value):
-        user = self.context["request"].user
-        if user.role != User.Role.PARENT:
-            raise serializers.ValidationError("Hanya akun orang tua yang dapat memilih siswa penerima.")
-        if not ParentStudentLink.objects.filter(parent=user, student_id=value, student__role=User.Role.STUDENT, student__is_active=True).exists():
-            raise serializers.ValidationError("Siswa tersebut belum terhubung dengan akun orang tua ini. Hubungi admin koperasi.")
-        return value
-
-    def validate(self, attrs):
-        if self.context["request"].user.role == User.Role.PARENT and not attrs.get("student_id"):
-            raise serializers.ValidationError({"student_id": "Pilih siswa yang terhubung dengan akun orang tua ini."})
-        return attrs
-
     def validate_payment_method(self, value):
         setting = StoreSetting.objects.filter(key="payment_methods").first()
         enabled = setting.value if setting and isinstance(setting.value, dict) else {"cash": True, "bank_transfer": True, "qris": True}
@@ -117,7 +102,6 @@ class OrderCreateSerializer(serializers.Serializer):
             customer=self.context["request"].user,
             payment_method=validated_data["payment_method"],
             note=validated_data.get("note", "").strip(),
-            beneficiary_id=validated_data.get("student_id"),
             subtotal=subtotal,
             total=subtotal,
         )
