@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from accounts.models import User
 from core.models import AuditLog
 from .models import CashMovement, CashierShift, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
-from .permissions import IsAdminOrCashier
+from .permissions import IsAdminRole
 from .serializers import CheckoutSerializer, OrderSerializer
 
 
@@ -41,7 +41,7 @@ def current_shift(user, lock=False):
 
 
 class CurrentShiftView(APIView):
-    permission_classes = [IsAdminOrCashier]
+    permission_classes = [IsAdminRole]
 
     def get(self, request):
         shift = current_shift(request.user)
