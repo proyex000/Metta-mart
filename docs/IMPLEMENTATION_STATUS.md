@@ -30,7 +30,7 @@ This document records the implementation scope on the development branch. A feat
 - Admin workflow: pending → accepted → ready for pickup → completed.
 - Pickup completion checks configured operating hours.
 - Cash is confirmed by admin at handover.
-- Bank transfer and QRIS remain manual-verification methods; submitted references do not automatically mark an order paid.
+- Bank transfer and QRIS remain manual-verification methods. The customer submits sender account name, bank/e-wallet source, optional last four account digits, and an optional note; this information does not automatically mark an order paid.
 - Parent orders store a beneficiary student and validate that the parent-student relationship exists.
 
 ### Parent and student accounts
@@ -58,11 +58,11 @@ This document records the implementation scope on the development branch. A feat
 
 - QRIS dynamic payment creation, bank reconciliation, and automatic payment settlement are not integrated. Those require an actual payment provider and merchant credentials.
 - Payment verification for bank transfer and QRIS is manual.
-- No file upload for payment receipts is enabled; users submit a reference or note for admin verification.
+- Payment receipt image upload is intentionally out of scope. Sender identity is used only to help admin match incoming transfers; admin must still verify the actual incoming funds.
 - No automatic order expiry or uncollected-order cancellation is enabled because the school has not defined a pickup deadline policy.
-- No automated scheduled weekly report delivery is enabled.
-- Student class/grade data is not currently modeled; only the student account identity and verified parent relationship are stored.
-- Logo upload remains browser-local and is not shared across devices.
+- Admin order list supports search and filters for order status, payment status, payment method, channel, and date range. The filtered result can be exported as UTF-8 CSV for spreadsheet use.\n- No automated scheduled weekly report delivery is enabled.
+- Student class/grade data is intentionally out of scope.
+- Permanent logo upload, supplier stock receiving, purchase cost, gross-profit reporting, and price-change history are intentionally out of scope.
 - Deployment environment variables, production database migration, domain, backups, and operational monitoring must be verified on the target hosting environment before production use.
 
 ## Operational setup required before live use
@@ -71,7 +71,7 @@ This document records the implementation scope on the development branch. A feat
 2. Create student and parent accounts, or allow registration according to school policy.
 3. Link each parent account to the correct student account from Admin → Settings → Relasi Orang Tua & Siswa.
 4. Set actual cooperative operating days and opening/closing times.
-5. Configure which payment methods are enabled and enter official bank/QRIS instructions.
+5. Configure which payment methods are enabled and enter official bank/QRIS instructions.\n6. Tell customers using transfer/QRIS to submit the sender name and bank/e-wallet source after making payment.
 6. Enter products and opening stock; record reasons for subsequent stock changes.
 7. Verify the backend database migrations have been applied on the deployment environment.
-8. Run a test online order, manual payment verification, ready-for-pickup handover, POS sale, cancellation, and stock reconciliation before opening to users.
+9. Run a test online order, manual payment verification, ready-for-pickup handover, POS sale, cancellation, and stock reconciliation before opening to users.
