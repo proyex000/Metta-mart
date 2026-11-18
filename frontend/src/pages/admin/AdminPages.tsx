@@ -960,12 +960,12 @@ export function Reports() {
 
 export function Settings() {
   const { session, updateProfile } = useAuth();
-  type SettingsTab = "store" | "account" | "payment" | "shipping" | "notifications";
+  type SettingsTab = "store" | "account" | "payment" | "pickup" | "notifications";
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
-    cash: boolean; qris: boolean; qrisImageUrl: string;
-    deliveryEnabled: boolean; pickupEnabled: boolean; shippingFee: string; estimatedDelivery: string;
+    cash: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string; qris: boolean; qrisImageUrl: string;
+    pickupEnabled: boolean; operatingDays: string; openingTime: string; closingTime: string; pickupInstructions: string;
     orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
   };
   const defaults: Preferences = {
@@ -976,8 +976,8 @@ export function Settings() {
     phone: "0812 3456 7890",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
-    cash: true, qris: false, qrisImageUrl: "",
-    deliveryEnabled: false, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
+    cash: true, bankTransfer: false, bankName: "", bankAccountName: "", bankAccountNumber: "", qris: false, qrisImageUrl: "",
+    pickupEnabled: true, operatingDays: "mon,tue,wed,thu,fri", openingTime: "", closingTime: "", pickupInstructions: "Ambil pesanan di koperasi saat jam operasional setelah status pesanan Siap diambil.",
     orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
@@ -995,11 +995,17 @@ export function Settings() {
       setValues((current) => ({
         ...current,
         cash: config.cash_enabled,
+        bankTransfer: config.bank_transfer_enabled,
+        bankName: config.bank_name,
+        bankAccountName: config.bank_account_name,
+        bankAccountNumber: config.bank_account_number,
         qris: config.qris_enabled,
         qrisImageUrl: config.qris_image_url,
-        deliveryEnabled: config.delivery_enabled,
         pickupEnabled: config.pickup_enabled,
-        shippingFee: String(config.delivery_fee),
+        operatingDays: config.operating_days.join(","),
+        openingTime: config.opening_time,
+        closingTime: config.closing_time,
+        pickupInstructions: config.pickup_instructions,
       }));
     }).catch(() => undefined);
     return () => { active = false; };
