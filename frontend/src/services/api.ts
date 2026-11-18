@@ -101,3 +101,6 @@ export async function updateProfileApi(input: { name: string; email: string }): 
   });
   return toSession(data.user);
 }
+
+
+export const apiRequest = request;
