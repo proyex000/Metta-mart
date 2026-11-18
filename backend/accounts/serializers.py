@@ -71,3 +71,14 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Nama lengkap wajib diisi.")
         return value.strip()
+
+    def validate(self, attrs):
+        if self.instance.role == User.Role.PARENT and "email" in attrs:
+            email = attrs["email"].strip().lower()
+            if not email:
+                raise serializers.ValidationError({"email": "Email akun orang tua wajib diisi."})
+            if User.objects.exclude(pk=self.instance.pk).filter(identifier__iexact=email).exists():
+                raise serializers.ValidationError({"email": "Email tersebut sudah digunakan."})
+            attrs["email"] = email
+            attrs["identifier"] = email
+        return attrs
