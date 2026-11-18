@@ -50,6 +50,14 @@ class MeView(APIView):
     def get(self, request):
         return Response({"user": UserSerializer(request.user).data})
 
+    def patch(self, request):
+        from .serializers import ProfileUpdateSerializer
+        serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        AuditLog.objects.create(actor=request.user, event="user.profile_updated", target_type="user", target_id=str(request.user.pk))
+        return Response({"user": UserSerializer(request.user).data})
+
 @method_decorator(csrf_protect, name="dispatch")
 class RegisterView(generics.GenericAPIView):
     authentication_classes = []
