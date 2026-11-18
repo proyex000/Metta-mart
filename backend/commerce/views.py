@@ -90,6 +90,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
 
 class OrderDetailView(generics.RetrieveAPIView):
     serializer_class = OrderReadSerializer
+    lookup_field = "code"
 
     def get_queryset(self):
         qs = Order.objects.select_related("customer").prefetch_related("items")
