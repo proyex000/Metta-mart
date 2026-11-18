@@ -29,6 +29,25 @@ class Product(models.Model):
         return self.name
 
 
+class InventoryMovement(models.Model):
+    REASONS = [
+        ("initial_stock", "Stok awal"),
+        ("manual_adjustment", "Penyesuaian manual"),
+        ("order_reserved", "Dipesan pelanggan"),
+        ("order_cancelled", "Pesanan dibatalkan"),
+    ]
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="stock_movements")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="stock_movements")
+    quantity_delta = models.IntegerField()
+    reason = models.CharField(max_length=32, choices=REASONS)
+    reference = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("product", "created_at"), name="commerce_i_product_13e4a1_idx")]
+
+
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Menunggu konfirmasi"
