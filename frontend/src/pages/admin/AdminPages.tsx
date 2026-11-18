@@ -1,9 +1,9 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
-import { productService, stockLabel, useProducts } from "../../services/products";
+import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
-import { adminOrderAction, adminPaymentAction, fetchAdminDashboard, fetchAdminSalesReport, fetchOrders, type AdminDashboardSummary, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
+import { adminOrderAction, adminPaymentAction, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchOrders, type AdminDashboardSummary, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 import { createFamilyLink, deleteFamilyLink, fetchAdminAccounts, fetchFamilyLinks, type AdminAccount, type FamilyLink } from "../../services/family";
@@ -841,6 +841,79 @@ export function Reports() {
           <p className="table-foot">Laporan hanya menghitung pesanan yang sudah dikonfirmasi selesai dan berstatus lunas. Pesanan dibatalkan atau belum diambil tidak dihitung sebagai penjualan.</p>
         </>
       )}
+    </>
+  );
+}
+
+export function POS() {
+  const products = useProducts();
+  const [counts, setCounts] = useState<Record<number, number>>({});
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "qris">("cash");
+  const [enabled, setEnabled] = useState({ cash: true, bank_transfer: true, qris: true });
+  const [note, setNote] = useState("");
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+  const [receipt, setReceipt] = useState<CommerceOrder | null>(null);
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => setEnabled(settings.payment_methods))
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
+  }, []);
+  const selected = products.filter((product) => (counts[product.id] || 0) > 0);
+  const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
+  const change = (id: number, delta: number) => {
+    const product = products.find((item) => item.id === id);
+    if (!product) return;
+    setCounts((current) => ({ ...current, [id]: Math.min(product.stock, Math.max(0, (current[id] || 0) + delta)) }));
+    setReceipt(null);
+  };
+  const checkout = async () => {
+    if (!selected.length || working) return;
+    setWorking(true); setError("");
+    try {
+      const order = await createPOSOrder({
+        items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
+        payment_method: paymentMethod,
+        note,
+      });
+      setReceipt(order); setCounts({}); setNote("");
+      await refreshProducts();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Transaksi POS gagal disimpan.");
+    } finally { setWorking(false); }
+  };
+  return (
+    <>
+      <Header title="POS Koperasi" subtitle="Transaksi langsung oleh admin saat melayani pembelian di koperasi." />
+      <div className="dashboard-grid">
+        <section className="panel table-panel">
+          <div className="panel__title"><h2>Pilih Produk</h2><small>Stok diperbarui dari server</small></div>
+          <div className="pos-product-list">
+            {products.map((product) => (
+              <article key={product.id}>
+                <div><b>{product.name}</b><small>{money(product.price)} · Stok {product.stock}</small></div>
+                <div className="quantity">
+                  <button type="button" onClick={() => change(product.id, -1)} disabled={!counts[product.id]}>−</button>
+                  <b>{counts[product.id] || 0}</b>
+                  <button type="button" onClick={() => change(product.id, 1)} disabled={counts[product.id] >= product.stock || product.stock === 0}>+</button>
+                </div>
+              </article>
+            ))}
+            {!products.length && <p className="table-foot">Belum ada produk aktif.</p>}
+          </div>
+        </section>
+        <section className="panel table-panel">
+          <div className="panel__title"><h2>Ringkasan Transaksi</h2></div>
+          {selected.map((product) => <div className="latest__row" key={product.id}><div><b>{product.name}</b><small>{counts[product.id]} × {money(product.price)}</small></div><strong>{money(counts[product.id] * product.price)}</strong></div>)}
+          {!selected.length && <p className="table-foot">Pilih produk untuk memulai transaksi.</p>}
+          <div className="detail-total"><span>Total</span><strong>{money(total)}</strong></div>
+          <label>Metode Pembayaran<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>{enabled.cash && <option value="cash">Tunai</option>}{enabled.bank_transfer && <option value="bank_transfer">Transfer Bank (dikonfirmasi admin)</option>}{enabled.qris && <option value="qris">QRIS (dikonfirmasi admin)</option>}</select></label>
+          <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
+          <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod]} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
+          <p className="table-foot">POS hanya dapat digunakan saat jam operasional. Admin bertanggung jawab memastikan pembayaran diterima sebelum menyelesaikan transaksi.</p>
+        </section>
+      </div>
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {receipt && <section className="panel table-panel"><h2>Transaksi Berhasil</h2><p>Kode: <b>{receipt.code}</b></p><p>Total: <b>{money(receipt.total)}</b></p><p>Status: Selesai · Lunas</p><button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button></section>}
     </>
   );
 }
