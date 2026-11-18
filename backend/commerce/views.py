@@ -18,6 +18,9 @@ def notify_user(user, title, message, kind="info", target_code=""):
 
 
 def notify_admins(title, message, kind="order", target_code=""):
+    preferences = StoreSetting.objects.filter(key="notification_preferences").first()
+    if preferences and isinstance(preferences.value, dict) and not preferences.value.get("order_alerts", True):
+        return
     User = get_user_model()
     Notification.objects.bulk_create([
         Notification(recipient=user, title=title, message=message, kind=kind, target_code=target_code)
@@ -51,6 +54,10 @@ class ProductListCreateView(generics.ListCreateAPIView):
         product = serializer.save()
         if product.stock:
             InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=product.stock, reason="initial_stock", reference=note)
+        if product.stock < 10:
+            preferences = StoreSetting.objects.filter(key="notification_preferences").first()
+            if not preferences or not isinstance(preferences.value, dict) or preferences.value.get("low_stock_alerts", True):
+                notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
     def get_queryset(self):
         qs = Product.objects.all()
@@ -75,6 +82,10 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         delta = product.stock - previous_stock
         if delta:
             InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment", reference=note)
+            if previous_stock >= 10 and product.stock < 10:
+                preferences = StoreSetting.objects.filter(key="notification_preferences").first()
+                if not preferences or not isinstance(preferences.value, dict) or preferences.value.get("low_stock_alerts", True):
+                    notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
     def perform_destroy(self, instance):
         if instance.order_items.exists():
