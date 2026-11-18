@@ -231,3 +231,13 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
+
+    def test_manual_stock_adjustment_requires_and_records_reason(self):
+        self.client.force_authenticate(user=self.admin)
+        missing_reason = self.client.patch(f"/api/products/{self.product.id}/", {"stock": 12}, format="json")
+        self.assertEqual(missing_reason.status_code, 400)
+        adjusted = self.client.patch(f"/api/products/{self.product.id}/", {"stock": 12, "stock_note": "Barang masuk dari pemasok"}, format="json")
+        self.assertEqual(adjusted.status_code, 200)
+        movement = InventoryMovement.objects.get(product=self.product, reason="manual_adjustment")
+        self.assertEqual(movement.quantity_delta, 2)
+        self.assertEqual(movement.reference, "Barang masuk dari pemasok")
