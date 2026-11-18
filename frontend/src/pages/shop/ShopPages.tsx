@@ -370,18 +370,24 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [senderName, setSenderName] = useState("");
+  const [paymentSource, setPaymentSource] = useState("");
+  const [accountLast4, setAccountLast4] = useState("");
   const [paymentMessage, setPaymentMessage] = useState("");
   const [sendingPayment, setSendingPayment] = useState(false);
   useEffect(() => {
     fetchOrder(code).then(setOrder).catch((reason) => setError(reason instanceof Error ? reason.message : "Detail pesanan gagal dimuat.")).finally(() => setLoading(false));
   }, [code]);
   const sendPayment = async () => {
-    if (!paymentNote.trim() || sendingPayment) return;
+    if (!senderName.trim() || !paymentSource.trim() || sendingPayment) return;
     setSendingPayment(true); setPaymentMessage("");
     try {
-      setOrder(await submitPayment(code, paymentNote));
+      setOrder(await submitPayment(code, { sender_name: senderName.trim(), payment_source: paymentSource.trim(), account_last4: accountLast4.trim(), note: paymentNote.trim() }));
       setPaymentMessage("Referensi pembayaran berhasil dikirim dan menunggu verifikasi admin.");
       setPaymentNote("");
+      setSenderName("");
+      setPaymentSource("");
+      setAccountLast4("");
     } catch (reason) {
       setPaymentMessage(reason instanceof Error ? reason.message : "Referensi pembayaran gagal dikirim.");
     } finally { setSendingPayment(false); }
@@ -403,7 +409,7 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
         <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
         <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? "Siap diambil" : "Belum siap diambil"}</span><span>{order.completed_at ? "Pengambilan selesai" : "Menunggu pengambilan"}</span></div>
         {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
-          <section className="payment-section"><h2>Konfirmasi Pembayaran</h2><p>Masukkan nomor referensi atau keterangan transfer/QRIS. Admin tetap harus memverifikasi sebelum status menjadi lunas.</p><textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Nomor referensi atau keterangan pembayaran" /><button className="primary wide" disabled={!paymentNote.trim() || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Konfirmasi"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
+          <section className="payment-section"><h2>Identitas Pembayaran</h2><p>Isi identitas rekening atau e-wallet yang digunakan untuk transfer. Admin akan mencocokkannya dengan dana yang masuk. Ini bukan bukti pembayaran otomatis.</p><label>Nama pemilik rekening/e-wallet<input value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={120} placeholder="Nama sesuai akun pengirim" /></label><label>Bank atau e-wallet asal<input value={paymentSource} onChange={(event) => setPaymentSource(event.target.value)} maxLength={80} placeholder="Contoh: BCA, Mandiri, DANA, GoPay" /></label><label>4 digit terakhir rekening (opsional)<input inputMode="numeric" value={accountLast4} onChange={(event) => setAccountLast4(event.target.value.replace(/\\D/g, "").slice(0, 4))} maxLength={4} placeholder="1234" /></label><label>Catatan tambahan (opsional)<textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} maxLength={300} placeholder="Contoh: transfer pukul 14.30" /></label><button className="primary wide" disabled={!senderName.trim() || !paymentSource.trim() || (accountLast4.length > 0 && accountLast4.length !== 4) || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Identitas Pembayaran"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
         )}
         <button className="primary wide" onClick={() => alert("Silakan hubungi admin koperasi melalui kanal komunikasi sekolah.")}>Hubungi Admin</button>
       </section>
