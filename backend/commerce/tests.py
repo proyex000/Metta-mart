@@ -13,7 +13,6 @@ class CommerceApiTests(TestCase):
         self.client = APIClient()
         self.admin = User.objects.create_user("admin@test.local", "TestPassword!2026", full_name="Admin", role=User.Role.ADMIN, is_staff=True)
         self.student = User.objects.create_user("1234567890", "TestPassword!2026", full_name="Student", role=User.Role.STUDENT)
-        self.cashier = User.objects.create_user("cashier@test.local", "TestPassword!2026", full_name="Cashier", role=User.Role.CASHIER)
         self.category = Category.objects.create(name="Kategori Uji", slug="kategori-uji")
         self.product = Product.objects.create(name="Buku", category=self.category, price=5000, stock=10)
 
@@ -142,8 +141,8 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
-    def test_pos_sale_requires_open_shift_and_updates_cash_expected(self):
-        self.client.force_authenticate(self.cashier)
+    def test_admin_pos_sale_requires_open_shift_and_updates_cash_expected(self):
+        self.client.force_authenticate(self.admin)
         blocked = self.client.post("/api/pos/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}]}, format="json")
         self.assertEqual(blocked.status_code, 400)
         opened = self.client.post("/api/pos/shifts/open/", {"opening_cash": 50000, "note": "Modal awal"}, format="json")
@@ -152,7 +151,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(sale.status_code, 201)
         self.assertEqual(sale.data["status"], Order.Status.COMPLETED)
         self.assertEqual(sale.data["customer_name"], "Pelanggan toko")
-        self.assertEqual(sale.data["created_by_name"], "Cashier")
+        self.assertEqual(sale.data["created_by_name"], "Admin")
         self.assertEqual(sale.data["payment"]["cash_received"], 5000)
         self.assertEqual(sale.data["payment"]["change_due"], 0)
         current = self.client.get("/api/pos/shifts/current/")
@@ -180,7 +179,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
 
-    def test_cashier_cannot_open_two_concurrent_shifts(self):
+    def test_admin_cannot_open_two_concurrent_shifts(self):
         self.client.force_authenticate(self.cashier)
         first = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")
         second = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")
