@@ -358,10 +358,19 @@ class AdminPOSCheckoutView(APIView):
             if product.stock < row["quantity"]:
                 raise ValidationError({"items": f"Stok {product.name} tidak mencukupi."})
             total += product.price * row["quantity"]
+        cash_received = None
+        if method == Order.PaymentMethod.CASH:
+            try:
+                cash_received = int(request.data.get("cash_received"))
+            except (TypeError, ValueError):
+                raise ValidationError({"cash_received": "Masukkan jumlah uang tunai yang diterima."})
+            if cash_received < total:
+                raise ValidationError({"cash_received": "Uang yang diterima kurang dari total transaksi."})
         note = str(request.data.get("note", "")).strip()[:500]
         order = Order.objects.create(
             customer=request.user,
             sales_channel="pos",
+            cash_received=cash_received,
             status=Order.Status.COMPLETED,
             payment_method=method,
             payment_status=Order.PaymentStatus.PAID,
@@ -377,6 +386,6 @@ class AdminPOSCheckoutView(APIView):
             Product.objects.filter(pk=product.pk, stock__gte=row["quantity"]).update(stock=F("stock") - row["quantity"])
             InventoryMovement.objects.create(product=product, actor=request.user, quantity_delta=-row["quantity"], reason="pos_sale", reference=order.code)
             OrderItem.objects.create(order=order, product=product, product_name=product.name, unit_price=product.price, quantity=row["quantity"], line_total=product.price * row["quantity"])
-        PaymentEvent.objects.create(order=order, actor=request.user, event="pos_sale", note="Pembayaran diterima dan dikonfirmasi admin pada POS.")
+        PaymentEvent.objects.create(order=order, actor=request.user, event="pos_sale", note=(f"Uang diterima Rp{cash_received}; kembalian Rp{cash_received - total}." if cash_received is not None else "Pembayaran non-tunai diterima dan dikonfirmasi admin pada POS."))
         AuditLog.objects.create(actor=request.user, event="pos.checkout", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": total, "payment_method": method})
         return Response(OrderReadSerializer(order).data, status=status.HTTP_201_CREATED)
