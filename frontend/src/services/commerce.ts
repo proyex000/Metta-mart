@@ -89,3 +89,19 @@ export function fetchAdminDashboard() {
 export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; cash_received?: number }) {
   return apiRequest<CommerceOrder>("/admin/pos/checkout/", { method: "POST", body: JSON.stringify(input) });
 }
+
+export type InventoryMovementRow = {
+  id: number;
+  product: number;
+  product_name: string;
+  actor: number | null;
+  actor_name: string | null;
+  quantity_delta: number;
+  reason: "initial_stock" | "manual_adjustment" | "order_reserved" | "order_cancelled" | "pos_sale";
+  reference: string;
+  created_at: string;
+};
+
+export function fetchInventoryMovements() {
+  return apiRequest<InventoryMovementRow[]>("/admin/inventory-movements/");
+}
