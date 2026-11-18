@@ -244,3 +244,80 @@ class CommerceApiTests(TestCase):
         self.client.force_authenticate(self.student)
         response = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "delivery", "payment_method": "cash"}, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_bank_transfer_requires_reference_verification_before_pickup(self):
+        today = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")[timezone.localtime().weekday()]
+        StoreSetting.objects.create(key="checkout", value={
+            "cash_enabled": True,
+            "bank_transfer_enabled": True,
+            "bank_name": "Bank Sekolah",
+            "bank_account_name": "Koperasi Sekolah",
+            "bank_account_number": "1234567890",
+            "qris_enabled": False,
+            "pickup_enabled": True,
+            "operating_days": [today],
+            "opening_time": "00:00",
+            "closing_time": "23:59",
+        })
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {
+            "items": [{"product_id": self.product.pk, "quantity": 1}],
+            "payment_method": "bank_transfer",
+        }, format="json")
+        self.assertEqual(created.status_code, 201)
+        code = created.data["code"]
+        self.assertEqual(created.data["status"], Order.Status.AWAITING_PAYMENT)
+        self.assertEqual(created.data["payment"]["status"], Payment.Status.UNPAID)
+        submitted = self.client.post(f"/api/orders/{code}/actions/", {
+            "action": "submit_payment_reference",
+            "payment_reference": "TRF-REF-20261118",
+        }, format="json")
+        self.assertEqual(submitted.status_code, 200)
+        self.assertEqual(submitted.data["payment"]["status"], Payment.Status.PENDING_VERIFICATION)
+        self.assertEqual(submitted.data["payment"]["payment_reference"], "TRF-REF-20261118")
+        self.client.force_authenticate(self.admin)
+        verified = self.client.post(f"/api/orders/{code}/actions/", {"action": "verify_payment", "note": "Cocok dengan mutasi bank"}, format="json")
+        self.assertEqual(verified.status_code, 200)
+        self.assertEqual(verified.data["payment"]["status"], Payment.Status.PAID)
+        self.client.post(f"/api/orders/{code}/actions/", {"action": "accept"}, format="json")
+        self.client.post(f"/api/orders/{code}/actions/", {"action": "start_processing"}, format="json")
+        self.client.post(f"/api/orders/{code}/actions/", {"action": "mark_ready"}, format="json")
+        completed = self.client.post(f"/api/orders/{code}/actions/", {"action": "complete"}, format="json")
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
+
+    def test_ordering_remains_available_outside_operating_hours(self):
+        StoreSetting.objects.create(key="checkout", value={
+            "cash_enabled": True,
+            "pickup_enabled": True,
+            "operating_days": [],
+            "opening_time": "",
+            "closing_time": "",
+        })
+        self.client.force_authenticate(self.student)
+        response = self.client.post("/api/orders/checkout/", {
+            "items": [{"product_id": self.product.pk, "quantity": 1}],
+            "payment_method": "cash",
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    def test_pickup_handover_is_blocked_outside_operating_hours(self):
+        StoreSetting.objects.create(key="checkout", value={
+            "cash_enabled": True,
+            "pickup_enabled": True,
+            "operating_days": [],
+            "opening_time": "00:00",
+            "closing_time": "23:59",
+        })
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {
+            "items": [{"product_id": self.product.pk, "quantity": 1}],
+            "payment_method": "cash",
+        }, format="json")
+        code = created.data["code"]
+        self.client.force_authenticate(self.admin)
+        self.client.post(f"/api/orders/{code}/actions/", {"action": "accept"}, format="json")
+        self.client.post(f"/api/orders/{code}/actions/", {"action": "start_processing"}, format="json")
+        self.client.post(f"/api/orders/{code}/actions/", {"action": "mark_ready"}, format="json")
+        blocked = self.client.post(f"/api/orders/{code}/actions/", {"action": "complete"}, format="json")
+        self.assertEqual(blocked.status_code, 400)
