@@ -1,10 +1,4 @@
-import type { Order, Product, Role } from "../types";
-
-export const demoAccounts: Record<Role, { identifier: string; password: string; name: string }> = {
-  admin: { identifier: "admin@mettamart.id", password: "admin123", name: "Admin" },
-  parent: { identifier: "parent@gmail.com", password: "parent123", name: "Ibu Sari" },
-  student: { identifier: "12345678", password: "student123", name: "Andi Pratama" },
-};
+import type { Order, Product } from "../types";
 
 // Seed data for the prototype only. Replace with a backend/database source.
 // The two "Seragam Sekolah" rows are SAMPLE items (names, prices, stock are placeholders).
