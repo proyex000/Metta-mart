@@ -7,6 +7,7 @@ import {
   updateProfile,
 } from "../services/auth";
 import type { AuthSession } from "../services/auth";
+import { refreshProducts } from "../services/products";
 
 type AuthValue = {
   session: AuthSession | null;
@@ -39,6 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (session) refreshProducts().catch(() => undefined);
+  }, [session]);
 
   const value = useMemo<AuthValue>(
     () => ({
