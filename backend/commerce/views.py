@@ -12,6 +12,7 @@ from accounts.permissions import IsAdminRole
 from core.models import AuditLog, StoreSetting
 from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
 from .permissions import IsAdminOrReadOnly
+from .notifications import notify_admins, notify_user
 from .serializers import CategorySerializer, CheckoutSerializer, OrderSerializer, ProductSerializer, StockMovementSerializer
 
 
@@ -22,6 +23,7 @@ def record_order_status(order, new_status, actor, note=""):
     order.status = new_status
     order.save(update_fields=("status", "updated_at"))
     OrderStatusHistory.objects.create(order=order, from_status=old_status, to_status=new_status, actor=actor, note=note)
+    notify_user(order.customer, "order.status", "Status pesanan diperbarui", "Pesanan " + order.code + " sekarang: " + new_status.replace("_", " ") + (". " + note if note else ""), "/orders/" + order.code)
 
 
 def release_order_stock(order, actor, note):
@@ -201,6 +203,7 @@ class CheckoutView(APIView):
             Payment.objects.create(order=order, method=payment_method, status=payment_status, amount=order.total, reference=order.code)
             OrderStatusHistory.objects.create(order=order, from_status="", to_status=order.status, actor=request.user, note="Pesanan dibuat")
             AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=order.code, metadata={"total": order.total, "payment_method": payment_method})
+            notify_admins("order.new", "Pesanan baru masuk", "Pesanan " + order.code + " dari " + request.user.full_name + " menunggu proses.")
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -251,6 +254,8 @@ class OrderActionView(APIView):
                     order.payment.verification_note = "Pesanan dibatalkan; pengembalian dana QRIS perlu diproses manual."
                     order.payment.save(update_fields=("status", "verification_note", "updated_at"))
                 record_order_status(order, Order.Status.CANCELLED, request.user, note or "Dibatalkan")
+                if role != User.Role.ADMIN:
+                    notify_admins("order.cancelled", "Pesanan dibatalkan", "Pesanan " + order.code + " dibatalkan pelanggan.")
             elif action == "verify_payment":
                 if role != User.Role.ADMIN:
                     raise PermissionDenied("Hanya admin yang dapat memverifikasi pembayaran QRIS.")

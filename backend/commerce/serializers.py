@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from accounts.models import User
-from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
+from .models import Category, Notification, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -103,3 +103,9 @@ class CheckoutSerializer(serializers.Serializer):
         if len(ids) != len(set(ids)):
             raise serializers.ValidationError({"items": "Produk yang sama harus digabung dalam satu baris."})
         return attrs
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ("id", "kind", "title", "body", "target_url", "read_at", "created_at")
+        read_only_fields = fields

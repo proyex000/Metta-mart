@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
-from .models import CashierShift, Category, Order, OrderItem, Payment, Product, StockMovement
+from .models import CashierShift, Category, Notification, Order, OrderItem, Payment, Product, StockMovement
 
 
 class CommerceApiTests(TestCase):
@@ -100,6 +100,29 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.data["status"], Order.Status.REJECTED)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
+
+
+    def test_order_events_create_private_notifications(self):
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "pickup", "payment_method": "cash"}, format="json")
+        self.assertEqual(Notification.objects.filter(recipient=self.admin, kind="order.new").count(), 1)
+        self.client.force_authenticate(self.admin)
+        self.client.post("/api/orders/" + created.data["code"] + "/actions/", {"action": "accept"}, format="json")
+        self.client.force_authenticate(self.student)
+        response = self.client.get("/api/notifications/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+        notification_id = response.data["results"][0]["id"]
+        marked = self.client.post("/api/notifications/" + str(notification_id) + "/read/", {}, format="json")
+        self.assertIsNotNone(marked.data["read_at"])
+        self.assertEqual(self.client.get("/api/notifications/unread-count/").data["count"], 0)
+
+    def test_user_cannot_mark_another_users_notification_read(self):
+        other = User.objects.create_user("notification-other@test.local", "TestPassword!2026", full_name="Other", role=User.Role.STUDENT)
+        notification = Notification.objects.create(recipient=other, kind="test", title="Test", body="Private")
+        self.client.force_authenticate(self.student)
+        response = self.client.post("/api/notifications/" + str(notification.pk) + "/read/", {}, format="json")
+        self.assertEqual(response.status_code, 404)
 
 
     def test_pos_sale_requires_open_shift_and_updates_cash_expected(self):

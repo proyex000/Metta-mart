@@ -3585,3 +3585,15 @@ td b {
 .report-data-list small{font-size:12px;color:var(--muted,#737b78);font-weight:400}
 .report-data-list b{font-size:13px;white-space:nowrap}
 @media(max-width:700px){.report-real-grid{grid-template-columns:1fr}.report-filter{align-items:stretch}.report-filter label{flex:1;min-width:130px}}
+
+.notification-panel{padding:18px}
+.notification-list-live{display:grid;gap:0}
+.notification-live-item{display:flex;align-items:flex-start;gap:12px;width:100%;padding:16px 10px;text-align:left;border:0;border-bottom:1px solid var(--border,#e5e9e7);background:transparent;color:inherit;cursor:pointer}
+.notification-live-item.unread{background:var(--surface-muted,#f5f8f6)}
+.notification-live-dot{width:9px;height:9px;flex:0 0 9px;margin-top:6px;border-radius:50%;background:transparent}
+.notification-live-item.unread .notification-live-dot{background:var(--accent,#16865c)}
+.notification-live-copy{display:grid;gap:5px;min-width:0}
+.notification-live-copy b{font-size:14px}
+.notification-live-copy>span{font-size:13px;line-height:1.45}
+.notification-live-copy small{font-size:12px;color:var(--muted,#737b78)}
+.notification-live-arrow{margin-left:auto;font-size:22px;color:var(--muted,#737b78)}

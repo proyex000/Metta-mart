@@ -2,9 +2,14 @@ from django.urls import path
 from .config_views import CheckoutConfigAdminView, CheckoutConfigView
 from .pos_views import CashMovementView, CloseShiftView, CurrentShiftView, OpenShiftView, POSCheckoutView
 from .report_views import SalesReportView
+from .notification_views import NotificationListView, NotificationReadAllView, NotificationReadView, NotificationUnreadCountView
 from .views import CategoryDetailView, CategoryListCreateView, CheckoutView, OrderActionView, OrderDetailView, OrderListView, ProductDetailView, ProductListCreateView, StockAdjustmentView, StockMovementListView
 
 urlpatterns = [
+    path("notifications/", NotificationListView.as_view(), name="notification-list"),
+    path("notifications/unread-count/", NotificationUnreadCountView.as_view(), name="notification-unread-count"),
+    path("notifications/read-all/", NotificationReadAllView.as_view(), name="notification-read-all"),
+    path("notifications/<int:pk>/read/", NotificationReadView.as_view(), name="notification-read"),
     path("admin/reports/sales/", SalesReportView.as_view(), name="admin-sales-report"),
     path("pos/shifts/current/", CurrentShiftView.as_view(), name="pos-current-shift"),
     path("pos/shifts/open/", OpenShiftView.as_view(), name="pos-open-shift"),

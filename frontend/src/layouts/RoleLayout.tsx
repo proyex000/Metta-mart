@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Brand, Icon, type IconName } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import type { Role } from "../types";
+import { getUnreadNotificationCount } from "../services/commerce";
 import "./RoleLayout.css";
 
 const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> = {
@@ -36,7 +37,15 @@ export function RoleLayout({ role }: { role: Role }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const items = navigation[role];
+  useEffect(() => {
+    let active = true;
+    const load = async () => { try { const result = await getUnreadNotificationCount(); if (active) setUnreadCount(result.count); } catch { /* Keep the last known badge while offline. */ } };
+    void load();
+    const timer = window.setInterval(() => { void load(); }, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   const exit = async () => {
     try {
       await logout();
@@ -72,7 +81,7 @@ export function RoleLayout({ role }: { role: Role }) {
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>
-              {item.label === "Notifikasi" && <em>5</em>}
+              {item.label === "Notifikasi" && unreadCount > 0 && <em>{unreadCount > 99 ? "99+" : unreadCount}</em>}
             </NavLink>
           ))}
         </nav>

@@ -1,0 +1,44 @@
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from rest_framework import generics, permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import Notification
+from .serializers import NotificationSerializer
+
+
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Notification.objects.filter(recipient=self.request.user)
+        if self.request.query_params.get("unread") == "true":
+            queryset = queryset.filter(read_at__isnull=True)
+        return queryset
+
+
+class NotificationUnreadCountView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response({"count": Notification.objects.filter(recipient=request.user, read_at__isnull=True).count()})
+
+
+class NotificationReadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
+        if notification.read_at is None:
+            notification.read_at = timezone.now()
+            notification.save(update_fields=("read_at",))
+        return Response(NotificationSerializer(notification).data)
+
+
+class NotificationReadAllView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        updated = Notification.objects.filter(recipient=request.user, read_at__isnull=True).update(read_at=timezone.now())
+        return Response({"updated": updated})

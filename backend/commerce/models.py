@@ -195,3 +195,16 @@ class OrderStatusHistory(models.Model):
 
     class Meta:
         ordering = ("created_at",)
+
+class Notification(models.Model):
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="commerce_notifications")
+    kind = models.CharField(max_length=40)
+    title = models.CharField(max_length=140)
+    body = models.CharField(max_length=500)
+    target_url = models.CharField(max_length=300, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("recipient", "read_at", "created_at"), name="commerce_notice_user_read_idx")]

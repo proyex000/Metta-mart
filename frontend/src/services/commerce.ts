@@ -98,3 +98,17 @@ export async function listStockMovements(productId?: number, page = 1) {
   if (page > 1) query.set("page", String(page));
   return apiRequest<Page<ApiStockMovement> | ApiStockMovement[]>(`/admin/stock-movements/${query.size ? `?${query.toString()}` : ""}`);
 }
+
+export type ApiNotification = { id: number; kind: string; title: string; body: string; target_url: string; read_at: string | null; created_at: string };
+export async function listNotifications(page = 1) {
+  return apiRequest<Page<ApiNotification> | ApiNotification[]>("/notifications/" + (page > 1 ? "?page=" + page : ""));
+}
+export async function getUnreadNotificationCount() {
+  return apiRequest<{ count: number }>("/notifications/unread-count/");
+}
+export async function markNotificationRead(id: number) {
+  return apiRequest<ApiNotification>("/notifications/" + id + "/read/", { method: "POST" });
+}
+export async function markAllNotificationsRead() {
+  return apiRequest<{ updated: number }>("/notifications/read-all/", { method: "POST" });
+}

@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import {
-  Notifications,
   Settings,
   Stock,
 } from "../pages/admin/AdminPages";
@@ -12,7 +11,7 @@ import { CashierPOS } from "../pages/cashier/CashierPOS";
 import { useAuth } from "../hooks/useAuth";
 import { RoleLayout } from "../layouts/RoleLayout";
 import { LoginPage, RegisterPage, RoleChooser, SplashPage } from "../pages/auth/AuthPages";
-import { ShopNotifications } from "../pages/shop/ShopPages";
+import { NotificationCenter } from "../pages/shared/NotificationCenter";
 import { CreateOrder, OrderDetail, ShopDashboard, ShopOrders, ShopStock } from "../pages/shop/ShopCommercePages";
 import { ShopSettings } from "../pages/shop/ShopSettings";
 import type { Role } from "../types";
@@ -75,7 +74,7 @@ export const router = createBrowserRouter([
       { index: true, Component: CommerceDashboard },
       { path: "stock", Component: Stock },
       { path: "orders", Component: CommerceOrders },
-      { path: "notifications", Component: Notifications },
+      { path: "notifications", element: <NotificationCenter role="admin" /> },
       { path: "reports", Component: Reports },
       { path: "settings", Component: Settings },
       { path: "*", Component: RoleNotFound },
@@ -95,7 +94,7 @@ export const router = createBrowserRouter([
       { path: "order", element: <CreateOrder role="parent" /> },
       { path: "orders", element: <ShopOrders role="parent" /> },
       { path: "orders/:code", element: <OrderDetail role="parent" /> },
-      { path: "notifications", Component: ShopNotifications },
+      { path: "notifications", element: <NotificationCenter role="parent" /> },
       { path: "settings", element: <ShopSettings role="parent" /> },
       { path: "*", Component: RoleNotFound },
     ],
@@ -109,7 +108,7 @@ export const router = createBrowserRouter([
       { path: "order", element: <CreateOrder role="student" /> },
       { path: "orders", element: <ShopOrders role="student" /> },
       { path: "orders/:code", element: <OrderDetail role="student" /> },
-      { path: "notifications", Component: ShopNotifications },
+      { path: "notifications", element: <NotificationCenter role="student" /> },
       { path: "settings", element: <ShopSettings role="student" /> },
       { path: "*", Component: RoleNotFound },
     ],
