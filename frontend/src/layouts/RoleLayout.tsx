@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Brand, Icon, type IconName } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import type { Role } from "../types";
+import { fetchNotifications } from "../services/notifications";
 import "./RoleLayout.css";
 
 const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> = {
   admin: [
     { to: "/admin", label: "Dashboard", icon: "home" },
     { to: "/admin/stock", label: "Kelola Stok", icon: "box" },
+    { to: "/admin/pos", label: "POS Koperasi", icon: "bag" },
     { to: "/admin/orders", label: "Pesanan", icon: "bag" },
     { to: "/admin/notifications", label: "Notifikasi", icon: "bell" },
     { to: "/admin/reports", label: "Laporan", icon: "chart" },
@@ -19,12 +21,14 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
     { to: "/parent/stock", label: "Stok Barang", icon: "box" },
     { to: "/parent/orders", label: "Pesanan", icon: "bag" },
     { to: "/parent/notifications", label: "Notifikasi", icon: "bell" },
+    { to: "/parent/settings", label: "Pengaturan", icon: "settings" },
   ],
   student: [
     { to: "/student", label: "Beranda", icon: "home" },
     { to: "/student/stock", label: "Stok Barang", icon: "box" },
     { to: "/student/orders", label: "Pesanan Saya", icon: "bag" },
     { to: "/student/notifications", label: "Notifikasi", icon: "bell" },
+    { to: "/student/settings", label: "Pengaturan", icon: "settings" },
   ],
 };
 
@@ -33,10 +37,19 @@ export function RoleLayout({ role }: { role: Role }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    fetchNotifications().then((rows) => setUnreadCount(rows.filter((row) => !row.is_read).length)).catch(() => setUnreadCount(0));
+  }, []);
   const items = navigation[role];
-  const exit = () => {
-    logout();
-    navigate("/login", { replace: true, state: { message: "Anda berhasil keluar." } });
+  const exit = async () => {
+    try {
+      await logout();
+    } catch {
+      // Local auth state is cleared even if the server session has already expired.
+    } finally {
+      navigate("/login", { replace: true, state: { message: "Anda berhasil keluar." } });
+    }
   };
 
   return (
@@ -49,9 +62,7 @@ export function RoleLayout({ role }: { role: Role }) {
         <span className="role-avatar">{session?.name.charAt(0)}</span>
       </header>
       <aside className={`role-sidebar ${menuOpen ? "open" : ""}`}>
-        <button className="sidebar-close" onClick={() => setMenuOpen(false)}>
-          ×
-        </button>
+        <button className="sidebar-close" onClick={() => setMenuOpen(false)}>×</button>
         <Brand />
         <div className="role-label">
           {role === "admin" ? "Administrator" : role === "parent" ? "Orang Tua" : "Murid"}
@@ -66,7 +77,7 @@ export function RoleLayout({ role }: { role: Role }) {
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>
-              {item.label === "Notifikasi" && <em>5</em>}
+              {item.label === "Notifikasi" && unreadCount > 0 && <em>{unreadCount > 99 ? "99+" : unreadCount}</em>}
             </NavLink>
           ))}
         </nav>
@@ -75,8 +86,8 @@ export function RoleLayout({ role }: { role: Role }) {
             className="role-account-link"
             to={`/${role}/settings`}
             onClick={() => setMenuOpen(false)}
-            aria-label="Buka pengaturan akun"
-            title="Pengaturan akun"
+            aria-label="Buka akun"
+            title="Akun"
           >
             <span className="role-avatar">{session?.name.charAt(0)}</span>
             <div>
@@ -85,19 +96,15 @@ export function RoleLayout({ role }: { role: Role }) {
               <small className="role-account-hint">Pengaturan akun</small>
             </div>
           </Link>
-          <button aria-label="Keluar" title="Keluar" onClick={() => setConfirm(true)}>
-            <Icon name="logout" />
+          <button className="role-logout" aria-label="Keluar" title="Keluar" onClick={() => setConfirm(true)}>
+            <Icon name="logout" size={24} />
           </button>
         </div>
       </aside>
-      {menuOpen && (
-        <button className="menu-scrim" onClick={() => setMenuOpen(false)} aria-label="Tutup menu" />
-      )}
-      <main className="role-content">
-        <Outlet />
-      </main>
+      {menuOpen && <button className="menu-scrim" onClick={() => setMenuOpen(false)} aria-label="Tutup menu" />}
+      <main className="role-content"><Outlet /></main>
       <nav className="role-bottom-nav">
-        {items.slice(0, 4).map((item) => (
+        {items.slice(0, role === "admin" ? 4 : 5).map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to.split("/").length === 2}>
             <Icon name={item.icon} />
             <span>{item.label.replace(" Barang", "").replace(" Saya", "")}</span>
@@ -108,14 +115,10 @@ export function RoleLayout({ role }: { role: Role }) {
         <div className="modal-backdrop">
           <div className="modal confirm-modal">
             <h2>Keluar dari MettaMart?</h2>
-            <p>Sesi demo Anda akan diakhiri dan Anda akan kembali ke halaman login.</p>
+            <p>Sesi akun Anda akan diakhiri dan Anda akan kembali ke halaman login.</p>
             <div>
-              <button className="secondary-btn" onClick={() => setConfirm(false)}>
-                Batal
-              </button>
-              <button className="primary" onClick={exit}>
-                Ya, Keluar
-              </button>
+              <button className="secondary-btn" onClick={() => setConfirm(false)}>Batal</button>
+              <button className="primary" onClick={exit}>Ya, Keluar</button>
             </div>
           </div>
         </div>

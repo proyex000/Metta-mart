@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import {
   Dashboard,
   Notifications,
+  POS,
   Orders,
   Reports,
   Settings,
@@ -23,8 +24,9 @@ import { ShopSettings } from "../pages/shop/ShopSettings";
 import type { Role } from "../types";
 
 function ProtectedRole({ role }: { role: Role }) {
-  const { session } = useAuth();
+  const { session, loading } = useAuth();
   const location = useLocation();
+  if (loading) return <div className="splash"><Brand /><span className="spinner" /><p>Memeriksa sesi...</p></div>;
   if (!session)
     return <Navigate to={`/login/${role}`} replace state={{ from: location.pathname }} />;
   if (session.role !== role) return <Navigate to={`/${session.role}`} replace />;
@@ -32,7 +34,8 @@ function ProtectedRole({ role }: { role: Role }) {
 }
 
 function SessionRedirect() {
-  const { session } = useAuth();
+  const { session, loading } = useAuth();
+  if (loading) return <div className="splash"><Brand /><span className="spinner" /><p>Memeriksa sesi...</p></div>;
   return session ? <Navigate to={`/${session.role}`} replace /> : <SplashPage />;
 }
 
@@ -76,6 +79,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "stock", Component: Stock },
+      { path: "pos", Component: POS },
       { path: "orders", Component: Orders },
       { path: "notifications", Component: Notifications },
       { path: "reports", Component: Reports },

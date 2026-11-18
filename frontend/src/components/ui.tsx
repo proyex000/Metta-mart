@@ -12,7 +12,9 @@ export type IconName =
   | "logout"
   | "back"
   | "plus"
-  | "menu";
+  | "menu"
+  | "lock"
+  | "shirt";
 
 const paths: Record<IconName, ReactNode> = {
   home: (
@@ -71,6 +73,13 @@ const paths: Record<IconName, ReactNode> = {
   back: <path d="m15 18-6-6 6-6" />,
   plus: <path d="M12 5v14M5 12h14" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  lock: (
+    <>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2" />
+    </>
+  ),
+  shirt: <path d="m8 3-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0Z" />,
 };
 
 export function Icon({ name, size = 19 }: { name: IconName; size?: number }) {

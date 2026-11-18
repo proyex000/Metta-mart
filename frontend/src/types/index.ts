@@ -1,3 +1,5 @@
+import type { CategoryId } from "../data/categories";
+
 export type Role = "admin" | "parent" | "student";
 
 export type Session = {
@@ -9,16 +11,18 @@ export type Session = {
 export type Product = {
   id: number;
   name: string;
-  category: "ATK" | "Buku" | "Minuman";
+  category: CategoryId;
   price: number;
   stock: number;
   art: string;
 };
+
+export type ProductInput = Omit<Product, "id" | "art"> & { art?: string; stock_note?: string };
 
 export type Order = {
   code: string;
   date: string;
   customer: string;
   total: number;
-  status: "Menunggu Konfirmasi" | "Diproses" | "Dikirim" | "Selesai";
+  status: "Menunggu Konfirmasi" | "Diproses" | "Siap Diambil" | "Selesai";
 };

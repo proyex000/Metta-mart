@@ -1,5 +1,12 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
+import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
+import type { Product } from "../../types";
+import { adminOrderAction, adminPaymentAction, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchInventoryMovements, fetchOrders, type AdminDashboardSummary, type InventoryMovementRow, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
+import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
+import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
+import { createFamilyLink, deleteFamilyLink, fetchAdminAccounts, fetchFamilyLinks, type AdminAccount, type FamilyLink } from "../../services/family";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -18,7 +25,8 @@ type IconName =
   | "edit"
   | "trash"
   | "logout"
-  | "chevron";
+  | "chevron"
+  | "shirt";
 
 const iconPaths: Record<IconName, ReactNode> = {
   home: (
@@ -106,6 +114,7 @@ const iconPaths: Record<IconName, ReactNode> = {
     </>
   ),
   chevron: <path d="m9 5 7 7-7 7" />,
+  shirt: <path d="m8 3-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0Z" />,
 };
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -146,14 +155,6 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-const products = [
-  { id: 1, name: "Buku Tulis", category: "ATK", price: 5000, stock: 120, art: "book" },
-  { id: 2, name: "Pensil 2B", category: "ATK", price: 3000, stock: 50, art: "pencil" },
-  { id: 3, name: "Penghapus", category: "ATK", price: 2000, stock: 8, art: "eraser" },
-  { id: 4, name: "Rautan", category: "ATK", price: 4000, stock: 0, art: "sharpener" },
-  { id: 5, name: "Minuman Botol", category: "Minuman", price: 8000, stock: 35, art: "bottle" },
-];
-
 const orders = [
   {
     code: "MTM-0128",
@@ -174,7 +175,7 @@ const orders = [
     date: "12 Okt 2025, 08:50",
     customer: "Budi Santoso",
     total: 120000,
-    status: "Dikirim",
+    status: "Siap Diambil",
   },
   {
     code: "MTM-0125",
@@ -240,7 +241,7 @@ function Status({ children }: { children: ReactNode }) {
   const tone =
     label.includes("Selesai") || label.includes("Tersedia")
       ? "green"
-      : label.includes("Dikirim")
+      : label.includes("Siap Diambil")
         ? "purple"
         : label.includes("Diproses")
           ? "blue"
@@ -259,10 +260,10 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
       </div>
       <div className="topbar__meta">
         <span className="topbar__date">
-          <Icon name="calendar" size={15} /> 12 Oktober 2025
+          <Icon name="calendar" size={15} /> {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
         </span>
         <span className="topbar__time">
-          <Icon name="clock" size={15} /> 10:24
+          <Icon name="clock" size={15} /> {new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
         </span>
         <span className="avatar" aria-label="Avatar Admin">A</span>
         <b>Admin</b>
@@ -311,111 +312,163 @@ function Sidebar({ view, setView }: { view: View; setView: (view: View) => void 
 }
 
 export function Dashboard() {
-  const stats = [
-    { icon: "box" as IconName, label: "Total Produk", value: "85", note: "3 dari minggu lalu" },
-    { icon: "bag" as IconName, label: "Pesanan Masuk", value: "27", note: "12% dari kemarin" },
-    { icon: "truck" as IconName, label: "Sedang Dikirim", value: "12", note: "5% dari kemarin" },
-    {
-      icon: "users" as IconName,
-      label: "Pelanggan Aktif",
-      value: "143",
-      note: "8% dari minggu lalu",
-    },
-  ];
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAdminDashboard()
+      .then(setSummary)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const maxRevenue = Math.max(1, ...(summary?.daily.map((day) => day.revenue) ?? [0]));
+  const statusLabel: Record<CommerceOrder["status"], string> = {
+    pending: "Menunggu Konfirmasi",
+    accepted: "Diproses",
+    ready_for_pickup: "Siap Diambil",
+    completed: "Selesai",
+    cancelled: "Dibatalkan",
+  };
+
   return (
     <>
-      <Header title="Halo, Admin!" subtitle="Selamat datang di dashboard MettaMart." />
-      <section className="stat-grid">
-        {stats.map((s) => (
-          <article className="stat-card" key={s.label}>
-            <span>
-              <Icon name={s.icon} />
-            </span>
-            <div>
-              <small>{s.label}</small>
-              <strong>{s.value}</strong>
-              <em>↑ {s.note}</em>
-            </div>
-          </article>
-        ))}
-      </section>
-      <section className="dashboard-grid">
-        <article className="panel chart-panel">
-          <div className="panel__title">
-            <h2>Penjualan 7 Hari Terakhir</h2>
-            <select>
-              <option>Jumlah Pesanan</option>
-            </select>
-          </div>
-          <div className="line-chart">
-            <div className="chart-labels">
-              <span>40</span>
-              <span>30</span>
-              <span>20</span>
-              <span>10</span>
-              <span>0</span>
-            </div>
-            <svg viewBox="0 0 600 210" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#ff3b30" stopOpacity=".25" />
-                  <stop offset="1" stopColor="#ff3b30" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                className="area"
-                d="M0 154 C45 152 70 188 120 169 S185 125 225 128 S300 49 352 62 S426 118 480 83 S550 57 600 17 V210H0Z"
-              />
-              <path
-                className="line"
-                d="M0 154 C45 152 70 188 120 169 S185 125 225 128 S300 49 352 62 S426 118 480 83 S550 57 600 17"
-              />
-            </svg>
-            <div className="chart-days">
-              <span>6 Okt</span>
-              <span>7 Okt</span>
-              <span>8 Okt</span>
-              <span>9 Okt</span>
-              <span>10 Okt</span>
-              <span>11 Okt</span>
-              <span>12 Okt</span>
-            </div>
-          </div>
-        </article>
-        <article className="panel latest">
-          <div className="panel__title">
-            <h2>Pesanan Terbaru</h2>
-            <button onClick={() => window.location.assign("/admin/orders")}>Lihat Semua ›</button>
-          </div>
-          {orders.map((o) => (
-            <div className="latest__row" key={o.code}>
-              <span className="mini-icon">
-                <Icon name="bag" size={16} />
-              </span>
-              <div>
-                <b>#{o.code}</b>
-                <small>{o.date}</small>
-              </div>
-              <Status>{o.status}</Status>
-              <span>{money(o.total)}</span>
-            </div>
+      <Header title="Dashboard Koperasi" subtitle="Ringkasan operasional berdasarkan data aktual MettaMart." />
+      {loading && <div className="panel"><p>Memuat ringkasan dari server...</p></div>}
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {summary && <>
+        <section className="stat-grid">
+          {[
+            { icon: "box" as IconName, label: "Produk Aktif", value: summary.products, note: "Produk di katalog" },
+            { icon: "bag" as IconName, label: "Pesanan Baru", value: summary.orders_pending, note: "Menunggu konfirmasi" },
+            { icon: "clock" as IconName, label: "Siap Diambil", value: summary.orders_ready, note: "Menunggu diserahkan" },
+            { icon: "users" as IconName, label: "Pelanggan Aktif", value: summary.customers, note: "Siswa dan orang tua" },
+          ].map((item) => (
+            <article className="stat-card" key={item.label}>
+              <span><Icon name={item.icon} /></span>
+              <div><small>{item.label}</small><strong>{item.value.toLocaleString("id-ID")}</strong><em>{item.note}</em></div>
+            </article>
           ))}
-        </article>
-      </section>
+        </section>
+        <section className="dashboard-grid">
+          <article className="panel chart-panel">
+            <div className="panel__title"><h2>Penjualan 7 Hari Terakhir</h2><strong>{money(summary.today_revenue)} hari ini</strong></div>
+            {summary.daily.every((day) => day.revenue === 0) ? (
+              <p className="table-foot">Belum ada transaksi lunas yang selesai dalam 7 hari terakhir.</p>
+            ) : (
+              <div className="bar-chart">
+                {summary.daily.map((day) => (
+                  <div key={day.date} title={`${money(day.revenue)} · ${day.orders} transaksi`}>
+                    <i style={{ height: `${Math.max(4, day.revenue / maxRevenue * 100)}%` }} />
+                    <small>{new Date(`${day.date}T00:00:00`).toLocaleDateString("id-ID", { weekday: "short" })}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+          <article className="panel latest">
+            <div className="panel__title"><h2>Pesanan Terbaru</h2><button onClick={() => window.location.assign("/admin/orders")}>Lihat Semua ›</button></div>
+            {summary.recent_orders.length ? summary.recent_orders.map((order) => (
+              <div className="latest__row" key={order.code}>
+                <span className="mini-icon"><Icon name="bag" size={16} /></span>
+                <div><b>#{order.code}</b><small>{order.beneficiary_name ? `Untuk ${order.beneficiary_name} · ` : ""}{order.customer_name} · {new Date(order.created_at).toLocaleString("id-ID")}</small></div>
+                <Status>{statusLabel[order.status]}</Status>
+                <span>{money(order.total)}</span>
+              </div>
+            )) : <p className="table-foot">Belum ada pesanan.</p>}
+          </article>
+        </section>
+        <section className="panel table-panel">
+          <div className="panel__title"><h2>Perhatian Stok</h2><small>Produk dengan stok kurang dari 10 unit</small></div>
+          {summary.low_stock.length ? (
+            <div className="top-products-list">
+              {summary.low_stock.map((product) => (
+                <div key={product.id}><span><b>{product.name}</b><small>Perlu diperiksa atau ditambah</small></span><strong>{product.stock} unit</strong></div>
+              ))}
+            </div>
+          ) : <p className="table-foot">Tidak ada produk dengan stok menipis.</p>}
+        </section>
+      </>}
     </>
   );
 }
 
+type ProductForm = { name: string; category: CategoryId; price: string; stock: string; stockNote: string };
+const emptyProductForm: ProductForm = {
+  name: "",
+  category: categories[0].id,
+  price: "",
+  stock: "",
+  stockNote: "",
+};
+type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
+
 export function Stock() {
+  const items = useProducts();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Semua Kategori");
-  const [items, setItems] = useState(products);
-  const [showAdd, setShowAdd] = useState(false);
-  const filtered = items.filter(
-    (p) =>
-      p.name.toLowerCase().includes(query.toLowerCase()) &&
-      (category === "Semua Kategori" || p.category === category),
-  );
+  const [category, setCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
+  const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
+  const [editing, setEditing] = useState<Product | "new" | null>(null);
+  const [form, setForm] = useState<ProductForm>(emptyProductForm);
+  const [error, setError] = useState("");
+  const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
+  const [movementError, setMovementError] = useState("");
+  const reloadMovements = () => fetchInventoryMovements().then(setMovements).catch((reason) => setMovementError(reason instanceof Error ? reason.message : "Riwayat stok gagal dimuat."));
+  useEffect(() => { reloadMovements(); }, []);
+  const filtered = items.filter((p) => {
+    const needle = query.trim().toLowerCase();
+    return (
+      (!needle ||
+        p.name.toLowerCase().includes(needle) ||
+        categoryLabel(p.category).toLowerCase().includes(needle)) &&
+      (category === ALL_CATEGORIES || p.category === category) &&
+      (stockFilter === "Semua Stok" || stockLabel(p.stock) === stockFilter)
+    );
+  });
+  const openNew = () => {
+    setForm(emptyProductForm);
+    setError("");
+    setEditing("new");
+  };
+  const openEdit = (product: Product) => {
+    setForm({
+      name: product.name,
+      category: product.category,
+      price: String(product.price),
+      stock: String(product.stock),
+      stockNote: "",
+    });
+    setError("");
+    setEditing(product);
+  };
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    if (form.price.trim() === "" || form.stock.trim() === "") {
+      setError("Harga dan stok wajib diisi.");
+      return;
+    }
+    if (editing !== "new" && Number(form.stock) !== editing.stock && !form.stockNote.trim()) {
+      setError("Isi alasan perubahan stok untuk mencatat riwayat persediaan.");
+      return;
+    }
+    const input = {
+      name: form.name,
+      category: form.category,
+      price: Number(form.price),
+      stock: Number(form.stock),
+      stock_note: form.stockNote,
+    };
+    try {
+      if (editing === "new") await productService.create(input);
+      else await productService.update(editing.id, input);
+      setEditing(null);
+      await reloadMovements();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Produk gagal disimpan.");
+    }
+  };
   return (
     <>
       <Header title="Kelola Stok" subtitle="Atur dan kelola stok produk di MettaMart." />
@@ -429,17 +482,31 @@ export function Stock() {
               placeholder="Cari nama produk..."
             />
           </label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option>Semua Kategori</option>
-            <option>ATK</option>
-            <option>Minuman</option>
+          <select
+            aria-label="Filter kategori"
+            value={category}
+            onChange={(e) =>
+              setCategory(isCategoryId(e.target.value) ? e.target.value : ALL_CATEGORIES)
+            }
+          >
+            <option value={ALL_CATEGORIES}>Semua Kategori</option>
+            {categories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
           </select>
-          <select>
+          <select
+            aria-label="Filter stok"
+            value={stockFilter}
+            onChange={(e) => setStockFilter(e.target.value as StockFilter)}
+          >
             <option>Semua Stok</option>
             <option>Tersedia</option>
             <option>Hampir Habis</option>
+            <option>Habis</option>
           </select>
-          <button className="primary" onClick={() => setShowAdd(true)}>
+          <button className="primary" onClick={openNew}>
             <Icon name="plus" size={16} /> Tambah Produk
           </button>
         </div>
@@ -467,21 +534,29 @@ export function Stock() {
                   <td>
                     <b>{p.name}</b>
                   </td>
-                  <td>{p.category}</td>
+                  <td>{categoryLabel(p.category)}</td>
                   <td>{money(p.price)}</td>
                   <td className={p.stock < 10 ? "danger" : ""}>{p.stock}</td>
                   <td>
-                    <Status>
-                      {p.stock === 0 ? "Habis" : p.stock < 10 ? "Hampir Habis" : "Tersedia"}
-                    </Status>
+                    <Status>{stockLabel(p.stock)}</Status>
                   </td>
                   <td>
-                    <button className="icon-button" onClick={() => setShowAdd(true)}>
+                    <button
+                      className="icon-button"
+                      aria-label={`Ubah ${p.name}`}
+                      onClick={() => openEdit(p)}
+                    >
                       <Icon name="edit" size={15} />
                     </button>
                     <button
                       className="icon-button"
-                      onClick={() => setItems(items.filter((x) => x.id !== p.id))}
+                      aria-label={`Hapus ${p.name}`}
+                      onClick={async () => {
+                        if (window.confirm(`Hapus produk "${p.name}"?`)) {
+                          try { await productService.remove(p.id); }
+                          catch { window.alert("Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
+                        }
+                      }}
                     >
                       <Icon name="trash" size={15} />
                     </button>
@@ -495,42 +570,72 @@ export function Stock() {
           Menampilkan {filtered.length} dari {items.length} produk
         </p>
       </div>
-      {showAdd && (
-        <Modal title="Tambah Produk" close={() => setShowAdd(false)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setItems([
-                ...items,
-                {
-                  id: Date.now(),
-                  name: "Produk Baru",
-                  category: "ATK",
-                  price: 5000,
-                  stock: 20,
-                  art: "book",
-                },
-              ]);
-              setShowAdd(false);
-            }}
-          >
+      <section className="panel table-panel">
+        <div className="panel__title"><h2>Riwayat Pergerakan Stok</h2><small>Catatan perubahan stok terbaru</small></div>
+        {movementError && <p className="auth-error" role="alert">{movementError}</p>}
+        {!movements.length && !movementError && <p className="table-foot">Belum ada pergerakan stok.</p>}
+        {movements.length > 0 && <div className="desktop-table"><table><thead><tr><th>Waktu</th><th>Produk</th><th>Perubahan</th><th>Jenis</th><th>Referensi</th><th>Admin</th></tr></thead><tbody>
+          {movements.slice(0, 20).map((movement) => <tr key={movement.id}><td>{new Date(movement.created_at).toLocaleString("id-ID")}</td><td>{movement.product_name}</td><td className={movement.quantity_delta < 0 ? "danger" : ""}>{movement.quantity_delta > 0 ? "+" : ""}{movement.quantity_delta}</td><td>{{ initial_stock: "Stok awal", manual_adjustment: "Penyesuaian", order_reserved: "Pesanan online", order_cancelled: "Pembatalan", pos_sale: "Penjualan POS" }[movement.reason]}</td><td>{movement.reference || "—"}</td><td>{movement.actor_name || "Sistem"}</td></tr>)}
+        </tbody></table></div>}
+      </section>
+      {editing && (
+        <Modal title={editing === "new" ? "Tambah Produk" : "Ubah Produk"} close={() => setEditing(null)}>
+          <form onSubmit={save} noValidate>
+            {error && (
+              <p className="auth-error" role="alert">
+                {error}
+              </p>
+            )}
             <label>
               Nama Produk
-              <input defaultValue="Produk Baru" />
+              <input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Contoh: Kemeja Seragam"
+              />
             </label>
             <div className="form-row">
               <label>
                 Kategori
-                <select>
-                  <option>ATK</option>
-                  <option>Minuman</option>
+                <select
+                  value={form.category}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (isCategoryId(next)) setForm({ ...form, category: next });
+                  }}
+                >
+                  {categories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
                 Stok
-                <input type="number" defaultValue="20" />
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                />
               </label>
             </div>
+            <label>
+              Harga (Rp)
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
+              />
+            </label>
+            <label>
+              Alasan perubahan stok (wajib jika stok berubah)
+              <input value={form.stockNote} maxLength={80} onChange={(e) => setForm({ ...form, stockNote: e.target.value })} placeholder="Contoh: barang masuk dari pemasok" />
+            </label>
             <button className="primary wide">Simpan Produk</button>
           </form>
         </Modal>
@@ -539,89 +644,119 @@ export function Stock() {
   );
 }
 
+function adminOrderStatus(status: CommerceOrder["status"]) {
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+}
+function adminPaymentStatus(status: CommerceOrder["payment_status"]) {
+  return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Ditolak", refunded: "Dikembalikan" })[status];
+}
+
 export function Orders() {
   const [tab, setTab] = useState("Semua");
-  const [selected, setSelected] = useState<(typeof orders)[number] | null>(null);
-  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Dikirim", "Selesai"];
-  const shown = tab === "Semua" ? orders : orders.filter((o) => o.status === tab);
+  const [items, setItems] = useState<CommerceOrder[]>([]);
+  const [selected, setSelected] = useState<CommerceOrder | null>(null);
+  const [query, setQuery] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
+  const [channelFilter, setChannelFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
+  const reload = async () => { const data = await fetchOrders(); setItems(data); };
+  useEffect(() => {
+    reload().catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
+  }, []);
+  const shown = items.filter((order) => {
+    const date = new Date(order.created_at).toLocaleDateString("en-CA");
+    const needle = query.trim().toLowerCase();
+    return (tab === "Semua" || adminOrderStatus(order.status) === tab)
+      && (!needle || order.code.toLowerCase().includes(needle) || order.customer_name.toLowerCase().includes(needle) || (order.beneficiary_name || "").toLowerCase().includes(needle))
+      && (paymentFilter === "all" || order.payment_status === paymentFilter)
+      && (methodFilter === "all" || order.payment_method === methodFilter)
+      && (channelFilter === "all" || order.sales_channel === channelFilter)
+      && (!dateFrom || date >= dateFrom)
+      && (!dateTo || date <= dateTo);
+  });
+  const exportCsv = () => {
+    const escapeCell = (value: unknown) => {
+      const raw = String(value ?? "");
+      const safe = /^[=+@\-\t\r]/.test(raw) ? "'" + raw : raw;
+      return '"' + safe.replace(/"/g, '""') + '"';
+    };
+    const rows = [
+      ["Kode", "Tanggal", "Pelanggan", "Penerima", "Kanal", "Metode", "Status Pesanan", "Status Pembayaran", "Total", "Nama Pengirim", "Bank/E-wallet", "Akhir Rekening"],
+      ...shown.map((order) => [order.code, new Date(order.created_at).toLocaleString("id-ID"), order.customer_name, order.beneficiary_name || "", order.sales_channel, order.payment_method, adminOrderStatus(order.status), adminPaymentStatus(order.payment_status), order.total, order.payment_sender_name, order.payment_source, order.payment_account_last4]),
+    ];
+    const csv = "\uFEFF" + rows.map((row) => row.map(escapeCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `mettamart-transaksi-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const act = async (action: "accept" | "ready" | "complete-pickup" | "cancel") => {
+    if (!selected || working) return;
+    setWorking(true); setError("");
+    try {
+      const updated = await adminOrderAction(selected.code, action);
+      setSelected(updated);
+      setItems((current) => current.map((item) => item.code === updated.code ? updated : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Status pesanan gagal diperbarui.");
+    } finally { setWorking(false); }
+  };
+  const verify = async (action: "verify" | "reject") => {
+    if (!selected || working) return;
+    setWorking(true); setError("");
+    try {
+      const updated = await adminPaymentAction(selected.code, action);
+      setSelected(updated);
+      setItems((current) => current.map((item) => item.code === updated.code ? updated : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Status pembayaran gagal diperbarui.");
+    } finally { setWorking(false); }
+  };
   return (
     <>
-      <Header title="Pesanan" subtitle="Kelola pesanan pelanggan dan atur status pengiriman." />
+      <Header title="Pesanan" subtitle="Terima pesanan, siapkan barang, dan konfirmasi pengambilan di koperasi." />
+      {error && <p className="auth-error" role="alert">{error}</p>}
       <div className="panel table-panel">
-        <div className="tabs">
-          {tabs.map((t) => (
-            <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>
-              {t}
-              {t === "Semua" && " (27)"}
-            </button>
-          ))}
-        </div>
-        <label className="search order-search">
-          <Icon name="search" size={16} />
-          <input placeholder="Cari nomor pesanan / nama pelanggan..." />
-        </label>
-        <div className="desktop-table">
-          <table>
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Kode Pesanan</th>
-                <th>Tanggal</th>
-                <th>Pelanggan</th>
-                <th>Total</th>
-                <th>Status</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((o, i) => (
-                <tr key={o.code}>
-                  <td>{i + 1}</td>
-                  <td>
-                    <b>{o.code}</b>
-                  </td>
-                  <td>{o.date}</td>
-                  <td>{o.customer}</td>
-                  <td>
-                    <b>{money(o.total)}</b>
-                  </td>
-                  <td>
-                    <Status>{o.status}</Status>
-                  </td>
-                  <td>
-                    <button className="primary small" onClick={() => setSelected(o)}>
-                      Detail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div className="tabs">{tabs.map((t) => <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>{t}{t === "Semua" ? ` (${items.length})` : ""}</button>)}</div>
+        <div className="toolbar"><label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode / pelanggan / penerima..." /></label><select aria-label="Filter status pembayaran" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">Semua Pembayaran</option><option value="unpaid">Belum Dibayar</option><option value="pending_verification">Menunggu Verifikasi</option><option value="paid">Lunas</option><option value="failed">Ditolak</option></select><select aria-label="Filter metode pembayaran" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">Semua Metode</option><option value="cash">Tunai</option><option value="bank_transfer">Transfer</option><option value="qris">QRIS</option></select><select aria-label="Filter kanal transaksi" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}><option value="all">Semua Kanal</option><option value="online">Online</option><option value="pos">POS</option></select><label>Dari<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Sampai<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label><button className="secondary" type="button" onClick={exportCsv} disabled={!shown.length}>Ekspor CSV ({shown.length})</button></div>
+        {loading ? <p>Memuat pesanan...</p> : (
+          <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{money(order.total)}</b></td><td><Status>{adminOrderStatus(order.status)}</Status></td><td><button className="primary small" onClick={() => setSelected(order)}>Detail</button></td></tr>)}</tbody>
+          </table></div>
+        )}
+        {!loading && !shown.length && <p className="table-foot">Tidak ada pesanan pada filter ini.</p>}
         <p className="table-foot">Total {shown.length} pesanan</p>
       </div>
       {selected && (
         <Modal title={`Detail ${selected.code}`} close={() => setSelected(null)}>
           <div className="admin-order-detail">
-            <p>
-              <span>Pelanggan</span>
-              <b>{selected.customer}</b>
-            </p>
-            <p>
-              <span>Tanggal</span>
-              <b>{selected.date}</b>
-            </p>
-            <p>
-              <span>Total</span>
-              <b>{money(selected.total)}</b>
-            </p>
-            <p>
-              <span>Status</span>
-              <Status>{selected.status}</Status>
-            </p>
-            <button className="primary wide" onClick={() => setSelected(null)}>
-              Tutup Detail
-            </button>
+            <p><span>Pelanggan</span><b>{selected.customer_name}</b></p>
+            {selected.beneficiary_name && <p><span>Untuk Siswa</span><b>{selected.beneficiary_name}</b></p>}
+            <p><span>Tanggal</span><b>{new Date(selected.created_at).toLocaleString("id-ID")}</b></p>
+            <p><span>Total</span><b>{money(selected.total)}</b></p>
+            <p><span>Status Pesanan</span><Status>{adminOrderStatus(selected.status)}</Status></p>
+            <p><span>Metode Pembayaran</span><b>{selected.payment_method === "bank_transfer" ? "Transfer Bank" : selected.payment_method === "qris" ? "QRIS" : "Tunai"}</b></p>
+            <p><span>Status Pembayaran</span><b>{adminPaymentStatus(selected.payment_status)}</b></p>
+            {selected.payment_method !== "cash" && selected.payment_sender_name && <><p><span>Nama Pengirim</span><b>{selected.payment_sender_name}</b></p><p><span>Bank / E-wallet Asal</span><b>{selected.payment_source}</b></p>{selected.payment_account_last4 && <p><span>4 Digit Akhir Rekening</span><b>•••• {selected.payment_account_last4}</b></p>}</>}
+            <h3>Rincian Barang</h3>
+            {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
+            {selected.note && <p><span>Catatan</span><b>{selected.note}</b></p>}
+            {selected.payment_status === "pending_verification" && <div className="form-row"><button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button><button className="secondary" disabled={working} onClick={() => verify("reject")}>Tolak Pembayaran</button></div>}
+            <div className="form-row">
+              {selected.status === "pending" && <button className="primary" disabled={working} onClick={() => act("accept")}>Terima Pesanan</button>}
+              {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>Tandai Siap Diambil</button>}
+              {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>Konfirmasi Pengambilan</button>}
+              {["pending", "accepted"].includes(selected.status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
+            </div>
+            <button className="primary wide" onClick={() => setSelected(null)}>Tutup Detail</button>
           </div>
         </Modal>
       )}
@@ -630,243 +765,281 @@ export function Orders() {
 }
 
 export function Notifications() {
-  type Notice = (typeof notifications)[number];
-  const [items, setItems] = useState<Notice[]>(notifications);
-  const [filter, setFilter] = useState(0);
-  const [selected, setSelected] = useState<Notice | null>(null);
-  const [showCompose, setShowCompose] = useState(false);
-  const [readItems, setReadItems] = useState<string[]>([]);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftText, setDraftText] = useState("");
-  const [draftType, setDraftType] = useState("Info");
-  const categories = [
-    "Semua Notifikasi",
-    "Pesanan Diterima",
-    "Pesanan Dikirim",
-    "Promo & Info",
-    "Stok Produk",
-  ];
-  const filtered = items.filter((notice) => {
-    if (filter === 0) return true;
-    if (filter === 1) return notice.title.toLowerCase().includes("diterima");
-    if (filter === 2) return notice.title.toLowerCase().includes("dikirim");
-    if (filter === 3) return notice.type === "Promo" || notice.type === "Info";
-    return notice.title.toLowerCase().includes("stok") || notice.text.toLowerCase().includes("stok");
-  });
-  const submitNotice = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const next: Notice = {
-      title: draftTitle.trim(),
-      text: draftText.trim(),
-      time: "Baru saja",
-      type: draftType,
-    };
-    if (!next.title || !next.text) return;
-    setItems((current) => [next, ...current]);
-    setFilter(0);
-    setShowCompose(false);
-    setDraftTitle("");
-    setDraftText("");
-    setDraftType("Info");
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sentMessage, setSentMessage] = useState("");
+  useEffect(() => {
+    fetchNotifications().then(setItems)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Notifikasi gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+  const markRead = async (notice: AppNotification) => {
+    if (notice.is_read) return;
+    try {
+      await markNotificationRead(notice.id);
+      setItems((current) => current.map((item) => item.id === notice.id ? { ...item, is_read: true } : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Notifikasi gagal diperbarui.");
+    }
   };
-  const markRead = (notice: Notice) => {
-    setReadItems((current) => current.includes(notice.title) ? current : [...current, notice.title]);
-    setSelected(notice);
+  const send = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!title.trim() || !message.trim() || sending) return;
+    setSending(true); setError(""); setSentMessage("");
+    try {
+      const result = await broadcastNotification({ title: title.trim(), message: message.trim(), kind: "announcement" });
+      setSentMessage(`Pengumuman berhasil dikirim ke ${result.sent_to} akun siswa dan orang tua.`);
+      setTitle(""); setMessage("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Pengumuman gagal dikirim.");
+    } finally { setSending(false); }
   };
   return (
     <>
-      <Header title="Notifikasi" subtitle="Kelola dan lihat informasi untuk pelanggan." />
-      <div className="notification-layout">
-        <aside className="panel notification-nav">
-          <button className="primary wide" onClick={() => setShowCompose(true)}>
-            <Icon name="plus" size={16} /> Kirim Notifikasi Baru
-          </button>
-          {categories.map((label, index) => (
-            <button className={index === filter ? "active" : ""} key={label} onClick={() => setFilter(index)}>
-              <Icon name={index === 0 ? "bell" : index < 3 ? "box" : "chart"} />
-              <span>{label}</span>
-              <b>{index === 0 ? items.length : index === 1 ? items.filter((n) => n.title.toLowerCase().includes("diterima")).length : index === 2 ? items.filter((n) => n.title.toLowerCase().includes("dikirim")).length : index === 3 ? items.filter((n) => n.type === "Promo" || n.type === "Info").length : items.filter((n) => n.title.toLowerCase().includes("stok")).length}</b>
+      <Header title="Notifikasi" subtitle="Pantau aktivitas pesanan dan kirim pengumuman kepada siswa serta orang tua." />
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      <section className="panel table-panel">
+        <div className="panel__title"><h2>Kirim Pengumuman</h2></div>
+        <form className="notification-compose" onSubmit={send}>
+          <label>Judul<input value={title} maxLength={180} onChange={(event) => setTitle(event.target.value)} required placeholder="Contoh: Jadwal koperasi selama ujian" /></label>
+          <label>Pesan<textarea value={message} maxLength={500} onChange={(event) => setMessage(event.target.value)} required placeholder="Tulis informasi untuk siswa dan orang tua." /></label>
+          <button className="primary" type="submit" disabled={sending || !title.trim() || !message.trim()}>{sending ? "Mengirim..." : "Kirim ke Siswa & Orang Tua"}</button>
+          {sentMessage && <p role="status">{sentMessage}</p>}
+        </form>
+      </section>
+      <section className="panel table-panel">
+        <div className="panel__title"><h2>Aktivitas Notifikasi Admin</h2><small>Pesanan dan pembayaran</small></div>
+        {loading && <p>Memuat...</p>}
+        {!loading && !items.length && <p className="table-foot">Belum ada aktivitas notifikasi.</p>}
+        <div className="shop-notices">
+          {items.map((notice) => (
+            <button className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => markRead(notice)}>
+              <span className="mini-icon"><Icon name={notice.kind === "payment" ? "bag" : "bell"} /></span>
+              <div><b>{notice.title}</b><p>{notice.message}</p><time>{new Date(notice.created_at).toLocaleString("id-ID")}</time></div>
+              {!notice.is_read && <span>Baru</span>}
             </button>
           ))}
-        </aside>
-        <section className="panel notification-list">
-          <div className="panel__title">
-            <h2>{categories[filter]}</h2>
-            <button type="button" onClick={() => { setFilter(0); setReadItems(items.map((item) => item.title)); }}>
-              Tandai semua dibaca
-            </button>
-          </div>
-          {filtered.length ? filtered.map((notice, index) => {
-            const isRead = readItems.includes(notice.title);
-            return (
-              <button
-                type="button"
-                className={`notification-item ${isRead ? "is-read" : "is-unread"}`}
-                key={`${notice.title}-${index}`}
-                onClick={() => markRead(notice)}
-              >
-                <span className="mini-icon"><Icon name={index % 2 ? "box" : "bell"} /></span>
-                <span className="notification-copy">
-                  <b>{notice.title}</b>
-                  <span>{notice.text}</span>
-                </span>
-                <time>{notice.time}</time>
-                <Status>{notice.type}</Status>
-                <Icon name="chevron" size={15} />
-              </button>
-            );
-          }) : (
-            <div className="notification-empty">
-              <Icon name="bell" size={28} />
-              <b>Belum ada notifikasi</b>
-              <span>Notifikasi untuk kategori ini akan muncul di sini.</span>
-            </div>
-          )}
-        </section>
-      </div>
-      {showCompose && (
-        <Modal title="Kirim Notifikasi Baru" close={() => setShowCompose(false)}>
-          <form className="notification-compose" onSubmit={submitNotice}>
-            <label>Judul Notifikasi
-              <input required maxLength={90} value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Contoh: Promo alat tulis" />
-            </label>
-            <label>Isi Pesan
-              <textarea required rows={4} maxLength={300} value={draftText} onChange={(event) => setDraftText(event.target.value)} placeholder="Tulis informasi untuk pelanggan..." />
-            </label>
-            <label>Kategori
-              <select value={draftType} onChange={(event) => setDraftType(event.target.value)}>
-                <option value="Info">Info</option>
-                <option value="Promo">Promo</option>
-                <option value="Pesan">Pesanan</option>
-              </select>
-            </label>
-            <button className="primary wide" type="submit">Terbitkan Notifikasi</button>
-          </form>
-        </Modal>
-      )}
-      {selected && (
-        <Modal title="Detail Notifikasi" close={() => setSelected(null)}>
-          <div className="notification-detail">
-            <Status>{selected.type}</Status>
-            <h3>{selected.title}</h3>
-            <p>{selected.text}</p>
-            <time>{selected.time}</time>
-            <button className="primary wide" onClick={() => setSelected(null)}>Tutup</button>
-          </div>
-        </Modal>
-      )}
+        </div>
+      </section>
     </>
   );
 }
 
 export function Reports() {
-  const bars = [45, 32, 64, 48, 59, 78, 46, 76];
+  const [report, setReport] = useState<AdminSalesReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchAdminSalesReport()
+      .then(setReport)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Laporan gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const maxDailyRevenue = Math.max(1, ...(report?.daily.map((day) => day.total) ?? [0]));
+  const periodLabel = report
+    ? `${new Date(`${report.period.from}T00:00:00`).toLocaleDateString("id-ID")} – ${new Date(`${report.period.to}T00:00:00`).toLocaleDateString("id-ID")}`
+    : "";
+
   return (
     <>
-      <Header title="Laporan" subtitle="Lihat ringkasan data penjualan dan aktivitas toko." />
-      <section className="report-summary">
-        <article>
-          <span className="mini-icon">
-            <Icon name="chart" />
-          </span>
-          <div>
-            <small>Total Penjualan</small>
-            <strong>Rp 4.820.000</strong>
-            <em>↑ 12% dari periode sebelumnya</em>
-          </div>
-        </article>
-        <article>
-          <span className="mini-icon">
-            <Icon name="bag" />
-          </span>
-          <div>
-            <small>Jumlah Pesanan</small>
-            <strong>86</strong>
-            <em>↑ 12% dari periode sebelumnya</em>
-          </div>
-        </article>
-        <article>
-          <span className="mini-icon">
-            <Icon name="bag" />
-          </span>
-          <div>
-            <small>Rata-rata Transaksi</small>
-            <strong>Rp 56.047</strong>
-            <em>↑ 8% dari periode sebelumnya</em>
-          </div>
-        </article>
-      </section>
-      <section className="report-grid">
-        <article className="panel">
-          <div className="panel__title">
-            <h2>Grafik Penjualan</h2>
-            <select>
-              <option>7 Hari Terakhir</option>
-            </select>
-          </div>
-          <div className="bar-chart">
-            {bars.map((h, i) => (
-              <div key={i}>
-                <i style={{ height: `${h}%` }} />
-                <small>{i + 5} Okt</small>
-              </div>
+      <Header title="Laporan" subtitle="Ringkasan penjualan dari pesanan yang sudah selesai dan pembayarannya lunas." />
+      {loading && <div className="panel"><p>Memuat laporan dari server...</p></div>}
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {report && (
+        <>
+          <section className="report-summary">
+            <article>
+              <span className="mini-icon"><Icon name="chart" /></span>
+              <div><small>Penjualan Hari Ini</small><strong>{money(report.today.revenue)}</strong><em>{report.today.orders} transaksi selesai</em></div>
+            </article>
+            <article>
+              <span className="mini-icon"><Icon name="bag" /></span>
+              <div><small>Penjualan Bulan Ini</small><strong>{money(report.month.revenue)}</strong><em>{report.month.orders} transaksi lunas</em></div>
+            </article>
+            <article>
+              <span className="mini-icon"><Icon name="bag" /></span>
+              <div><small>Rata-rata Transaksi Bulan Ini</small><strong>{money(report.month.average_order)}</strong><em>Per transaksi selesai</em></div>
+            </article>
+          </section>
+          <section className="report-grid">
+            <article className="panel">
+              <div className="panel__title"><h2>Penjualan 7 Hari Terakhir</h2><small>{periodLabel}</small></div>
+              {report.daily.every((day) => day.total === 0) ? (
+                <p className="table-foot">Belum ada penjualan selesai dalam 7 hari terakhir.</p>
+              ) : (
+                <div className="bar-chart">
+                  {report.daily.map((day) => (
+                    <div key={day.date} title={`${money(day.total)} · ${day.orders} transaksi`}>
+                      <i style={{ height: `${Math.max(4, day.total / maxDailyRevenue * 100)}%` }} />
+                      <small>{new Date(`${day.date}T00:00:00`).toLocaleDateString("id-ID", { weekday: "short" })}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+            <article className="panel">
+              <div className="panel__title"><h2>Produk Terlaris Bulan Ini</h2></div>
+              {report.top_products.length ? (
+                <div className="top-products-list">
+                  {report.top_products.map((product) => (
+                    <div key={product.product_name}>
+                      <span><b>{product.product_name}</b><small>{product.quantity} unit terjual</small></span>
+                      <strong>{money(product.revenue)}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="table-foot">Belum ada produk terjual pada periode ini.</p>}
+            </article>
+          </section>
+          <p className="table-foot">Laporan hanya menghitung pesanan yang sudah dikonfirmasi selesai dan berstatus lunas. Pesanan dibatalkan atau belum diambil tidak dihitung sebagai penjualan.</p>
+        </>
+      )}
+    </>
+  );
+}
+
+export function POS() {
+  const products = useProducts();
+  const [counts, setCounts] = useState<Record<number, number>>({});
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "qris">("cash");
+  const [enabled, setEnabled] = useState({ cash: true, bank_transfer: true, qris: true });
+  const [note, setNote] = useState("");
+  const [cashReceived, setCashReceived] = useState("");
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+  const [receipt, setReceipt] = useState<CommerceOrder | null>(null);
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => {
+      setEnabled(settings.payment_methods);
+      if (!settings.payment_methods[paymentMethod]) {
+        const first = (["cash", "bank_transfer", "qris"] as const).find((method) => settings.payment_methods[method]);
+        if (first) setPaymentMethod(first);
+      }
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
+  }, []);
+  const selected = products.filter((product) => (counts[product.id] || 0) > 0);
+  const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
+  const change = (id: number, delta: number) => {
+    const product = products.find((item) => item.id === id);
+    if (!product) return;
+    setCounts((current) => ({ ...current, [id]: Math.min(product.stock, Math.max(0, (current[id] || 0) + delta)) }));
+    setReceipt(null);
+  };
+  const checkout = async () => {
+    if (!selected.length || working) return;
+    setWorking(true); setError("");
+    try {
+      const order = await createPOSOrder({
+        items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
+        payment_method: paymentMethod,
+        note,
+        ...(paymentMethod === "cash" ? { cash_received: Number(cashReceived) } : {}),
+      });
+      setReceipt(order); setCounts({}); setNote(""); setCashReceived("");
+      await refreshProducts();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Transaksi POS gagal disimpan.");
+    } finally { setWorking(false); }
+  };
+  return (
+    <>
+      <Header title="POS Koperasi" subtitle="Transaksi langsung oleh admin saat melayani pembelian di koperasi." />
+      <div className="dashboard-grid">
+        <section className="panel table-panel">
+          <div className="panel__title"><h2>Pilih Produk</h2><small>Stok diperbarui dari server</small></div>
+          <div className="pos-product-list">
+            {products.map((product) => (
+              <article key={product.id}>
+                <div><b>{product.name}</b><small>{money(product.price)} · Stok {product.stock}</small></div>
+                <div className="quantity">
+                  <button type="button" onClick={() => change(product.id, -1)} disabled={!counts[product.id]}>−</button>
+                  <b>{counts[product.id] || 0}</b>
+                  <button type="button" onClick={() => change(product.id, 1)} disabled={counts[product.id] >= product.stock || product.stock === 0}>+</button>
+                </div>
+              </article>
             ))}
+            {!products.length && <p className="table-foot">Belum ada produk aktif.</p>}
           </div>
-        </article>
-        <article className="panel">
-          <div className="panel__title">
-            <h2>Penjualan per Kategori</h2>
-          </div>
-          <div className="donut-wrap">
-            <div className="donut">
-              <span>
-                Total<b>Rp 4,82jt</b>
-              </span>
-            </div>
-            <ul>
-              <li>
-                <i /> ATK <b>45%</b>
-              </li>
-              <li>
-                <i /> Minuman <b>25%</b>
-              </li>
-              <li>
-                <i /> Makanan <b>15%</b>
-              </li>
-              <li>
-                <i /> Lainnya <b>15%</b>
-              </li>
-            </ul>
-          </div>
-        </article>
-      </section>
+        </section>
+        <section className="panel table-panel">
+          <div className="panel__title"><h2>Ringkasan Transaksi</h2></div>
+          {selected.map((product) => <div className="latest__row" key={product.id}><div><b>{product.name}</b><small>{counts[product.id]} × {money(product.price)}</small></div><strong>{money(counts[product.id] * product.price)}</strong></div>)}
+          {!selected.length && <p className="table-foot">Pilih produk untuk memulai transaksi.</p>}
+          <div className="detail-total"><span>Total</span><strong>{money(total)}</strong></div>
+          <label>Metode Pembayaran<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>{enabled.cash && <option value="cash">Tunai</option>}{enabled.bank_transfer && <option value="bank_transfer">Transfer Bank (dikonfirmasi admin)</option>}{enabled.qris && <option value="qris">QRIS (dikonfirmasi admin)</option>}</select></label>
+          {paymentMethod === "cash" && <>
+            <label>Uang Diterima (Rp)<input type="number" min={total} step={1} value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={String(total)} /></label>
+            <p className="table-foot">Kembalian: <b>{money(Math.max(0, Number(cashReceived || 0) - total))}</b></p>
+          </>}
+          <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
+          <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
+          <p className="table-foot">POS hanya dapat digunakan saat jam operasional. Admin bertanggung jawab memastikan pembayaran diterima sebelum menyelesaikan transaksi.</p>
+        </section>
+      </div>
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {receipt && <section className="panel table-panel"><h2>Transaksi Berhasil</h2><p>Kode: <b>{receipt.code}</b></p><p>Total: <b>{money(receipt.total)}</b></p><p>Status: Selesai · Lunas</p>{receipt.cash_received !== null && <p>Uang diterima: {money(receipt.cash_received)} · Kembalian: {money(receipt.change_due || 0)}</p>}<button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button></section>}
     </>
   );
 }
 
 export function Settings() {
   const { session, updateProfile } = useAuth();
-  type SettingsTab = "store" | "account" | "payment" | "shipping" | "notifications";
+  type SettingsTab = "store" | "account" | "payment" | "pickup" | "notifications" | "family";
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
-    cash: boolean; qris: boolean; bankTransfer: boolean;
-    deliveryEnabled: boolean; pickupEnabled: boolean; shippingFee: string; estimatedDelivery: string;
-    orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
+    cash: boolean; qris: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string; qrisNote: string;
+    operatingDays: string; openTime: string; closeTime: string; pickupMessage: string;
+    orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean;
   };
   const defaults: Preferences = {
     storeName: "MettaMart",
     description: "Toko perlengkapan sekolah dan kebutuhan sehari-hari.",
-    address: "Jl. Metta Maitreya No. 123, Pekanbaru",
-    email: "mettamart@sekolahmetta.id",
-    phone: "0812 3456 7890",
+    address: "",
+    email: "",
+    phone: "",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
-    cash: true, qris: true, bankTransfer: false,
-    deliveryEnabled: true, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
-    orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
+    cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "", qrisNote: "",
+    operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
+    orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
+  const [accounts, setAccounts] = useState<AdminAccount[]>([]);
+  const [familyLinks, setFamilyLinks] = useState<FamilyLink[]>([]);
+  const [familyParent, setFamilyParent] = useState<number | "">("");
+  const [familyStudent, setFamilyStudent] = useState<number | "">("");
+  const [familyError, setFamilyError] = useState("");
+  const [familyLoading, setFamilyLoading] = useState(false);
+  const [familySaving, setFamilySaving] = useState(false);
+  useEffect(() => {
+    if (tab !== "family") return;
+    setFamilyLoading(true); setFamilyError("");
+    Promise.all([fetchAdminAccounts(), fetchFamilyLinks()])
+      .then(([users, links]) => { setAccounts(users.filter((user) => user.is_active)); setFamilyLinks(links); })
+      .catch((reason) => setFamilyError(reason instanceof Error ? reason.message : "Data relasi keluarga gagal dimuat."))
+      .finally(() => setFamilyLoading(false));
+  }, [tab]);
+  const addFamilyLink = async () => {
+    if (!familyParent || !familyStudent || familySaving) return;
+    setFamilySaving(true); setFamilyError("");
+    try { await createFamilyLink(familyParent, familyStudent); setFamilyLinks(await fetchFamilyLinks()); }
+    catch (reason) { setFamilyError(reason instanceof Error ? reason.message : "Relasi gagal dibuat."); }
+    finally { setFamilySaving(false); }
+  };
+  const removeFamilyLink = async (id: number) => {
+    setFamilyError("");
+    try { await deleteFamilyLink(id); setFamilyLinks((current) => current.filter((link) => link.id !== id)); }
+    catch (reason) { setFamilyError(reason instanceof Error ? reason.message : "Relasi gagal dihapus."); }
+  };
+
+  const [settingsLoadError, setSettingsLoadError] = useState("");
   const [values, setValues] = useState<Preferences>(() => {
     try {
       return { ...defaults, ...JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") };
@@ -874,7 +1047,32 @@ export function Settings() {
       return defaults;
     }
   });
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => setValues((current) => ({
+      ...current,
+      cash: settings.payment_methods.cash,
+      qris: settings.payment_methods.qris,
+      bankTransfer: settings.payment_methods.bank_transfer,
+      bankName: settings.payment_instructions.bank_name,
+      bankAccountName: settings.payment_instructions.account_name,
+      bankAccountNumber: settings.payment_instructions.account_number,
+      qrisNote: settings.payment_instructions.qris_note,
+      operatingDays: settings.operating_hours.days.join(","),
+      openTime: settings.operating_hours.open_time,
+      closeTime: settings.operating_hours.close_time,
+      pickupMessage: settings.pickup_instructions.message,
+      storeName: settings.store_profile.name,
+      description: settings.store_profile.description,
+      address: settings.store_profile.address,
+      email: settings.store_profile.email,
+      phone: settings.store_profile.phone,
+      orderAlerts: settings.notification_preferences.order_alerts,
+      lowStockAlerts: settings.notification_preferences.low_stock_alerts,
+      promoAlerts: settings.notification_preferences.announcements_enabled,
+    }))).catch((reason) => setSettingsLoadError(reason instanceof Error ? reason.message : "Pengaturan server gagal dimuat."));
+  }, []);
   const [saved, setSaved] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState("");
   const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
   const [logoMessage, setLogoMessage] = useState("");
   const [logoError, setLogoError] = useState("");
@@ -922,20 +1120,51 @@ export function Settings() {
     setValues((current) => ({ ...current, [key]: value }));
     setSaved(false);
   };
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
-    if (tab === "account") updateProfile({ name: values.adminName, email: values.adminEmail });
-    setSaved(true);
+    setProfileSaveError("");
+    if (tab === "account") {
+      try {
+        await updateProfile({ name: values.adminName, email: values.adminEmail });
+      } catch (reason) {
+        setSaved(false);
+        setProfileSaveError(reason instanceof Error ? reason.message : "Profil gagal diperbarui.");
+        return;
+      }
+    }
+    try {
+      if (tab === "store") {
+        await updateStorefrontSettings({ store_profile: { name: values.storeName, description: values.description, address: values.address, email: values.email, phone: values.phone } });
+      } else if (tab === "notifications") {
+        await updateStorefrontSettings({ notification_preferences: { order_alerts: values.orderAlerts, low_stock_alerts: values.lowStockAlerts, announcements_enabled: values.promoAlerts } });
+      } else if (tab === "payment") {
+        await updateStorefrontSettings({
+          payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer },
+          payment_instructions: { bank_name: values.bankName, account_name: values.bankAccountName, account_number: values.bankAccountNumber, qris_note: values.qrisNote },
+        });
+      } else if (tab === "pickup") {
+        const days = values.operatingDays.split(",").map((day) => day.trim()).filter(Boolean);
+        await updateStorefrontSettings({
+          operating_hours: { days, open_time: values.openTime, close_time: values.closeTime },
+          pickup_instructions: { message: values.pickupMessage },
+        });
+      }
+      localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
+      setSaved(true);
+    } catch (reason) {
+      setSaved(false);
+      setProfileSaveError(reason instanceof Error ? reason.message : "Pengaturan gagal disimpan ke server.");
+    }
   };
   const tabs: { id: SettingsTab; label: string; icon: IconName }[] = [
     { id: "store", label: "Informasi Toko", icon: "home" },
     { id: "account", label: "Akun Admin", icon: "users" },
     { id: "payment", label: "Metode Pembayaran", icon: "bag" },
-    { id: "shipping", label: "Pengiriman", icon: "truck" },
+    { id: "pickup", label: "Jam Operasional & Pengambilan", icon: "clock" },
     { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
+    { id: "family", label: "Relasi Orang Tua & Siswa", icon: "users" },
   ];
-  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" = "text") => (
+  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" | "time" = "text") => (
     <label key={key}>
       {label}
       <input type={type} value={String(values[key])} onChange={(event) => update(key, event.target.value as Preferences[typeof key])} />
@@ -980,24 +1209,62 @@ export function Settings() {
             {toggle("Tunai di kasir", "cash", "Pembayaran langsung saat mengambil pesanan.")}
             {toggle("QRIS", "qris", "Pembayaran menggunakan QRIS.")}
             {toggle("Transfer bank", "bankTransfer", "Transfer manual yang perlu diverifikasi admin.")}
+            {field("Nama Bank", "bankName")}
+            {field("Nama Pemilik Rekening", "bankAccountName")}
+            {field("Nomor Rekening", "bankAccountNumber")}
+            <label>Instruksi QRIS<textarea value={values.qrisNote} onChange={(event) => update("qrisNote", event.target.value)} /></label>
           </>}
-          {tab === "shipping" && <>
-            <h2>Pengiriman & Pengambilan</h2>
-            {toggle("Aktifkan pengiriman", "deliveryEnabled", "Pesanan dapat diantar sesuai ketentuan toko.")}
-            {toggle("Ambil di toko", "pickupEnabled", "Pelanggan dapat mengambil pesanan di toko.")}
-            {field("Biaya pengiriman (Rp)", "shippingFee")}
-            {field("Estimasi pengiriman", "estimatedDelivery")}
+          {tab === "pickup" && <>
+            <h2>Jam Operasional & Pengambilan</h2>
+            <p>Pemesanan tetap dapat dilakukan kapan saja. Jam ini hanya mengatur kapan pesanan yang sudah siap boleh diambil.</p>
+            <div className="settings-day-picker">
+              <span>Hari Operasional</span>
+              {[
+                ["mon", "Senin"], ["tue", "Selasa"], ["wed", "Rabu"], ["thu", "Kamis"],
+                ["fri", "Jumat"], ["sat", "Sabtu"], ["sun", "Minggu"],
+              ].map(([day, label]) => (
+                <label key={day}>
+                  <input
+                    type="checkbox"
+                    checked={values.operatingDays.split(",").includes(day)}
+                    onChange={(event) => {
+                      const current = values.operatingDays.split(",").filter(Boolean);
+                      const next = event.target.checked ? [...current, day] : current.filter((item) => item !== day);
+                      update("operatingDays", next.join(","));
+                    }}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div className="form-row">{field("Jam buka", "openTime", "time")}{field("Jam tutup", "closeTime", "time")}</div>
+            <label>Instruksi pengambilan<textarea value={values.pickupMessage} onChange={(event) => update("pickupMessage", event.target.value)} /></label>
+          </>}
+          {tab === "family" && <>
+            <h2>Relasi Orang Tua & Siswa</h2>
+            <p>Hubungkan akun orang tua dengan akun siswa yang sudah diverifikasi sekolah. Orang tua hanya dapat membuat pesanan untuk siswa yang terhubung.</p>
+            {familyError && <p className="auth-error" role="alert">{familyError}</p>}
+            {familyLoading ? <p>Memuat akun dan relasi...</p> : <>
+              <div className="form-row">
+                <label>Orang Tua<select value={familyParent} onChange={(event) => setFamilyParent(event.target.value ? Number(event.target.value) : "")}><option value="">Pilih akun orang tua</option>{accounts.filter((user) => user.role === "parent").map((user) => <option key={user.id} value={user.id}>{user.full_name} · {user.identifier}</option>)}</select></label>
+                <label>Siswa<select value={familyStudent} onChange={(event) => setFamilyStudent(event.target.value ? Number(event.target.value) : "")}><option value="">Pilih akun siswa</option>{accounts.filter((user) => user.role === "student").map((user) => <option key={user.id} value={user.id}>{user.full_name} · {user.identifier}</option>)}</select></label>
+              </div>
+              <button type="button" className="primary" disabled={!familyParent || !familyStudent || familySaving} onClick={addFamilyLink}>{familySaving ? "Menghubungkan..." : "Hubungkan Akun"}</button>
+              <h3>Relasi Aktif ({familyLinks.length})</h3>
+              {familyLinks.length ? <div className="top-products-list">{familyLinks.map((link) => <div key={link.id}><span><b>{link.parent_name}</b><small>{link.parent_identifier} ↔ {link.student_name} · {link.student_identifier}</small></span><button type="button" className="secondary small" onClick={() => removeFamilyLink(link.id)}>Putuskan</button></div>)}</div> : <p className="table-foot">Belum ada akun orang tua yang terhubung dengan siswa.</p>}
+            </>}
           </>}
           {tab === "notifications" && <>
             <h2>Notifikasi Sistem</h2>
             {toggle("Pesanan baru", "orderAlerts", "Beri tahu admin saat ada pesanan masuk.")}
             {toggle("Stok menipis", "lowStockAlerts", "Peringatan saat stok produk rendah.")}
             {toggle("Promo dan pengumuman", "promoAlerts", "Izinkan pengumuman promo ke pelanggan.")}
-            {toggle("Laporan mingguan", "weeklyReport", "Simpan preferensi ringkasan mingguan.")}
           </>}
+          {settingsLoadError && <p className="auth-error" role="alert">{settingsLoadError}</p>}
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
-            {saved && <span role="status">Pengaturan tersimpan di browser ini.</span>}
+            {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
+            {saved && <span role="status">{tab === "store" || tab === "payment" || tab === "pickup" || tab === "notifications" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
           </div>
         </form>
         <div className="logo-upload">
@@ -1042,7 +1309,11 @@ function Modal({
 }
 
 function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }) {
+  const products = useProducts();
   const [query, setQuery] = useState("");
+  const [mobileCategory, setMobileCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(
+    ALL_CATEGORIES,
+  );
   const [cart, setCart] = useState<number[]>([]);
   const [mobileNotice, setMobileNotice] = useState<(typeof notifications)[number] | null>(null);
   const mobileView =
@@ -1054,8 +1325,13 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           ? "notifications"
           : "orders";
   const visible = useMemo(
-    () => products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
-    [query],
+    () =>
+      products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query.toLowerCase()) &&
+          (mobileCategory === ALL_CATEGORIES || p.category === mobileCategory),
+      ),
+    [products, query, mobileCategory],
   );
   return (
     <div className="mobile-app">
@@ -1090,12 +1366,18 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
             <button onClick={() => setView("stock")}>Lihat Semua ›</button>
           </div>
           <div className="category-grid">
-            {["Alat Tulis", "Buku", "Minuman", "Lainnya"].map((x, i) => (
-              <button onClick={() => setView("stock")} key={x}>
+            {categories.map((item) => (
+              <button
+                onClick={() => {
+                  setMobileCategory(item.id);
+                  setView("stock");
+                }}
+                key={item.id}
+              >
                 <span>
-                  <Icon name={i === 2 ? "bag" : i === 3 ? "box" : "edit"} />
+                  <Icon name={item.icon === "shirt" ? "shirt" : "box"} />
                 </span>
-                {x}
+                {item.label}
               </button>
             ))}
           </div>
@@ -1141,10 +1423,15 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
             />
           </label>
           <div className="tabs mobile-tabs">
-            <button className="active">Semua</button>
-            <button>Alat Tulis</button>
-            <button>Buku</button>
-            <button>Minuman</button>
+            {[{ id: ALL_CATEGORIES, label: "Semua" }, ...categories].map((item) => (
+              <button
+                key={item.id}
+                className={mobileCategory === item.id ? "active" : ""}
+                onClick={() => setMobileCategory(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="mobile-products">
             {visible.map((p) => (
@@ -1173,7 +1460,7 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           <div className="tabs mobile-tabs">
             <button className="active">Semua</button>
             <button>Diproses</button>
-            <button>Dikirim</button>
+            <button>Siap Diambil</button>
             <button>Selesai</button>
           </div>
           <div className="mobile-orders">

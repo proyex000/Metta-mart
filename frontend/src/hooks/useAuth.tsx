@@ -1,38 +1,77 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
-import { clearSession, mockLogin, restoreSession } from "../services/auth";
-import type { Role, Session } from "../types";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import {
+  clearSession,
+  login,
+  register,
+  restoreSession,
+  updateProfile,
+} from "../services/auth";
+import type { AuthSession } from "../services/auth";
+import { refreshProducts } from "../services/products";
 
 type AuthValue = {
-  session: Session | null;
-  login: (role: Role, identifier: string, password: string) => Promise<void>;
-  logout: () => void;
-  updateProfile: (updates: { name: string; email: string }) => void;
+  session: AuthSession | null;
+  loading: boolean;
+  login: (role: AuthSession["role"], identifier: string, password: string) => Promise<void>;
+  register: (input: { role: "student" | "parent"; identifier: string; fullName: string; password: string }) => Promise<void>;
+  logout: () => Promise<void>;
+  updateProfile: (updates: { name: string; email: string }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(() => restoreSession());
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    restoreSession()
+      .then((current) => {
+        if (active) setSession(current);
+      })
+      .catch(() => {
+        if (active) setSession(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session) refreshProducts().catch(() => undefined);
+  }, [session]);
+
   const value = useMemo<AuthValue>(
     () => ({
       session,
-      login: async (role, identifier, password) =>
-        setSession(await mockLogin(role, identifier, password)),
-      logout: () => {
-        clearSession();
-        setSession(null);
+      loading,
+      login: async (role, identifier, password) => {
+        const next = await login(role, identifier, password);
+        setSession(next);
       },
-      updateProfile: (updates) => {
-        setSession((current) => {
-          if (!current) return current;
-          const next = { ...current, name: updates.name.trim(), email: updates.email.trim() };
-          localStorage.setItem("mettamart-demo-session", JSON.stringify(next));
-          return next;
-        });
+      register: async (input) => {
+        const next = await register(input);
+        setSession(next);
+      },
+      logout: async () => {
+        try {
+          await clearSession();
+        } finally {
+          setSession(null);
+        }
+      },
+      updateProfile: async (updates) => {
+        const next = await updateProfile(updates);
+        setSession(next);
       },
     }),
-    [session],
+    [session, loading],
   );
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

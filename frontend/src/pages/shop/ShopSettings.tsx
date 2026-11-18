@@ -29,13 +29,32 @@ export function ShopSettings({ role }: { role: ShopRole }) {
   const [profileName, setProfileName] = useState(session?.name || "");
   const [profileEmail, setProfileEmail] = useState(session?.email || "");
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const isParent = role === "parent";
 
-  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!profileName.trim() || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(profileEmail.trim())) return;
-    updateProfile({ name: profileName, email: profileEmail });
-    setProfileSaved(true);
+    setProfileSaved(false);
+    if (!profileName.trim()) {
+      setProfileError("Nama lengkap wajib diisi.");
+      return;
+    }
+    // Parent accounts use email as their login identifier. Student email is optional.
+    if (isParent && !profileEmail.trim()) {
+      setProfileError("Email orang tua wajib diisi.");
+      return;
+    }
+    if (profileEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileEmail.trim())) {
+      setProfileError("Masukkan alamat email yang valid.");
+      return;
+    }
+    setProfileError("");
+    try {
+      await updateProfile({ name: profileName, email: profileEmail });
+      setProfileSaved(true);
+    } catch (reason) {
+      setProfileError(reason instanceof Error ? reason.message : "Profil gagal diperbarui.");
+    }
   };
 
   const updatePreference = (key: keyof typeof defaultPreferences, checked: boolean) => {
@@ -78,15 +97,16 @@ export function ShopSettings({ role }: { role: ShopRole }) {
               <input required value={profileName} onChange={(event) => setProfileName(event.target.value)} />
             </label>
             <label className="shop-settings-field">
-              <span>Email akun</span>
-              <input required type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} />
+              <span>{isParent ? "Email akun" : "Email kontak (opsional)"}</span>
+              <input required={isParent} type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} />
             </label>
             <div className="shop-settings-field">
               <span>Jenis akun</span>
               <strong>{isParent ? "Orang Tua" : "Siswa"}</strong>
             </div>
             <button className="shop-settings-save-button" type="submit">Simpan profil</button>
-            {profileSaved && <p className="shop-settings-save-state" role="status">Profil diperbarui untuk sesi ini.</p>}
+            {profileError && <p className="auth-error" role="alert">{profileError}</p>}
+            {profileSaved && <p className="shop-settings-save-state" role="status">Profil berhasil diperbarui di server.</p>}
             <p className="shop-settings-note">Data profil tersimpan di browser pada prototipe ini. Sinkronisasi server memerlukan API backend.</p>
           </form>
         </section>

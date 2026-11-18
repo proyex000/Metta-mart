@@ -1,17 +1,29 @@
-import type { Order, Product, Role } from "../types";
+import type { Order, Product } from "../types";
 
-export const demoAccounts: Record<Role, { identifier: string; password: string; name: string }> = {
-  admin: { identifier: "admin@mettamart.id", password: "admin123", name: "Admin" },
-  parent: { identifier: "parent@gmail.com", password: "parent123", name: "Ibu Sari" },
-  student: { identifier: "12345678", password: "student123", name: "Andi Pratama" },
-};
-
+// Seed data for the prototype only. Replace with a backend/database source.
+// The two "Seragam Sekolah" rows are SAMPLE items (names, prices, stock are placeholders).
 export const products: Product[] = [
-  { id: 1, name: "Buku Tulis", category: "Buku", price: 5000, stock: 120, art: "book" },
-  { id: 2, name: "Pensil 2B", category: "ATK", price: 3000, stock: 50, art: "pencil" },
-  { id: 3, name: "Penghapus", category: "ATK", price: 2000, stock: 8, art: "eraser" },
-  { id: 4, name: "Rautan", category: "ATK", price: 4000, stock: 0, art: "sharpener" },
-  { id: 5, name: "Minuman Botol", category: "Minuman", price: 8000, stock: 35, art: "bottle" },
+  { id: 1, name: "Buku Tulis", category: "buku", price: 5000, stock: 120, art: "book" },
+  { id: 2, name: "Pensil 2B", category: "alat-tulis", price: 3000, stock: 50, art: "pencil" },
+  { id: 3, name: "Penghapus", category: "alat-tulis", price: 2000, stock: 8, art: "eraser" },
+  { id: 4, name: "Rautan", category: "alat-tulis", price: 4000, stock: 0, art: "sharpener" },
+  { id: 5, name: "Minuman Botol", category: "minuman", price: 8000, stock: 35, art: "bottle" },
+  {
+    id: 6,
+    name: "Kemeja Seragam Putih (contoh)",
+    category: "seragam-sekolah",
+    price: 85000,
+    stock: 20,
+    art: "shirt",
+  },
+  {
+    id: 7,
+    name: "Celana/Rok Seragam (contoh)",
+    category: "seragam-sekolah",
+    price: 90000,
+    stock: 15,
+    art: "shirt",
+  },
 ];
 
 export const orders: Order[] = [
@@ -27,7 +39,7 @@ export const orders: Order[] = [
     date: "11 Okt 2025, 14:20",
     customer: "Andi Pratama",
     total: 16000,
-    status: "Dikirim",
+    status: "Siap Diambil",
   },
   {
     code: "MTM-0126",

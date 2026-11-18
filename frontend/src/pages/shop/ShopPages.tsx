@@ -1,118 +1,105 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { Icon, PageTitle, ProductArt, Status } from "../../components/ui";
-import { money, notices, orders, products } from "../../data/mock";
+import {
+  ALL_CATEGORIES,
+  categories,
+  categoryLabel,
+  isCategoryId,
+  type CategoryId,
+} from "../../data/categories";
+import { money } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
+import { refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
+import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
+import { fetchStorefrontSettings } from "../../services/settings";
+import { fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
+import { fetchLinkedStudents, type LinkedStudent } from "../../services/family";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
+  const navigate = useNavigate();
+  const products = useProducts();
   const base = `/${role}`;
+  const [orders, setOrders] = useState<CommerceOrder[]>([]);
+  const [children, setChildren] = useState<LinkedStudent[]>([]);
+  const [dataError, setDataError] = useState("");
+  useEffect(() => {
+    fetchOrders().then(setOrders).catch((reason) => setDataError(reason instanceof Error ? reason.message : "Ringkasan pesanan gagal dimuat."));
+    if (role === "parent") fetchLinkedStudents().then(setChildren).catch((reason) => setDataError(reason instanceof Error ? reason.message : "Data siswa gagal dimuat."));
+  }, [role]);
+  const now = new Date();
+  const monthSpend = orders.filter((order) => {
+    const date = new Date(order.created_at);
+    return order.payment_status === "paid" && order.status === "completed" && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }).reduce((total, order) => total + order.total, 0);
+  const latestOrder = orders[0];
+  const statusText = latestOrder ? ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" }[latestOrder.status]) : "";
   return (
     <>
-      <PageTitle
-        title={`Halo, ${session?.name}!`}
-        subtitle={
-          role === "parent"
-            ? "Semoga hari ini menyenangkan untuk anak Anda."
-            : "Semangat belajar hari ini!"
-        }
-      />
-      {role !== "parent" && (
+      <PageTitle title={`Halo, ${session?.name || "Pengguna"}!`} subtitle={role === "parent" ? "Pantau kebutuhan dan pesanan anak yang terhubung." : "Temukan kebutuhan sekolah di koperasi."} />
+      {role === "student" && (
         <section className="shop-profile">
-          <span className="role-avatar">AP</span>
-          <div>
-            <small>Siswa</small>
-            <b>Andi Pratama</b>
-            <span>Kelas 8A</span>
-          </div>
+          <span className="role-avatar">{(session?.name || "S").slice(0, 2).toUpperCase()}</span>
+          <div><small>Akun Siswa</small><b>{session?.name || "Siswa"}</b><span>Data identitas dikelola sekolah</span></div>
           <span>›</span>
         </section>
       )}
       {role === "parent" && (
-        <section className="monthly-card">
-          <div>
-            <small>Total Belanja Bulan Ini</small>
-            <strong>Rp 120.000</strong>
-            <Link to={`${base}/orders`}>Lihat Detail ›</Link>
-          </div>
-          <Icon name="bag" size={32} />
-        </section>
+        <>
+          <section className="monthly-card">
+            <div><small>Total Belanja Lunas Bulan Ini</small><strong>{money(monthSpend)}</strong><Link to={`${base}/orders`}>Lihat Detail ›</Link></div>
+            <Icon name="bag" size={32} />
+          </section>
+          <section className="panel table-panel">
+            <div className="panel__title"><h2>Anak Terhubung</h2><small>{children.length} akun siswa</small></div>
+            {children.length ? children.map((child) => <div className="latest__row" key={child.id}><span className="mini-icon"><Icon name="users" /></span><div><b>{child.full_name}</b><small>NISN {child.identifier}</small></div></div>) : <p className="table-foot">Belum ada akun siswa yang terhubung. Hubungi admin koperasi.</p>}
+          </section>
+        </>
       )}
+      {dataError && <p className="payment-unavailable" role="alert">{dataError}</p>}
       <label className="search shop-search">
         <Icon name="search" />
-        <input
-          placeholder="Cari barang, buku, atau kebutuhan sekolah..."
-          onFocus={() => {
-            location.href = `${base}/stock`;
-          }}
-        />
+        <input placeholder="Cari barang, buku, atau kebutuhan sekolah..." onFocus={() => navigate(`${base}/stock`)} />
       </label>
-      <div className="section-heading">
-        <h2>{role === "parent" ? "Kebutuhan Anak" : "Kategori"}</h2>
-        <Link to={`${base}/stock`}>Lihat Semua ›</Link>
-      </div>
+      <div className="section-heading"><h2>{role === "parent" ? "Kebutuhan Sekolah" : "Kategori"}</h2><Link to={`${base}/stock`}>Lihat Semua ›</Link></div>
       <section className="category-grid">
-        {["Alat Tulis", "Buku", "Minuman", "Lainnya"].map((item, index) => (
-          <Link to={`${base}/stock`} key={item}>
-            <span>
-              <Icon name={index === 1 ? "bag" : "box"} />
-            </span>
-            {item}
-          </Link>
-        ))}
+        {categories.map((item) => <Link to={`${base}/stock?category=${item.id}`} key={item.id}><span><Icon name={item.icon} /></span>{item.label}</Link>)}
       </section>
-      <div className="section-heading">
-        <h2>{role === "parent" ? "Pesanan Terbaru" : "Stok Tersedia"}</h2>
-        <Link to={role === "parent" ? `${base}/orders` : `${base}/stock`}>Lihat Semua ›</Link>
-      </div>
+      <div className="section-heading"><h2>{role === "parent" ? "Pesanan Terbaru" : "Stok Tersedia"}</h2><Link to={role === "parent" ? `${base}/orders` : `${base}/stock`}>Lihat Semua ›</Link></div>
       {role === "parent" ? (
-        <section className="recent-order">
-          <span className="mini-icon">
-            <Icon name="bag" />
-          </span>
-          <div>
-            <b>#MTM-0128</b>
-            <small>12 Okt 2025, 09:45</small>
-          </div>
-          <Status>Diproses</Status>
-          <strong>Rp 45.000</strong>
-        </section>
+        latestOrder ? <section className="recent-order"><span className="mini-icon"><Icon name="bag" /></span><div><b>#{latestOrder.code}</b><small>{latestOrder.beneficiary_name ? `Untuk ${latestOrder.beneficiary_name} · ` : ""}{new Date(latestOrder.created_at).toLocaleString("id-ID")}</small></div><Status>{statusText}</Status><strong>{money(latestOrder.total)}</strong><Link to={`${base}/orders/${latestOrder.code}`}>Detail</Link></section> : <div className="empty-state"><p>Belum ada pesanan dari akun ini.</p></div>
       ) : (
-        <section className="product-strip shop-strip">
-          {products.slice(0, 3).map((product) => (
-            <article key={product.id}>
-              <ProductArt type={product.art} />
-              <b>{product.name}</b>
-              <span>{money(product.price)}</span>
-              <Status>Tersedia</Status>
-              <Link to={`${base}/order?product=${product.id}`}>Pesan</Link>
-            </article>
-          ))}
-        </section>
+        <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={`${base}/order?product=${product.id}`}>Pesan</Link></article>)}</section>
       )}
-      <section className="shop-promo">
-        <Icon name="bag" size={28} />
-        <div>
-          <b>Dukung kebutuhan belajar</b>
-          <p>Pesan perlengkapan sekolah dengan mudah dan aman.</p>
-        </div>
-      </section>
+      <section className="shop-promo"><Icon name="bag" size={28} /><div><b>Dukung kebutuhan belajar</b><p>Pesan perlengkapan sekolah dengan mudah dan aman.</p></div></section>
     </>
   );
 }
 
 export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
+  const products = useProducts();
+  const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Semua");
+  const requested = params.get("category");
+  const category: CategoryId | typeof ALL_CATEGORIES = isCategoryId(requested)
+    ? requested
+    : ALL_CATEGORIES;
+  const selectCategory = (next: CategoryId | typeof ALL_CATEGORIES) =>
+    setParams(next === ALL_CATEGORIES ? {} : { category: next }, { replace: true });
   const list = useMemo(
     () =>
-      products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query.toLowerCase()) &&
-          (category === "Semua" || p.category === category),
-      ),
-    [query, category],
+      products.filter((p) => {
+        const needle = query.trim().toLowerCase();
+        return (
+          (!needle ||
+            p.name.toLowerCase().includes(needle) ||
+            categoryLabel(p.category).toLowerCase().includes(needle)) &&
+          (category === ALL_CATEGORIES || p.category === category)
+        );
+      }),
+    [products, query, category],
   );
   return (
     <>
@@ -126,13 +113,13 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
         />
       </label>
       <div className="tabs shop-tabs">
-        {["Semua", "ATK", "Buku", "Minuman"].map((item) => (
+        {[{ id: ALL_CATEGORIES, label: "Semua" }, ...categories].map((item) => (
           <button
-            key={item}
-            className={category === item ? "active" : ""}
-            onClick={() => setCategory(item)}
+            key={item.id}
+            className={category === item.id ? "active" : ""}
+            onClick={() => selectCategory(item.id)}
           >
-            {item}
+            {item.label}
           </button>
         ))}
       </div>
@@ -143,11 +130,11 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
             <div>
               <b>{product.name}</b>
               <span>{money(product.price)}</span>
-              <small>Stok: {product.stock}</small>
+              <small>
+                {categoryLabel(product.category)} · Stok: {product.stock}
+              </small>
             </div>
-            <Status>
-              {product.stock === 0 ? "Habis" : product.stock < 10 ? "Hampir Habis" : "Tersedia"}
-            </Status>
+            <Status>{stockLabel(product.stock)}</Status>
             <Link
               className={product.stock === 0 ? "disabled" : ""}
               to={product.stock ? `/${role}/order?product=${product.id}` : "#"}
@@ -169,42 +156,72 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
-  const navigate = useNavigate();
-  const [counts, setCounts] = useState<Record<number, number>>({ 1: 1 });
+  const products = useProducts();
+  const [params] = useSearchParams();
+  const [counts, setCounts] = useState<Record<number, number>>(() => {
+    const id = Number(params.get("product"));
+    const product = products.find((item) => item.id === id);
+    return product && product.stock > 0 ? { [product.id]: 1 } : {};
+  });
+  // Products load asynchronously; initialize a deep-linked product after the API response arrives.
+  useEffect(() => {
+    const id = Number(params.get("product"));
+    if (!Number.isInteger(id) || id <= 0) return;
+    const product = products.find((item) => item.id === id);
+    if (!product || product.stock < 1) return;
+    setCounts((current) => Object.keys(current).length ? current : { [product.id]: 1 });
+  }, [params, products]);
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [createdCode, setCreatedCode] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
-  const paymentSettings = useMemo(() => {
-    const defaults = { cash: true, qris: true, bankTransfer: false };
-    try {
-      const saved = JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}");
-      return {
-        cash: typeof saved.cash === "boolean" ? saved.cash : defaults.cash,
-        qris: typeof saved.qris === "boolean" ? saved.qris : defaults.qris,
-        bankTransfer: typeof saved.bankTransfer === "boolean" ? saved.bankTransfer : defaults.bankTransfer,
-      };
-    } catch {
-      return defaults;
-    }
+  const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
+  const [paymentInstructions, setPaymentInstructions] = useState({ bank_name: "", account_name: "", account_number: "", qris_note: "" });
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => { setPaymentSettings(settings.payment_methods); setPaymentInstructions(settings.payment_instructions); }).catch(() => undefined);
   }, []);
   const methods = [
-    { id: "cash" as const, title: "Tunai di kasir", description: "Bayar langsung saat mengambil pesanan.", symbol: "Rp" },
-    { id: "qris" as const, title: "QRIS", description: "Minta kode QRIS resmi kepada kasir/admin saat pembayaran.", symbol: "QR" },
-    { id: "bankTransfer" as const, title: "Transfer bank", description: "Instruksi rekening dan verifikasi diberikan oleh admin.", symbol: "TF" },
-  ].filter((method) => paymentSettings[method.id]);
+    { id: "cash" as const, title: "Tunai", description: "Bayar tunai saat pengambilan di koperasi.", symbol: "Rp", enabled: paymentSettings.cash },
+    { id: "qris" as const, title: "QRIS", description: "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin.", symbol: "QR", enabled: paymentSettings.qris },
+    { id: "bankTransfer" as const, title: "Transfer bank", description: "Transfer ke rekening resmi koperasi dan kirim referensi pembayaran.", symbol: "TF", enabled: paymentSettings.bank_transfer },
+  ].filter((method) => method.enabled);
   const selectedPayment = methods.some((method) => method.id === payment) ? payment : methods[0]?.id;
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
-  const change = (id: number, amount: number) =>
-    setCounts((current) => ({ ...current, [id]: Math.max(0, (current[id] || 0) + amount) }));
-  const submit = () => {
-    if (!total || !selectedPayment || sent) return;
-    setSent(true);
-    setTimeout(() => navigate(`/${role}/orders`), 1400);
+  const change = (id: number, amount: number) => {
+    const stock = products.find((product) => product.id === id)?.stock ?? 0;
+    setCounts((current) => ({
+      ...current,
+      [id]: Math.min(stock, Math.max(0, (current[id] || 0) + amount)),
+    }));
+  };
+  const submit = async () => {
+    if (!total || !selectedPayment || sent || submitting) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const order = await createOrder({
+        items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
+        payment_method: selectedPayment === "bankTransfer" ? "bank_transfer" : selectedPayment,
+        note,
+        ...(role === "parent" && selectedStudent ? { student_id: selectedStudent } : {}),
+      });
+      setCreatedCode(order.code);
+      setSent(true);
+      // Keep the catalogue stock in sync without turning a successful order into a false error.
+      refreshProducts().catch(() => undefined);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Pesanan gagal dibuat. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   };
   return (
     <>
       <PageTitle title="Pesan Barang" subtitle="Pilih jumlah barang dan metode pembayaran." />
+      {role === "parent" && <section className="payment-section"><h2>Pesanan Untuk Anak</h2>{familyLoading ? <p>Memuat data anak...</p> : children.length ? <label>Pilih siswa penerima<select value={selectedStudent} onChange={(event) => setSelectedStudent(Number(event.target.value))} disabled={sent}><option value="">Pilih siswa</option>{children.map((child) => <option key={child.id} value={child.id}>{child.full_name} · {child.identifier}</option>)}</select></label> : <p className="payment-unavailable">Belum ada siswa yang terhubung dengan akun ini. Minta admin koperasi menghubungkan akun orang tua dan siswa terlebih dahulu.</p>}</section>}
       <section className="order-summary-card">
         <div>
           <small>Total Belanja</small>
@@ -219,12 +236,21 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
             <ProductArt type={product.art} />
             <div>
               <b>{product.name}</b>
-              <span>{money(product.price)}</span>
+              <span>
+                {categoryLabel(product.category)} · {money(product.price)}
+              </span>
             </div>
             <div className="quantity">
               <button type="button" aria-label={`Kurangi ${product.name}`} onClick={() => change(product.id, -1)}>−</button>
               <b>{counts[product.id] || 0}</b>
-              <button type="button" aria-label={`Tambah ${product.name}`} onClick={() => change(product.id, 1)}>+</button>
+              <button
+                type="button"
+                aria-label={`Tambah ${product.name}`}
+                disabled={(counts[product.id] || 0) >= product.stock}
+                onClick={() => change(product.id, 1)}
+              >
+                +
+              </button>
             </div>
           </article>
         ))}
@@ -272,62 +298,64 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           </p>
         )}
         {selectedPayment === "qris" && (
-          <p className="payment-help">Kode QRIS akan diberikan oleh kasir/admin. Jangan transfer ke kode atau rekening dari sumber yang tidak resmi.</p>
+          <p className="payment-help">{paymentInstructions.qris_note || "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin."} Jangan gunakan kode dari sumber yang tidak resmi.</p>
         )}
         {selectedPayment === "bankTransfer" && (
-          <p className="payment-help">Detail rekening dan konfirmasi pembayaran akan diberikan oleh admin setelah pesanan diterima.</p>
+          <p className="payment-help">{paymentInstructions.bank_name ? `Bank: ${paymentInstructions.bank_name}. ` : ""}{paymentInstructions.account_name ? `Atas nama: ${paymentInstructions.account_name}. ` : ""}{paymentInstructions.account_number ? `Nomor rekening: ${paymentInstructions.account_number}.` : "Detail rekening belum diatur admin."} Setelah transfer, kirim referensi pembayaran pada detail pesanan.</p>
         )}
         {selectedPayment === "cash" && (
-          <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di kasir.</p>
+          <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di koperasi.</p>
         )}
       </section>
       {sent && (
         <p className="payment-success" role="status">
-          Pesanan berhasil dikirim. Metode pembayaran: {methods.find((method) => method.id === selectedPayment)?.title}. Lanjutkan konfirmasi pembayaran dengan kasir/admin.
+          Pesanan {createdCode} berhasil dibuat. Status awal: menunggu konfirmasi admin. Pembayaran belum dianggap lunas.
         </p>
       )}
-      <button className="primary wide order-submit" disabled={!total || sent || !methods.length} onClick={submit}>
-        {sent ? "Pesanan berhasil dikirim" : "Kirim Pesanan"}
+      {submitError && <p className="payment-unavailable" role="alert">{submitError}</p>}
+      <button className="primary wide order-submit" disabled={!total || sent || submitting || !methods.length || familyLoading || (role === "parent" && !selectedStudent)} onClick={submit}>
+        {submitting ? "Mengirim pesanan..." : sent ? "Pesanan berhasil dibuat" : "Kirim Pesanan"}
       </button>
-      <p className="payment-disclaimer">Pembayaran di aplikasi ini masih berupa simulasi pilihan metode. QRIS, transfer, dan konfirmasi transaksi belum terhubung ke payment gateway.</p>
+      {sent && <Link className="primary wide" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
+      <p className="payment-disclaimer">Pemesanan dapat dilakukan kapan saja. Pengambilan hanya dapat dilakukan saat koperasi buka dan pesanan sudah berstatus siap diambil.</p>
     </>
   );
 }
 
+function orderStatusText(status: CommerceOrder["status"]) {
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+}
+function paymentStatusText(status: CommerceOrder["payment_status"]) {
+  return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Perlu Konfirmasi Ulang", refunded: "Dikembalikan" })[status];
+}
+
 export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
   const [tab, setTab] = useState("Semua");
-  const shown = tab === "Semua" ? orders : orders.filter((order) => order.status === tab);
+  const [items, setItems] = useState<CommerceOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    fetchOrders().then(setItems).catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
+  }, []);
+  const shown = tab === "Semua" ? items : items.filter((order) => orderStatusText(order.status) === tab);
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
   return (
     <>
-      <PageTitle
-        title={role === "student" ? "Pesanan Saya" : "Pesanan"}
-        subtitle="Pantau status pesanan dengan mudah."
-      />
+      <PageTitle title={role === "student" ? "Pesanan Saya" : "Pesanan"} subtitle="Pantau status pesanan dan pengambilan." />
       <div className="tabs shop-tabs">
-        {["Semua", "Diproses", "Dikirim", "Selesai"].map((item) => (
-          <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>
-            {item}
-          </button>
-        ))}
+        {tabs.map((item) => <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item}</button>)}
       </div>
+      {loading && <p>Memuat pesanan...</p>}
+      {error && <p className="payment-unavailable" role="alert">{error}</p>}
+      {!loading && !error && !shown.length && <div className="empty-state"><h2>Belum ada pesanan</h2><p>Pesanan yang dibuat akan muncul di sini.</p></div>}
       <section className="shop-orders">
         {shown.map((order) => (
           <article key={order.code}>
-            <div>
-              <b>#{order.code}</b>
-              <Status>{order.status}</Status>
-            </div>
-            <small>{order.date}</small>
-            <p>
-              <ProductArt type={order.code === "MTM-0127" ? "bottle" : "book"} /> Buku Tulis &
-              Pensil 2B
-            </p>
-            <footer>
-              <span>
-                Total <strong>{money(order.total)}</strong>
-              </span>
-              <Link to={`/${role}/orders/${order.code}`}>Lihat Detail ›</Link>
-            </footer>
+            <div><b>#{order.code}</b><Status>{orderStatusText(order.status)}</Status></div>
+            <small>{new Date(order.created_at).toLocaleString("id-ID")}{order.beneficiary_name ? ` · Untuk ${order.beneficiary_name}` : ""}</small>
+            <p>{order.items.map((item) => `${item.product_name} × ${item.quantity}`).join(", ")}</p>
+            <small>Pembayaran: {paymentStatusText(order.payment_status)}</small>
+            <footer><span>Total <strong>{money(order.total)}</strong></span><Link to={`/${role}/orders/${order.code}`}>Lihat Detail ›</Link></footer>
           </article>
         ))}
       </section>
@@ -336,88 +364,96 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
-  const { code } = useParams();
+  const { code = "" } = useParams();
   const navigate = useNavigate();
-  const order = orders.find((item) => item.code === code) || orders[0];
+  const [order, setOrder] = useState<CommerceOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [senderName, setSenderName] = useState("");
+  const [paymentSource, setPaymentSource] = useState("");
+  const [accountLast4, setAccountLast4] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [sendingPayment, setSendingPayment] = useState(false);
+  useEffect(() => {
+    fetchOrder(code).then(setOrder).catch((reason) => setError(reason instanceof Error ? reason.message : "Detail pesanan gagal dimuat.")).finally(() => setLoading(false));
+  }, [code]);
+  const sendPayment = async () => {
+    if (!senderName.trim() || !paymentSource.trim() || sendingPayment) return;
+    setSendingPayment(true); setPaymentMessage("");
+    try {
+      setOrder(await submitPayment(code, { sender_name: senderName.trim(), payment_source: paymentSource.trim(), account_last4: accountLast4.trim(), note: paymentNote.trim() }));
+      setPaymentMessage("Referensi pembayaran berhasil dikirim dan menunggu verifikasi admin.");
+      setPaymentNote("");
+      setSenderName("");
+      setPaymentSource("");
+      setAccountLast4("");
+    } catch (reason) {
+      setPaymentMessage(reason instanceof Error ? reason.message : "Referensi pembayaran gagal dikirim.");
+    } finally { setSendingPayment(false); }
+  };
+  if (loading) return <p>Memuat detail pesanan...</p>;
+  if (error || !order) return <div className="empty-state"><h2>Pesanan tidak ditemukan</h2><p>{error || "Periksa kembali nomor pesanan."}</p><button className="primary" onClick={() => navigate(-1)}>Kembali</button></div>;
+  const status = orderStatusText(order.status);
   return (
     <>
-      <button className="back-button" onClick={() => navigate(-1)}>
-        <Icon name="back" /> Kembali
-      </button>
-      <PageTitle title="Detail Pesanan" subtitle={`#${order.code} · ${order.date}`} />
+      <button className="back-button" onClick={() => navigate(-1)}><Icon name="back" /> Kembali</button>
+      <PageTitle title="Detail Pesanan" subtitle={`#${order.code} · ${new Date(order.created_at).toLocaleString("id-ID")}`} />
       <section className="detail-card">
-        <div className="detail-head">
-          <span className="mini-icon">
-            <Icon name="box" />
-          </span>
-          <div>
-            <b>#{order.code}</b>
-            <small>{order.date}</small>
-          </div>
-          <Status>{order.status}</Status>
-        </div>
+        <div className="detail-head"><span className="mini-icon"><Icon name="box" /></span><div><b>#{order.code}</b><small>{new Date(order.created_at).toLocaleString("id-ID")}</small></div><Status>{status}</Status></div>
         <h2>Item Pesanan</h2>
-        {products.slice(0, 2).map((product) => (
-          <div className="detail-product" key={product.id}>
-            <ProductArt type={product.art} />
-            <div>
-              <b>{product.name}</b>
-              <span>{money(product.price)}</span>
-            </div>
-            <span>1×</span>
-          </div>
-        ))}
-        <div className="detail-total">
-          <span>Total Belanja</span>
-          <strong>{money(order.total)}</strong>
-        </div>
-        <h2>Informasi Pengiriman</h2>
-        <dl>
-          <dt>Pengirim</dt>
-          <dd>Admin MettaMart</dd>
-          <dt>Status</dt>
-          <dd>
-            <Status>{order.status}</Status>
-          </dd>
-        </dl>
-        <div className="timeline">
-          <b>Pesanan Diterima</b>
-          <span>Sedang Diproses</span>
-          <span>Dikirim</span>
-          <span>Selesai</span>
-        </div>
-        <button
-          className="primary wide"
-          onClick={() => alert("Pesan bantuan telah dikirim ke admin.")}
-        >
-          Hubungi Admin
-        </button>
+        {order.beneficiary_name && <p className="table-foot">Pesanan untuk siswa: <b>{order.beneficiary_name}</b></p>}
+        {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small><span>{money(item.line_total)}</span></div></div>)}
+        <div className="detail-total"><span>Total Belanja</span><strong>{money(order.total)}</strong></div>
+        <h2>Informasi Pengambilan</h2>
+        <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
+        <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? "Siap diambil" : "Belum siap diambil"}</span><span>{order.completed_at ? "Pengambilan selesai" : "Menunggu pengambilan"}</span></div>
+        {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
+          <section className="payment-section"><h2>Identitas Pembayaran</h2><p>Isi identitas rekening atau e-wallet yang digunakan untuk transfer. Admin akan mencocokkannya dengan dana yang masuk. Ini bukan bukti pembayaran otomatis.</p><label>Nama pemilik rekening/e-wallet<input value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={120} placeholder="Nama sesuai akun pengirim" /></label><label>Bank atau e-wallet asal<input value={paymentSource} onChange={(event) => setPaymentSource(event.target.value)} maxLength={80} placeholder="Contoh: BCA, Mandiri, DANA, GoPay" /></label><label>4 digit terakhir rekening (opsional)<input inputMode="numeric" value={accountLast4} onChange={(event) => setAccountLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} maxLength={4} placeholder="1234" /></label><label>Catatan tambahan (opsional)<textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} maxLength={300} placeholder="Contoh: transfer pukul 14.30" /></label><button className="primary wide" disabled={!senderName.trim() || !paymentSource.trim() || (accountLast4.length > 0 && accountLast4.length !== 4) || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Identitas Pembayaran"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
+        )}
+        <button className="primary wide" onClick={() => alert("Silakan hubungi admin koperasi melalui kanal komunikasi sekolah.")}>Hubungi Admin</button>
       </section>
     </>
   );
 }
 
 export function ShopNotifications() {
-  const [read, setRead] = useState<number[]>([]);
+  const [items, setItems] = useState<AppNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState<number | null>(null);
+  useEffect(() => {
+    fetchNotifications().then(setItems)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Notifikasi gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+  const openNotice = async (notice: AppNotification) => {
+    if (notice.is_read || working === notice.id) return;
+    setWorking(notice.id);
+    try {
+      await markNotificationRead(notice.id);
+      setItems((current) => current.map((item) => item.id === notice.id ? { ...item, is_read: true } : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Status notifikasi gagal diperbarui.");
+    } finally { setWorking(null); }
+  };
   return (
     <>
-      <PageTitle title="Notifikasi" subtitle="Informasi terbaru dari MettaMart." />
+      <PageTitle title="Notifikasi" subtitle="Informasi pesanan dan pengumuman dari koperasi." />
+      {loading && <p>Memuat notifikasi...</p>}
+      {error && <p className="payment-unavailable" role="alert">{error}</p>}
+      {!loading && !error && !items.length && <div className="empty-state"><h2>Belum ada notifikasi</h2><p>Informasi terbaru dari koperasi akan muncul di sini.</p></div>}
       <section className="shop-notices">
-        {notices.map((notice, index) => (
-          <button
-            className={read.includes(index) ? "read" : ""}
-            key={notice.title}
-            onClick={() => setRead([...new Set([...read, index])])}
-          >
-            <span className="mini-icon">
-              <Icon name={index % 2 ? "box" : "bell"} />
-            </span>
+        {items.map((notice) => (
+          <button className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => openNotice(notice)}>
+            <span className="mini-icon"><Icon name={notice.kind === "payment" ? "bag" : "bell"} /></span>
             <div>
               <b>{notice.title}</b>
-              <p>{notice.text}</p>
-              <time>{notice.time}</time>
+              <p>{notice.message}</p>
+              <time>{new Date(notice.created_at).toLocaleString("id-ID")}</time>
+              {notice.target_code && <small>Pesanan {notice.target_code}</small>}
             </div>
-            <span>›</span>
+            {!notice.is_read && <span aria-label="Belum dibaca">Baru</span>}
           </button>
         ))}
       </section>
