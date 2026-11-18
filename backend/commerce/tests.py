@@ -2,7 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
-from .models import Order, Product
+from .models import InventoryMovement, Order, Product
 
 
 class CommerceApiTests(TestCase):
@@ -26,6 +26,8 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.data["total"], 10000)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 8)
+        movement = InventoryMovement.objects.get(reason="order_reserved")
+        self.assertEqual(movement.quantity_delta, -2)
 
     def test_customer_cannot_read_another_customers_order(self):
         response = self.create_order()
@@ -47,6 +49,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(cancelled.status_code, 200)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
+        self.assertEqual(InventoryMovement.objects.filter(reason="order_cancelled", reference=code).count(), 1)
         second = self.client.post(f"/api/admin/orders/{code}/cancel/", {}, format="json")
         self.assertEqual(second.status_code, 400)
         self.product.refresh_from_db()
