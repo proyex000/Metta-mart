@@ -961,19 +961,19 @@ export function Settings() {
     adminName: string; adminEmail: string;
     cash: boolean; qris: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string; qrisNote: string;
     operatingDays: string; openTime: string; closeTime: string; pickupMessage: string;
-    orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
+    orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean;
   };
   const defaults: Preferences = {
     storeName: "MettaMart",
     description: "Toko perlengkapan sekolah dan kebutuhan sehari-hari.",
-    address: "Jl. Metta Maitreya No. 123, Pekanbaru",
-    email: "mettamart@sekolahmetta.id",
-    phone: "0812 3456 7890",
+    address: "",
+    email: "",
+    phone: "",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
     cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "", qrisNote: "",
     operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
-    orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
+    orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);
@@ -1026,6 +1026,14 @@ export function Settings() {
       openTime: settings.operating_hours.open_time,
       closeTime: settings.operating_hours.close_time,
       pickupMessage: settings.pickup_instructions.message,
+      storeName: settings.store_profile.name,
+      description: settings.store_profile.description,
+      address: settings.store_profile.address,
+      email: settings.store_profile.email,
+      phone: settings.store_profile.phone,
+      orderAlerts: settings.notification_preferences.order_alerts,
+      lowStockAlerts: settings.notification_preferences.low_stock_alerts,
+      promoAlerts: settings.notification_preferences.announcements_enabled,
     }))).catch((reason) => setSettingsLoadError(reason instanceof Error ? reason.message : "Pengaturan server gagal dimuat."));
   }, []);
   const [saved, setSaved] = useState(false);
@@ -1090,7 +1098,11 @@ export function Settings() {
       }
     }
     try {
-      if (tab === "payment") {
+      if (tab === "store") {
+        await updateStorefrontSettings({ store_profile: { name: values.storeName, description: values.description, address: values.address, email: values.email, phone: values.phone } });
+      } else if (tab === "notifications") {
+        await updateStorefrontSettings({ notification_preferences: { order_alerts: values.orderAlerts, low_stock_alerts: values.lowStockAlerts, announcements_enabled: values.promoAlerts } });
+      } else if (tab === "payment") {
         await updateStorefrontSettings({
           payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer },
           payment_instructions: { bank_name: values.bankName, account_name: values.bankAccountName, account_number: values.bankAccountNumber, qris_note: values.qrisNote },
@@ -1212,13 +1224,12 @@ export function Settings() {
             {toggle("Pesanan baru", "orderAlerts", "Beri tahu admin saat ada pesanan masuk.")}
             {toggle("Stok menipis", "lowStockAlerts", "Peringatan saat stok produk rendah.")}
             {toggle("Promo dan pengumuman", "promoAlerts", "Izinkan pengumuman promo ke pelanggan.")}
-            {toggle("Laporan mingguan", "weeklyReport", "Simpan preferensi ringkasan mingguan.")}
           </>}
           {settingsLoadError && <p className="auth-error" role="alert">{settingsLoadError}</p>}
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
             {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
-            {saved && <span role="status">{tab === "payment" || tab === "pickup" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
+            {saved && <span role="status">{tab === "store" || tab === "payment" || tab === "pickup" || tab === "notifications" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
           </div>
         </form>
         <div className="logo-upload">
