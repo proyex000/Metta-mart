@@ -173,7 +173,7 @@ const orders = [
     date: "12 Okt 2025, 08:50",
     customer: "Budi Santoso",
     total: 120000,
-    status: "Dikirim",
+    status: "Siap Diambil",
   },
   {
     code: "MTM-0125",
@@ -239,7 +239,7 @@ function Status({ children }: { children: ReactNode }) {
   const tone =
     label.includes("Selesai") || label.includes("Tersedia")
       ? "green"
-      : label.includes("Dikirim")
+      : label.includes("Siap Diambil")
         ? "purple"
         : label.includes("Diproses")
           ? "blue"
@@ -313,7 +313,7 @@ export function Dashboard() {
   const stats = [
     { icon: "box" as IconName, label: "Total Produk", value: "85", note: "3 dari minggu lalu" },
     { icon: "bag" as IconName, label: "Pesanan Masuk", value: "27", note: "12% dari kemarin" },
-    { icon: "truck" as IconName, label: "Sedang Dikirim", value: "12", note: "5% dari kemarin" },
+    { icon: "truck" as IconName, label: "Siap Diambil", value: "12", note: "5% dari kemarin" },
     {
       icon: "users" as IconName,
       label: "Pelanggan Aktif",
@@ -656,7 +656,7 @@ export function Stock() {
 export function Orders() {
   const [tab, setTab] = useState("Semua");
   const [selected, setSelected] = useState<(typeof orders)[number] | null>(null);
-  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Dikirim", "Selesai"];
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai"];
   const shown = tab === "Semua" ? orders : orders.filter((o) => o.status === tab);
   return (
     <>
@@ -756,7 +756,7 @@ export function Notifications() {
   const categories = [
     "Semua Notifikasi",
     "Pesanan Diterima",
-    "Pesanan Dikirim",
+    "Pesanan Siap Diambil",
     "Promo & Info",
     "Stok Produk",
   ];
@@ -1375,7 +1375,7 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           <div className="tabs mobile-tabs">
             <button className="active">Semua</button>
             <button>Diproses</button>
-            <button>Dikirim</button>
+            <button>Siap Diambil</button>
             <button>Selesai</button>
           </div>
           <div className="mobile-orders">
