@@ -937,7 +937,7 @@ export function Settings() {
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
-    cash: boolean; qris: boolean; bankTransfer: boolean;
+    cash: boolean; qris: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string; qrisNote: string;
     operatingDays: string; openTime: string; closeTime: string; pickupMessage: string;
     orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
   };
@@ -949,7 +949,7 @@ export function Settings() {
     phone: "0812 3456 7890",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
-    cash: true, qris: true, bankTransfer: true,
+    cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "", qrisNote: "",
     operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
     orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
   };
@@ -968,6 +968,10 @@ export function Settings() {
       cash: settings.payment_methods.cash,
       qris: settings.payment_methods.qris,
       bankTransfer: settings.payment_methods.bank_transfer,
+      bankName: settings.payment_instructions.bank_name,
+      bankAccountName: settings.payment_instructions.account_name,
+      bankAccountNumber: settings.payment_instructions.account_number,
+      qrisNote: settings.payment_instructions.qris_note,
       operatingDays: settings.operating_hours.days.join(","),
       openTime: settings.operating_hours.open_time,
       closeTime: settings.operating_hours.close_time,
@@ -1037,7 +1041,10 @@ export function Settings() {
     }
     try {
       if (tab === "payment") {
-        await updateStorefrontSettings({ payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer } });
+        await updateStorefrontSettings({
+          payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer },
+          payment_instructions: { bank_name: values.bankName, account_name: values.bankAccountName, account_number: values.bankAccountNumber, qris_note: values.qrisNote },
+        });
       } else if (tab === "pickup") {
         const days = values.operatingDays.split(",").map((day) => day.trim()).filter(Boolean);
         await updateStorefrontSettings({
@@ -1104,6 +1111,10 @@ export function Settings() {
             {toggle("Tunai di kasir", "cash", "Pembayaran langsung saat mengambil pesanan.")}
             {toggle("QRIS", "qris", "Pembayaran menggunakan QRIS.")}
             {toggle("Transfer bank", "bankTransfer", "Transfer manual yang perlu diverifikasi admin.")}
+            {field("Nama Bank", "bankName")}
+            {field("Nama Pemilik Rekening", "bankAccountName")}
+            {field("Nomor Rekening", "bankAccountNumber")}
+            <label>Instruksi QRIS<textarea value={values.qrisNote} onChange={(event) => update("qrisNote", event.target.value)} /></label>
           </>}
           {tab === "pickup" && <>
             <h2>Jam Operasional & Pengambilan</h2>
