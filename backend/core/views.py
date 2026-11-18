@@ -8,14 +8,19 @@ class AuditLogListView(generics.ListAPIView):
     queryset = AuditLog.objects.select_related("actor").all()
     serializer_class = AuditLogSerializer
 
-class StoreSettingListView(generics.ListCreateAPIView):
+class StoreSettingListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAdminRole]
+    queryset = StoreSetting.objects.all()
+    serializer_class = StoreSettingSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+class StoreSettingDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAdminRole]
     queryset = StoreSetting.objects.all()
     serializer_class = StoreSettingSerializer
     lookup_field = "key"
-
-    def perform_create(self, serializer):
-        serializer.save(updated_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
