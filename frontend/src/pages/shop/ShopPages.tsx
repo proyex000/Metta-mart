@@ -8,7 +8,7 @@ import {
   isCategoryId,
   type CategoryId,
 } from "../../data/categories";
-import { money, notices } from "../../data/mock";
+import { money } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
 import { refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
@@ -22,94 +22,58 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const navigate = useNavigate();
   const products = useProducts();
   const base = `/${role}`;
+  const [orders, setOrders] = useState<CommerceOrder[]>([]);
+  const [children, setChildren] = useState<LinkedStudent[]>([]);
+  const [dataError, setDataError] = useState("");
+  useEffect(() => {
+    fetchOrders().then(setOrders).catch((reason) => setDataError(reason instanceof Error ? reason.message : "Ringkasan pesanan gagal dimuat."));
+    if (role === "parent") fetchLinkedStudents().then(setChildren).catch((reason) => setDataError(reason instanceof Error ? reason.message : "Data siswa gagal dimuat."));
+  }, [role]);
+  const now = new Date();
+  const monthSpend = orders.filter((order) => {
+    const date = new Date(order.created_at);
+    return order.payment_status === "paid" && order.status === "completed" && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }).reduce((total, order) => total + order.total, 0);
+  const latestOrder = orders[0];
+  const statusText = latestOrder ? ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" }[latestOrder.status]) : "";
   return (
     <>
-      <PageTitle
-        title={`Halo, ${session?.name}!`}
-        subtitle={
-          role === "parent"
-            ? "Semoga hari ini menyenangkan untuk anak Anda."
-            : "Semangat belajar hari ini!"
-        }
-      />
-      {role !== "parent" && (
+      <PageTitle title={`Halo, ${session?.name || "Pengguna"}!`} subtitle={role === "parent" ? "Pantau kebutuhan dan pesanan anak yang terhubung." : "Temukan kebutuhan sekolah di koperasi."} />
+      {role === "student" && (
         <section className="shop-profile">
-          <span className="role-avatar">AP</span>
-          <div>
-            <small>Siswa</small>
-            <b>Andi Pratama</b>
-            <span>Kelas 8A</span>
-          </div>
+          <span className="role-avatar">{(session?.name || "S").slice(0, 2).toUpperCase()}</span>
+          <div><small>Akun Siswa</small><b>{session?.name || "Siswa"}</b><span>Data identitas dikelola sekolah</span></div>
           <span>›</span>
         </section>
       )}
       {role === "parent" && (
-        <section className="monthly-card">
-          <div>
-            <small>Total Belanja Bulan Ini</small>
-            <strong>Rp 120.000</strong>
-            <Link to={`${base}/orders`}>Lihat Detail ›</Link>
-          </div>
-          <Icon name="bag" size={32} />
-        </section>
+        <>
+          <section className="monthly-card">
+            <div><small>Total Belanja Lunas Bulan Ini</small><strong>{money(monthSpend)}</strong><Link to={`${base}/orders`}>Lihat Detail ›</Link></div>
+            <Icon name="bag" size={32} />
+          </section>
+          <section className="panel table-panel">
+            <div className="panel__title"><h2>Anak Terhubung</h2><small>{children.length} akun siswa</small></div>
+            {children.length ? children.map((child) => <div className="latest__row" key={child.id}><span className="mini-icon"><Icon name="users" /></span><div><b>{child.full_name}</b><small>NISN {child.identifier}</small></div></div>) : <p className="table-foot">Belum ada akun siswa yang terhubung. Hubungi admin koperasi.</p>}
+          </section>
+        </>
       )}
+      {dataError && <p className="payment-unavailable" role="alert">{dataError}</p>}
       <label className="search shop-search">
         <Icon name="search" />
-        <input
-          placeholder="Cari barang, buku, atau kebutuhan sekolah..."
-          onFocus={() => navigate(`${base}/stock`)}
-        />
+        <input placeholder="Cari barang, buku, atau kebutuhan sekolah..." onFocus={() => navigate(`${base}/stock`)} />
       </label>
-      <div className="section-heading">
-        <h2>{role === "parent" ? "Kebutuhan Anak" : "Kategori"}</h2>
-        <Link to={`${base}/stock`}>Lihat Semua ›</Link>
-      </div>
+      <div className="section-heading"><h2>{role === "parent" ? "Kebutuhan Sekolah" : "Kategori"}</h2><Link to={`${base}/stock`}>Lihat Semua ›</Link></div>
       <section className="category-grid">
-        {categories.map((item) => (
-          <Link to={`${base}/stock?category=${item.id}`} key={item.id}>
-            <span>
-              <Icon name={item.icon} />
-            </span>
-            {item.label}
-          </Link>
-        ))}
+        {categories.map((item) => <Link to={`${base}/stock?category=${item.id}`} key={item.id}><span><Icon name={item.icon} /></span>{item.label}</Link>)}
       </section>
-      <div className="section-heading">
-        <h2>{role === "parent" ? "Pesanan Terbaru" : "Stok Tersedia"}</h2>
-        <Link to={role === "parent" ? `${base}/orders` : `${base}/stock`}>Lihat Semua ›</Link>
-      </div>
+      <div className="section-heading"><h2>{role === "parent" ? "Pesanan Terbaru" : "Stok Tersedia"}</h2><Link to={role === "parent" ? `${base}/orders` : `${base}/stock`}>Lihat Semua ›</Link></div>
       {role === "parent" ? (
-        <section className="recent-order">
-          <span className="mini-icon">
-            <Icon name="bag" />
-          </span>
-          <div>
-            <b>#MTM-0128</b>
-            <small>12 Okt 2025, 09:45</small>
-          </div>
-          <Status>Diproses</Status>
-          <strong>Rp 45.000</strong>
-        </section>
+        latestOrder ? <section className="recent-order"><span className="mini-icon"><Icon name="bag" /></span><div><b>#{latestOrder.code}</b><small>{latestOrder.beneficiary_name ? `Untuk ${latestOrder.beneficiary_name} · ` : ""}{new Date(latestOrder.created_at).toLocaleString("id-ID")}</small></div><Status>{statusText}</Status><strong>{money(latestOrder.total)}</strong><Link to={`${base}/orders/${latestOrder.code}`}>Detail</Link></section> : <div className="empty-state"><p>Belum ada pesanan dari akun ini.</p></div>
       ) : (
-        <section className="product-strip shop-strip">
-          {products.slice(0, 3).map((product) => (
-            <article key={product.id}>
-              <ProductArt type={product.art} />
-              <b>{product.name}</b>
-              <span>{money(product.price)}</span>
-              <Status>Tersedia</Status>
-              <Link to={`${base}/order?product=${product.id}`}>Pesan</Link>
-            </article>
-          ))}
-        </section>
+        <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={`${base}/order?product=${product.id}`}>Pesan</Link></article>)}</section>
       )}
-      <section className="shop-promo">
-        <Icon name="bag" size={28} />
-        <div>
-          <b>Dukung kebutuhan belajar</b>
-          <p>Pesan perlengkapan sekolah dengan mudah dan aman.</p>
-        </div>
-      </section>
+      <section className="shop-promo"><Icon name="bag" size={28} /><div><b>Dukung kebutuhan belajar</b><p>Pesan perlengkapan sekolah dengan mudah dan aman.</p></div></section>
     </>
   );
 }
