@@ -80,8 +80,7 @@ class Order(models.Model):
         EXPIRED = "expired", "Kedaluwarsa"
 
     class Fulfillment(models.TextChoices):
-        PICKUP = "pickup", "Ambil di toko"
-        DELIVERY = "delivery", "Pengiriman"
+        PICKUP = "pickup", "Ambil di koperasi"
 
     code = models.CharField(max_length=32, unique=True, editable=False)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="commerce_orders")
@@ -159,6 +158,7 @@ class CashMovement(models.Model):
 class Payment(models.Model):
     class Method(models.TextChoices):
         CASH = "cash", "Tunai"
+        BANK_TRANSFER = "bank_transfer", "Transfer bank"
         QRIS = "qris", "QRIS toko"
 
     class Status(models.TextChoices):
@@ -172,12 +172,13 @@ class Payment(models.Model):
 
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="payment")
     shift = models.ForeignKey(CashierShift, null=True, blank=True, on_delete=models.SET_NULL, related_name="payments")
-    method = models.CharField(max_length=12, choices=Method.choices)
+    method = models.CharField(max_length=20, choices=Method.choices)
     status = models.CharField(max_length=24, choices=Status.choices)
     amount = models.PositiveBigIntegerField()
     cash_received = models.PositiveBigIntegerField(null=True, blank=True)
     change_due = models.PositiveBigIntegerField(default=0)
     reference = models.CharField(max_length=80, unique=True)
+    payment_reference = models.CharField(max_length=120, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     verification_note = models.CharField(max_length=240, blank=True)
