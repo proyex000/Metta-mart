@@ -63,3 +63,16 @@ class StorefrontSettingsTests(TestCase):
             "operating_hours": {"days": ["monday"], "open_time": "08:00", "close_time": "17:00"},
         }, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_admin_announcement_respects_notification_preference(self):
+        StoreSetting.objects.create(key="notification_preferences", value={
+            "order_alerts": True,
+            "low_stock_alerts": True,
+            "announcements_enabled": False,
+        })
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post("/api/notifications/", {
+            "title": "Pengumuman",
+            "message": "Informasi koperasi",
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
