@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.models import User
 from accounts.permissions import IsAdminRole
-from core.models import AuditLog, StoreSetting, StoreSetting
+from core.models import AuditLog, StoreSetting
 from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
 from .permissions import IsAdminOrReadOnly
 from .serializers import CategorySerializer, CheckoutSerializer, OrderSerializer, ProductSerializer, StockMovementSerializer
@@ -45,6 +45,13 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAdminRole]
+
+    def perform_destroy(self, instance):
+        if instance.products.exists():
+            instance.is_active = False
+            instance.save(update_fields=("is_active",))
+        else:
+            instance.delete()
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
@@ -237,18 +244,33 @@ class OrderActionView(APIView):
                 if order.payment.status == Payment.Status.PENDING_VERIFICATION:
                     order.payment.status = Payment.Status.EXPIRED
                     order.payment.save(update_fields=("status", "updated_at"))
+                elif order.payment.status == Payment.Status.PAID and order.payment.method == Payment.Method.QRIS:
+                    order.payment.status = Payment.Status.REFUND_PENDING
+                    order.payment.verification_note = "Pesanan dibatalkan; pengembalian dana QRIS perlu diproses manual."
+                    order.payment.save(update_fields=("status", "verification_note", "updated_at"))
                 record_order_status(order, Order.Status.CANCELLED, request.user, note or "Dibatalkan")
             elif action == "verify_payment":
                 if role != User.Role.ADMIN:
                     raise PermissionDenied("Hanya admin yang dapat memverifikasi pembayaran QRIS.")
                 if order.status != Order.Status.AWAITING_PAYMENT or order.payment.method != Payment.Method.QRIS or order.payment.status != Payment.Status.PENDING_VERIFICATION:
                     raise ValidationError("Pesanan ini tidak sedang menunggu verifikasi QRIS.")
+                if order.expires_at and order.expires_at <= timezone.now():
+                    raise ValidationError("Batas pembayaran telah berakhir. Pembayaran tidak dapat diverifikasi.")
                 order.payment.status = Payment.Status.PAID
                 order.payment.paid_at = timezone.now()
                 order.payment.verified_by = request.user
                 order.payment.verification_note = note
                 order.payment.save(update_fields=("status", "paid_at", "verified_by", "verification_note", "updated_at"))
                 record_order_status(order, Order.Status.PENDING_REVIEW, request.user, "Pembayaran QRIS diverifikasi admin")
+            elif action == "mark_refunded":
+                if role != User.Role.ADMIN:
+                    raise PermissionDenied("Hanya admin yang dapat mencatat pengembalian dana.")
+                if order.payment.status != Payment.Status.REFUND_PENDING:
+                    raise ValidationError("Pembayaran ini tidak sedang menunggu pengembalian dana.")
+                order.payment.status = Payment.Status.REFUNDED
+                order.payment.verified_by = request.user
+                order.payment.verification_note = note or "Pengembalian dana telah dilakukan dan dikonfirmasi admin."
+                order.payment.save(update_fields=("status", "verified_by", "verification_note", "updated_at"))
             elif action == "accept":
                 if role != User.Role.ADMIN:
                     raise PermissionDenied("Hanya admin yang dapat menerima pesanan.")
@@ -283,6 +305,8 @@ class OrderActionView(APIView):
                     raise ValidationError("Perubahan status tidak sesuai alur pesanan.")
                 if action == "dispatch" and order.fulfillment != Order.Fulfillment.DELIVERY:
                     raise ValidationError("Pesanan ambil di toko tidak dapat dikirim.")
+                if action == "complete" and ((order.fulfillment == Order.Fulfillment.PICKUP and order.status != Order.Status.READY) or (order.fulfillment == Order.Fulfillment.DELIVERY and order.status != Order.Status.OUT_FOR_DELIVERY)):
+                    raise ValidationError("Status pesanan belum sesuai dengan metode pemenuhan.")
                 if action == "complete" and order.payment.method == Payment.Method.QRIS and order.payment.status != Payment.Status.PAID:
                     raise ValidationError("Pembayaran QRIS harus lunas sebelum pesanan diselesaikan.")
                 if action == "complete" and order.payment.method == Payment.Method.CASH:

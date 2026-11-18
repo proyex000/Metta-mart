@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiOrder, getOrder, listOrders, orderAction, pageResults } from "../../services/commerce";
+import { getOrder, listOrders, orderAction, pageResults } from "../../services/commerce";
+import type { ApiOrder } from "../../services/commerce";
 
 const money = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 const dateTime = (value: string) => new Date(value).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
@@ -71,6 +72,7 @@ export function Orders() {
 
   const actions = selected ? [
     ...(selected.status === "awaiting_payment" && selected.payment.method === "qris" && selected.payment.status === "pending_verification" ? [{ id: "verify_payment", label: "Verifikasi QRIS", style: "primary" }] : []),
+    ...(selected.payment.status === "refund_pending" ? [{ id: "mark_refunded", label: "Catat Refund Selesai", style: "primary" }] : []),
     ...(selected.status === "pending_review" ? [{ id: "accept", label: "Terima Pesanan", style: "primary" }, { id: "reject", label: "Tolak Pesanan", style: "danger" }] : []),
     ...(selected.status === "accepted" ? [{ id: "start_processing", label: "Mulai Diproses", style: "primary" }] : []),
     ...(selected.status === "processing" ? [{ id: "mark_ready", label: "Tandai Siap", style: "primary" }] : []),

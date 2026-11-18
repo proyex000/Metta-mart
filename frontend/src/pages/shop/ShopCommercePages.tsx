@@ -54,7 +54,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   }, [params, products]);
   useEffect(() => {
     let active = true;
-    apiRequest<CheckoutConfig>("/store/checkout-config/").then((value) => { if (active) setConfig(value); })
+    apiRequest<CheckoutConfig>("/store/checkout-config/").then((value) => { if (active) { setConfig(value); if (!value.cash_enabled && value.qris_enabled) setPayment("qris"); } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Pengaturan checkout gagal dimuat."); })
       .finally(() => { if (active) setConfigLoading(false); });
     return () => { active = false; };
@@ -129,7 +129,7 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
   }, []);
   const filtered = tab === "all" ? orders : orders.filter((order) => order.status === tab);
   const filters = [{ id: "all", label: "Semua" }, { id: "pending_review", label: "Menunggu" }, { id: "processing", label: "Diproses" }, { id: "out_for_delivery", label: "Dikirim" }, { id: "completed", label: "Selesai" }];
-  return <><PageTitle title={role === "student" ? "Pesanan Saya" : "Pesanan"} subtitle="Pantau status pesanan dari server." /><div className="tabs shop-tabs">{filters.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>{error && <p className="auth-error">{error}</p>}{loading ? <div className="empty-state">Memuat pesanan...</div> : <section className="shop-orders">{filtered.map((order) => <article key={order.code}><div><b>#" + order.code + "</b><Status>{labels[order.status] || order.status}</Status></div><small>{formatDate(order.created_at)}</small><p>{order.items.map((item) => item.product_name + " × " + item.quantity).join(", ")}</p><footer><span>Total <strong>{money(order.total)}</strong></span><Link to={"/" + role + "/orders/" + order.code}>Lihat Detail ›</Link></footer></article>)}{!filtered.length && <div className="empty-state"><h2>Belum ada pesanan</h2><p>Pesanan yang Anda buat akan muncul di sini.</p></div>}</section>}</>;
+  return <><PageTitle title={role === "student" ? "Pesanan Saya" : "Pesanan"} subtitle="Pantau status pesanan dari server." /><div className="tabs shop-tabs">{filters.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>{error && <p className="auth-error">{error}</p>}{loading ? <div className="empty-state">Memuat pesanan...</div> : <section className="shop-orders">{filtered.map((order) => <article key={order.code}><div><b>#{order.code}</b><Status>{labels[order.status] || order.status}</Status></div><small>{formatDate(order.created_at)}</small><p>{order.items.map((item) => item.product_name + " × " + item.quantity).join(", ")}</p><footer><span>Total <strong>{money(order.total)}</strong></span><Link to={"/" + role + "/orders/" + order.code}>Lihat Detail ›</Link></footer></article>)}{!filtered.length && <div className="empty-state"><h2>Belum ada pesanan</h2><p>Pesanan yang Anda buat akan muncul di sini.</p></div>}</section>}</>;
 }
 
 export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {

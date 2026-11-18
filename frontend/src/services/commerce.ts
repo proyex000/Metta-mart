@@ -57,3 +57,11 @@ export async function orderAction(code: string, action: string, note = "") {
 export function pageResults<T>(value: Page<T> | T[]): T[] {
   return Array.isArray(value) ? value : value.results;
 }
+
+export type CheckoutConfig = { cash_enabled: boolean; qris_enabled: boolean; qris_image_url: string; pickup_enabled: boolean; delivery_enabled: boolean; delivery_fee: number };
+export async function getCheckoutConfig() {
+  return apiRequest<CheckoutConfig>("/store/checkout-config/");
+}
+export async function updateCheckoutConfig(input: Partial<CheckoutConfig>) {
+  return apiRequest<CheckoutConfig>("/admin/checkout-config/", { method: "PATCH", body: JSON.stringify(input) });
+}

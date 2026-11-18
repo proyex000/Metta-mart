@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from 
 import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, stockLabel, useProducts } from "../../services/products";
+import { getCheckoutConfig, updateCheckoutConfig } from "../../services/commerce";
 import type { Product } from "../../types";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
@@ -937,7 +938,7 @@ export function Settings() {
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
-    cash: boolean; qris: boolean; bankTransfer: boolean;
+    cash: boolean; qris: boolean; qrisImageUrl: string;
     deliveryEnabled: boolean; pickupEnabled: boolean; shippingFee: string; estimatedDelivery: string;
     orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean; weeklyReport: boolean;
   };
@@ -949,8 +950,8 @@ export function Settings() {
     phone: "0812 3456 7890",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
-    cash: true, qris: true, bankTransfer: false,
-    deliveryEnabled: true, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
+    cash: true, qris: false, qrisImageUrl: "",
+    deliveryEnabled: false, pickupEnabled: true, shippingFee: "0", estimatedDelivery: "1-2 hari sekolah",
     orderAlerts: true, lowStockAlerts: true, promoAlerts: false, weeklyReport: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
@@ -961,6 +962,22 @@ export function Settings() {
       return defaults;
     }
   });
+  useEffect(() => {
+    let active = true;
+    getCheckoutConfig().then((config) => {
+      if (!active) return;
+      setValues((current) => ({
+        ...current,
+        cash: config.cash_enabled,
+        qris: config.qris_enabled,
+        qrisImageUrl: config.qris_image_url,
+        deliveryEnabled: config.delivery_enabled,
+        pickupEnabled: config.pickup_enabled,
+        shippingFee: String(config.delivery_fee),
+      }));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
   const [saved, setSaved] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
   const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
@@ -1013,17 +1030,26 @@ export function Settings() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setProfileSaveError("");
-    if (tab === "account") {
-      try {
+    try {
+      if (tab === "account") {
         await updateProfile({ name: values.adminName, email: values.adminEmail });
-      } catch (reason) {
-        setSaved(false);
-        setProfileSaveError(reason instanceof Error ? reason.message : "Profil gagal diperbarui.");
-        return;
       }
+      if (tab === "payment" || tab === "shipping") {
+        await updateCheckoutConfig({
+          cash_enabled: values.cash,
+          qris_enabled: values.qris,
+          qris_image_url: values.qrisImageUrl,
+          delivery_enabled: values.deliveryEnabled,
+          pickup_enabled: values.pickupEnabled,
+          delivery_fee: Number(values.shippingFee),
+        });
+      }
+      localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
+      setSaved(true);
+    } catch (reason) {
+      setSaved(false);
+      setProfileSaveError(reason instanceof Error ? reason.message : "Pengaturan gagal disimpan.");
     }
-    localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
-    setSaved(true);
   };
   const tabs: { id: SettingsTab; label: string; icon: IconName }[] = [
     { id: "store", label: "Informasi Toko", icon: "home" },
@@ -1075,8 +1101,9 @@ export function Settings() {
             <h2>Metode Pembayaran</h2>
             <p>Aktifkan metode pembayaran yang dapat dipilih pelanggan.</p>
             {toggle("Tunai di kasir", "cash", "Pembayaran langsung saat mengambil pesanan.")}
-            {toggle("QRIS", "qris", "Pembayaran menggunakan QRIS.")}
-            {toggle("Transfer bank", "bankTransfer", "Transfer manual yang perlu diverifikasi admin.")}
+            {toggle("QRIS toko", "qris", "Pembayaran menggunakan QRIS statis milik toko; verifikasi dilakukan Admin.")}
+            {field("URL gambar QRIS toko", "qrisImageUrl")}
+            <p className="settings-help">QRIS baru bisa dipilih pelanggan setelah URL gambar QRIS diisi dan opsi QRIS diaktifkan. Verifikasi tetap manual melalui aplikasi merchant.</p>
           </>}
           {tab === "shipping" && <>
             <h2>Pengiriman & Pengambilan</h2>
@@ -1095,7 +1122,7 @@ export function Settings() {
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
             {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
-            {saved && <span role="status">Pengaturan tersimpan di browser ini.</span>}
+            {saved && <span role="status">Pengaturan operasional pembayaran dan pengiriman tersimpan di server. Preferensi lainnya masih tersimpan di browser ini.</span>}
           </div>
         </form>
         <div className="logo-upload">

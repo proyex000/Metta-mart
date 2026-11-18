@@ -1,4 +1,7 @@
+from datetime import timedelta
+from django.core.management import call_command
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
@@ -70,6 +73,55 @@ class CommerceApiTests(TestCase):
         response = self.client.post(f"/api/orders/{created.data['code']}/actions/", {"action": "reject", "note": "Stok perlu diperiksa"}, format="json")
         self.assertEqual(response.data["status"], Order.Status.REJECTED)
         self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+
+    def test_cancel_after_qris_verification_requires_manual_refund(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": True, "qris_image_url": "https://example.test/qris.png", "pickup_enabled": True, "delivery_enabled": False, "delivery_fee": 0})
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "pickup", "payment_method": "qris"}, format="json")
+        code = created.data["code"]
+        self.client.force_authenticate(self.admin)
+        self.client.post("/api/orders/" + code + "/actions/", {"action": "verify_payment", "note": "Diperiksa"}, format="json")
+        self.client.force_authenticate(self.student)
+        cancelled = self.client.post("/api/orders/" + code + "/actions/", {"action": "cancel"}, format="json")
+        self.assertEqual(cancelled.data["payment"]["status"], Payment.Status.REFUND_PENDING)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_admin_can_record_manual_qris_refund(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": True, "qris_image_url": "https://example.test/qris.png", "pickup_enabled": True, "delivery_enabled": False, "delivery_fee": 0})
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "pickup", "payment_method": "qris"}, format="json")
+        code = created.data["code"]
+        self.client.force_authenticate(self.admin)
+        self.client.post("/api/orders/" + code + "/actions/", {"action": "verify_payment"}, format="json")
+        self.client.force_authenticate(self.student)
+        self.client.post("/api/orders/" + code + "/actions/", {"action": "cancel"}, format="json")
+        self.client.force_authenticate(self.admin)
+        refunded = self.client.post("/api/orders/" + code + "/actions/", {"action": "mark_refunded", "note": "Refund dikirim ke pelanggan"}, format="json")
+        self.assertEqual(refunded.data["payment"]["status"], Payment.Status.REFUNDED)
+
+    def test_delivery_fee_is_calculated_from_server_setting(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": False, "pickup_enabled": True, "delivery_enabled": True, "delivery_fee": 7500})
+        self.client.force_authenticate(self.student)
+        response = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "delivery", "delivery_address": "Jl. Sekolah No. 1", "payment_method": "cash"}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["delivery_fee"], 7500)
+        self.assertEqual(response.data["total"], 12500)
+
+    def test_expired_qris_command_releases_reserved_stock(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": True, "qris_image_url": "https://example.test/qris.png", "pickup_enabled": True, "delivery_enabled": False, "delivery_fee": 0})
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 2}], "fulfillment": "pickup", "payment_method": "qris"}, format="json")
+        order = Order.objects.get(code=created.data["code"])
+        order.expires_at = timezone.now() - timedelta(minutes=1)
+        order.save(update_fields=("expires_at",))
+        call_command("expire_qris_orders", verbosity=0)
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.EXPIRED)
+        self.assertEqual(order.payment.status, Payment.Status.EXPIRED)
         self.assertEqual(self.product.stock, 10)
 
     def test_delivery_requires_address(self):
