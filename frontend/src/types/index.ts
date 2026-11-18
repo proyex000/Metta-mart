@@ -1,6 +1,6 @@
 import type { CategoryId } from "../data/categories";
 
-export type Role = "admin" | "cashier" | "parent" | "student";
+export type Role = "admin" | "parent" | "student";
 
 export type Session = {
   role: Role;
