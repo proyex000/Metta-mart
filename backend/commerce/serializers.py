@@ -8,10 +8,25 @@ from .models import InventoryMovement, Order, OrderItem, Product
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    stock_note = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=80)
+
     class Meta:
         model = Product
-        fields = ("id", "name", "sku", "category", "price", "stock", "is_active", "created_at", "updated_at")
+        fields = ("id", "name", "sku", "category", "price", "stock", "is_active", "stock_note", "created_at", "updated_at")
         read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate(self, attrs):
+        if self.instance and "stock" in attrs and attrs["stock"] != self.instance.stock and not attrs.get("stock_note", "").strip():
+            raise serializers.ValidationError({"stock_note": "Isi alasan perubahan stok agar riwayat persediaan dapat diaudit."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("stock_note", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("stock_note", None)
+        return super().update(instance, validated_data)
 
     def validate_price(self, value):
         if value < 0:
