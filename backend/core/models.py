@@ -20,3 +20,18 @@ class StoreSetting(models.Model):
 
     class Meta:
         ordering = ("key",)
+
+class Notification(models.Model):
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
+    title = models.CharField(max_length=180)
+    message = models.CharField(max_length=500)
+    kind = models.CharField(max_length=32, default="info")
+    target_code = models.CharField(max_length=24, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=("recipient", "read_at", "created_at"), name="core_notif_user_read_idx"),
+        ]
