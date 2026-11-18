@@ -352,7 +352,7 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
         {shown.map((order) => (
           <article key={order.code}>
             <div><b>#{order.code}</b><Status>{orderStatusText(order.status)}</Status></div>
-            <small>{new Date(order.created_at).toLocaleString("id-ID")}</small>
+            <small>{new Date(order.created_at).toLocaleString("id-ID")}{order.beneficiary_name ? ` · Untuk ${order.beneficiary_name}` : ""}</small>
             <p>{order.items.map((item) => `${item.product_name} × ${item.quantity}`).join(", ")}</p>
             <small>Pembayaran: {paymentStatusText(order.payment_status)}</small>
             <footer><span>Total <strong>{money(order.total)}</strong></span><Link to={`/${role}/orders/${order.code}`}>Lihat Detail ›</Link></footer>
@@ -396,6 +396,7 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
       <section className="detail-card">
         <div className="detail-head"><span className="mini-icon"><Icon name="box" /></span><div><b>#{order.code}</b><small>{new Date(order.created_at).toLocaleString("id-ID")}</small></div><Status>{status}</Status></div>
         <h2>Item Pesanan</h2>
+        {order.beneficiary_name && <p className="table-foot">Pesanan untuk siswa: <b>{order.beneficiary_name}</b></p>}
         {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small><span>{money(item.line_total)}</span></div></div>)}
         <div className="detail-total"><span>Total Belanja</span><strong>{money(order.total)}</strong></div>
         <h2>Informasi Pengambilan</h2>
