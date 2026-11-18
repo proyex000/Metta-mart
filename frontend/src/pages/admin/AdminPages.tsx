@@ -372,7 +372,7 @@ export function Dashboard() {
             {summary.recent_orders.length ? summary.recent_orders.map((order) => (
               <div className="latest__row" key={order.code}>
                 <span className="mini-icon"><Icon name="bag" size={16} /></span>
-                <div><b>#{order.code}</b><small>{order.customer_name} · {new Date(order.created_at).toLocaleString("id-ID")}</small></div>
+                <div><b>#{order.code}</b><small>{order.beneficiary_name ? `Untuk ${order.beneficiary_name} · ` : ""}{order.customer_name} · {new Date(order.created_at).toLocaleString("id-ID")}</small></div>
                 <Status>{statusLabel[order.status]}</Status>
                 <span>{money(order.total)}</span>
               </div>
