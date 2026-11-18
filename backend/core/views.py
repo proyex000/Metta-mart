@@ -105,6 +105,23 @@ class NotificationListView(APIView):
             "created_at": row.created_at,
         } for row in rows])
 
+    def post(self, request):
+        if request.user.role != "admin":
+            return Response({"detail": "Hanya admin yang dapat mengirim pengumuman."}, status=status.HTTP_403_FORBIDDEN)
+        title = str(request.data.get("title", "")).strip()
+        message = str(request.data.get("message", "")).strip()
+        kind = str(request.data.get("kind", "announcement")).strip()
+        if not title or len(title) > 180 or not message or len(message) > 500:
+            return Response({"detail": "Judul (1–180 karakter) dan pesan (1–500 karakter) wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        recipients = User.objects.filter(is_active=True, role__in=("student", "parent"))
+        Notification.objects.bulk_create([
+            Notification(recipient=user, title=title, message=message, kind=kind)
+            for user in recipients
+        ])
+        return Response({"sent_to": recipients.count()}, status=status.HTTP_201_CREATED)
+
 class NotificationReadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
