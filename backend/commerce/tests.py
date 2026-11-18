@@ -129,3 +129,19 @@ class CommerceApiTests(TestCase):
         self.assertEqual(report.data["month"]["orders"], 1)
         self.assertEqual(report.data["month"]["average_order"], 10000)
         self.assertEqual(len(report.data["daily"]), 7)
+
+    def test_admin_dashboard_is_role_protected_and_returns_live_counts(self):
+        self.create_order("cash")
+        self.client.force_authenticate(user=self.student)
+        denied = self.client.get("/api/admin/dashboard/")
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/admin/dashboard/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["products"], 1)
+        self.assertEqual(response.data["orders_pending"], 1)
+        self.assertEqual(response.data["customers"], 2)
+        self.assertEqual(response.data["low_stock"], [])
+        self.assertEqual(len(response.data["daily"]), 7)
+        self.assertEqual(response.data["recent_orders"][0]["code"], Order.objects.latest("created_at").code)
