@@ -89,3 +89,14 @@ class OrderCreateSerializer(serializers.Serializer):
             InventoryMovement.objects.create(product=product, actor=self.context["request"].user, quantity_delta=-row["quantity"], reason="order_reserved", reference=order.code)
             OrderItem.objects.create(order=order, product=product, product_name=product.name, unit_price=product.price, quantity=row["quantity"], line_total=product.price * row["quantity"])
         return order
+
+
+class InventoryMovementSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    actor_name = serializers.CharField(source="actor.full_name", read_only=True, default=None)
+
+    class Meta:
+        from .models import InventoryMovement
+        model = InventoryMovement
+        fields = ("id", "product", "product_name", "actor", "actor_name", "quantity_delta", "reason", "reference", "created_at")
+        read_only_fields = fields
