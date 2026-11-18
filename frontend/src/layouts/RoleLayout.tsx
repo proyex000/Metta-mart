@@ -73,7 +73,6 @@ export function RoleLayout({ role }: { role: Role }) {
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>
-              {item.label === "Notifikasi" && <em>5</em>}
             </NavLink>
           ))}
         </nav>
