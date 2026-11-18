@@ -46,3 +46,17 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.full_name} ({self.identifier})"
+
+class ParentStudentLink(models.Model):
+    parent = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="linked_students")
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="linked_parents")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("parent", "student"), name="accounts_parent_student_unique"),
+        ]
+        ordering = ("student__full_name",)
+
+    def __str__(self):
+        return f"{self.parent.full_name} → {self.student.full_name}"
