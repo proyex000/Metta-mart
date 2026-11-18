@@ -98,6 +98,16 @@ class CommerceApiTests(TestCase):
         completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
         self.assertEqual(completed.status_code, 200)
 
+    def test_transfer_identity_validates_required_fields_and_last_four(self):
+        created = self.create_order("bank_transfer")
+        code = created.data["code"]
+        self.client.force_authenticate(user=self.student)
+        missing = self.client.post(f"/api/orders/{code}/payment-submission/", {"sender_name": "A"}, format="json")
+        self.assertEqual(missing.status_code, 400)
+        invalid = self.client.post(f"/api/orders/{code}/payment-submission/", {
+            "sender_name": "A", "payment_source": "BCA", "account_last4": "12X4"
+        }, format="json")
+        self.assertEqual(invalid.status_code, 400)
     def test_disabled_payment_method_is_rejected_by_backend(self):
         StoreSetting.objects.create(key="payment_methods", value={"cash": True, "bank_transfer": False, "qris": True})
         response = self.create_order("bank_transfer")
