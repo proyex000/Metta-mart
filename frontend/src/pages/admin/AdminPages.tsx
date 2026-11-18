@@ -1066,14 +1066,20 @@ export function Settings() {
       if (tab === "account") {
         await updateProfile({ name: values.adminName, email: values.adminEmail });
       }
-      if (tab === "payment" || tab === "shipping") {
+      if (tab === "payment" || tab === "pickup") {
         await updateCheckoutConfig({
           cash_enabled: values.cash,
+          bank_transfer_enabled: values.bankTransfer,
+          bank_name: values.bankName,
+          bank_account_name: values.bankAccountName,
+          bank_account_number: values.bankAccountNumber,
           qris_enabled: values.qris,
           qris_image_url: values.qrisImageUrl,
-          delivery_enabled: values.deliveryEnabled,
           pickup_enabled: values.pickupEnabled,
-          delivery_fee: Number(values.shippingFee),
+          operating_days: values.operatingDays.split(",").map((day) => day.trim()).filter(Boolean),
+          opening_time: values.openingTime,
+          closing_time: values.closingTime,
+          pickup_instructions: values.pickupInstructions,
         });
       }
       localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
@@ -1087,10 +1093,10 @@ export function Settings() {
     { id: "store", label: "Informasi Toko", icon: "home" },
     { id: "account", label: "Akun Admin", icon: "users" },
     { id: "payment", label: "Metode Pembayaran", icon: "bag" },
-    { id: "shipping", label: "Pengiriman", icon: "truck" },
+    { id: "pickup", label: "Jam Operasional & Pengambilan", icon: "clock" },
     { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
   ];
-  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" = "text") => (
+  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" | "time" = "text") => (
     <label key={key}>
       {label}
       <input type={type} value={String(values[key])} onChange={(event) => update(key, event.target.value as Preferences[typeof key])} />
