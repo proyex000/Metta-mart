@@ -236,8 +236,8 @@ class CheckoutView(APIView):
                 subtotal += product.price * quantity
                 lines.append((product, quantity, product.price * quantity))
             payment_status = Payment.Status.PENDING_VERIFICATION if payment_method == Payment.Method.QRIS else Payment.Status.UNPAID
-            order_status = Order.Status.AWAITING_PAYMENT if payment_method == Payment.Method.QRIS else Order.Status.PENDING_REVIEW
-            order = Order.objects.create(customer=request.user, created_by=request.user, status=order_status, fulfillment=data["fulfillment"], delivery_address=data.get("delivery_address", "").strip(), customer_note=data.get("customer_note", "").strip(), subtotal=subtotal, delivery_fee=delivery_fee, total=subtotal + delivery_fee, expires_at=timezone.now() + timedelta(minutes=20) if payment_method == Payment.Method.QRIS else None)
+            order_status = Order.Status.AWAITING_PAYMENT if payment_method in {Payment.Method.QRIS, Payment.Method.BANK_TRANSFER} else Order.Status.PENDING_REVIEW
+            order = Order.objects.create(customer=request.user, created_by=request.user, status=order_status, fulfillment=Order.Fulfillment.PICKUP, delivery_address="", customer_note=data.get("customer_note", "").strip(), subtotal=subtotal, delivery_fee=0, total=subtotal, expires_at=timezone.now() + timedelta(minutes=20) if payment_method == Payment.Method.QRIS else None)
             for product, quantity, line_total in lines:
                 changed = Product.objects.filter(pk=product.pk, stock__gte=quantity).update(stock=F("stock") - quantity)
                 if not changed:
@@ -259,7 +259,7 @@ class OrderListView(generics.ListAPIView):
     def get_queryset(self):
         expire_due_qris_orders()
         queryset = Order.objects.select_related("customer", "payment").prefetch_related("items", "status_history")
-        if self.request.user.role not in {User.Role.ADMIN, User.Role.CASHIER}:
+        if self.request.user.role != User.Role.ADMIN:
             queryset = queryset.filter(customer=self.request.user)
         state = self.request.query_params.get("status")
         return queryset.filter(status=state) if state else queryset
@@ -272,7 +272,7 @@ class OrderDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         queryset = Order.objects.select_related("customer", "payment").prefetch_related("items", "status_history")
-        return queryset if self.request.user.role in {User.Role.ADMIN, User.Role.CASHIER} else queryset.filter(customer=self.request.user)
+        return queryset if self.request.user.role == User.Role.ADMIN else queryset.filter(customer=self.request.user)
 
 
 class OrderActionView(APIView):
