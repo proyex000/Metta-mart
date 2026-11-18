@@ -39,13 +39,13 @@ export function ShopSettings({ role }: { role: ShopRole }) {
       setProfileError("Nama lengkap wajib diisi.");
       return;
     }
-    // Student accounts sign in with an NISN, so only enforce an email format for parents.
-    if (isParent && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileEmail.trim())) {
-      setProfileError("Masukkan alamat email yang valid.");
+    // Parent accounts use email as their login identifier. Student email is optional.
+    if (isParent && !profileEmail.trim()) {
+      setProfileError("Email orang tua wajib diisi.");
       return;
     }
-    if (!profileEmail.trim()) {
-      setProfileError("Email atau identitas akun wajib diisi.");
+    if (profileEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileEmail.trim())) {
+      setProfileError("Masukkan alamat email yang valid.");
       return;
     }
     setProfileError("");
