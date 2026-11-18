@@ -61,9 +61,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [params] = useSearchParams();
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [note, setNote] = useState("");
-  const [payment, setPayment] = useState<"cash" | "qris">("cash");
-  const [fulfillment, setFulfillment] = useState<"pickup" | "delivery">("pickup");
-  const [address, setAddress] = useState("");
+  const [payment, setPayment] = useState<"cash" | "bank_transfer" | "qris">("cash");
   const [config, setConfig] = useState<CheckoutConfig>(defaultConfig);
   const [configLoading, setConfigLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -77,7 +75,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   }, [params, products]);
   useEffect(() => {
     let active = true;
-    apiRequest<CheckoutConfig>("/store/checkout-config/").then((value) => { if (active) { setConfig(value); if (!value.cash_enabled && value.qris_enabled) setPayment("qris"); } })
+    apiRequest<CheckoutConfig>("/store/checkout-config/").then((value) => { if (active) { setConfig(value); if (!value.cash_enabled && value.bank_transfer_enabled) setPayment("bank_transfer"); else if (!value.cash_enabled && !value.bank_transfer_enabled && value.qris_enabled) setPayment("qris"); } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Pengaturan checkout gagal dimuat."); })
       .finally(() => { if (active) setConfigLoading(false); });
     return () => { active = false; };
@@ -93,8 +91,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
 
   const selected = products.filter((product) => (counts[product.id] || 0) > 0);
   const subtotal = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
-  const deliveryFee = fulfillment === "delivery" ? config.delivery_fee : 0;
-  const total = subtotal + deliveryFee;
+  const total = subtotal;
   const change = (id: number, delta: number) => {
     const stock = products.find((product) => product.id === id)?.stock ?? 0;
     setCounts((current) => ({ ...current, [id]: Math.min(stock, Math.max(0, (current[id] || 0) + delta)) }));
@@ -105,13 +102,12 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
     try {
       const order = await createCheckout({
         items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
-        fulfillment,
-        ...(fulfillment === "delivery" ? { delivery_address: address.trim() } : {}),
+        fulfillment: "pickup",
         customer_note: note.trim(),
         payment_method: payment,
       });
       setCreated(order);
-      if (order.payment.method === "cash") navigate("/" + role + "/orders/" + order.code);
+      if (order.payment.method === "cash" || order.payment.method === "bank_transfer") navigate("/" + role + "/orders/" + order.code);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Pesanan gagal dibuat."); }
     finally { setBusy(false); }
   };
