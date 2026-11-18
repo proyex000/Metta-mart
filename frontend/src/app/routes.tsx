@@ -38,23 +38,6 @@ function SessionRedirect() {
   return session ? <Navigate to={`/${session.role}`} replace /> : <SplashPage />;
 }
 
-function CashierHome() {
-  return (
-    <section className="role-page">
-      <header className="role-page-title">
-        <div>
-          <h1>Dashboard Kasir</h1>
-          <p>Akun kasir sudah aktif. Modul POS akan dibangun pada Phase 3.</p>
-        </div>
-      </header>
-      <div className="empty-state">
-        <h2>Modul kasir belum tersedia</h2>
-        <p>Transaksi penjualan belum dapat dilakukan sampai POS dan manajemen shift selesai dibangun.</p>
-      </div>
-    </section>
-  );
-}
-
 function NotFound() {
   const { session } = useAuth();
   return (
@@ -101,11 +84,6 @@ export const router = createBrowserRouter([
       { path: "settings", Component: Settings },
       { path: "*", Component: RoleNotFound },
     ],
-  },
-  {
-    path: "/cashier",
-    element: <ProtectedRole role="cashier" />,
-    children: [{ index: true, Component: CashierHome }, { path: "*", Component: RoleNotFound }],
   },
   {
     path: "/parent",
