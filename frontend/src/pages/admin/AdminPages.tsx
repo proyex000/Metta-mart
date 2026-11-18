@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
-import { adminOrderAction, adminPaymentAction, fetchAdminSalesReport, fetchOrders, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
+import { adminOrderAction, adminPaymentAction, fetchAdminDashboard, fetchAdminSalesReport, fetchOrders, type AdminDashboardSummary, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
@@ -310,97 +310,84 @@ function Sidebar({ view, setView }: { view: View; setView: (view: View) => void 
 }
 
 export function Dashboard() {
-  const stats = [
-    { icon: "box" as IconName, label: "Total Produk", value: "85", note: "3 dari minggu lalu" },
-    { icon: "bag" as IconName, label: "Pesanan Masuk", value: "27", note: "12% dari kemarin" },
-    { icon: "truck" as IconName, label: "Siap Diambil", value: "12", note: "5% dari kemarin" },
-    {
-      icon: "users" as IconName,
-      label: "Pelanggan Aktif",
-      value: "143",
-      note: "8% dari minggu lalu",
-    },
-  ];
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAdminDashboard()
+      .then(setSummary)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Dashboard gagal dimuat."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const maxRevenue = Math.max(1, ...(summary?.daily.map((day) => day.revenue) ?? [0]));
+  const statusLabel: Record<CommerceOrder["status"], string> = {
+    pending: "Menunggu Konfirmasi",
+    accepted: "Diproses",
+    ready_for_pickup: "Siap Diambil",
+    completed: "Selesai",
+    cancelled: "Dibatalkan",
+  };
+
   return (
     <>
-      <Header title="Halo, Admin!" subtitle="Selamat datang di dashboard MettaMart." />
-      <section className="stat-grid">
-        {stats.map((s) => (
-          <article className="stat-card" key={s.label}>
-            <span>
-              <Icon name={s.icon} />
-            </span>
-            <div>
-              <small>{s.label}</small>
-              <strong>{s.value}</strong>
-              <em>↑ {s.note}</em>
-            </div>
-          </article>
-        ))}
-      </section>
-      <section className="dashboard-grid">
-        <article className="panel chart-panel">
-          <div className="panel__title">
-            <h2>Penjualan 7 Hari Terakhir</h2>
-            <select>
-              <option>Jumlah Pesanan</option>
-            </select>
-          </div>
-          <div className="line-chart">
-            <div className="chart-labels">
-              <span>40</span>
-              <span>30</span>
-              <span>20</span>
-              <span>10</span>
-              <span>0</span>
-            </div>
-            <svg viewBox="0 0 600 210" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#ff3b30" stopOpacity=".25" />
-                  <stop offset="1" stopColor="#ff3b30" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                className="area"
-                d="M0 154 C45 152 70 188 120 169 S185 125 225 128 S300 49 352 62 S426 118 480 83 S550 57 600 17 V210H0Z"
-              />
-              <path
-                className="line"
-                d="M0 154 C45 152 70 188 120 169 S185 125 225 128 S300 49 352 62 S426 118 480 83 S550 57 600 17"
-              />
-            </svg>
-            <div className="chart-days">
-              <span>6 Okt</span>
-              <span>7 Okt</span>
-              <span>8 Okt</span>
-              <span>9 Okt</span>
-              <span>10 Okt</span>
-              <span>11 Okt</span>
-              <span>12 Okt</span>
-            </div>
-          </div>
-        </article>
-        <article className="panel latest">
-          <div className="panel__title">
-            <h2>Pesanan Terbaru</h2>
-            <button onClick={() => window.location.assign("/admin/orders")}>Lihat Semua ›</button>
-          </div>
-          {orders.map((o) => (
-            <div className="latest__row" key={o.code}>
-              <span className="mini-icon">
-                <Icon name="bag" size={16} />
-              </span>
-              <div>
-                <b>#{o.code}</b>
-                <small>{o.date}</small>
-              </div>
-              <Status>{o.status}</Status>
-              <span>{money(o.total)}</span>
-            </div>
+      <Header title="Dashboard Koperasi" subtitle="Ringkasan operasional berdasarkan data aktual MettaMart." />
+      {loading && <div className="panel"><p>Memuat ringkasan dari server...</p></div>}
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {summary && <>
+        <section className="stat-grid">
+          {[
+            { icon: "box" as IconName, label: "Produk Aktif", value: summary.products, note: "Produk di katalog" },
+            { icon: "bag" as IconName, label: "Pesanan Baru", value: summary.orders_pending, note: "Menunggu konfirmasi" },
+            { icon: "clock" as IconName, label: "Siap Diambil", value: summary.orders_ready, note: "Menunggu diserahkan" },
+            { icon: "users" as IconName, label: "Pelanggan Aktif", value: summary.customers, note: "Siswa dan orang tua" },
+          ].map((item) => (
+            <article className="stat-card" key={item.label}>
+              <span><Icon name={item.icon} /></span>
+              <div><small>{item.label}</small><strong>{item.value.toLocaleString("id-ID")}</strong><em>{item.note}</em></div>
+            </article>
           ))}
-        </article>
-      </section>
+        </section>
+        <section className="dashboard-grid">
+          <article className="panel chart-panel">
+            <div className="panel__title"><h2>Penjualan 7 Hari Terakhir</h2><strong>{money(summary.today_revenue)} hari ini</strong></div>
+            {summary.daily.every((day) => day.revenue === 0) ? (
+              <p className="table-foot">Belum ada transaksi lunas yang selesai dalam 7 hari terakhir.</p>
+            ) : (
+              <div className="bar-chart">
+                {summary.daily.map((day) => (
+                  <div key={day.date} title={`${money(day.revenue)} · ${day.orders} transaksi`}>
+                    <i style={{ height: `${Math.max(4, day.revenue / maxRevenue * 100)}%` }} />
+                    <small>{new Date(`${day.date}T00:00:00`).toLocaleDateString("id-ID", { weekday: "short" })}</small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+          <article className="panel latest">
+            <div className="panel__title"><h2>Pesanan Terbaru</h2><button onClick={() => window.location.assign("/admin/orders")}>Lihat Semua ›</button></div>
+            {summary.recent_orders.length ? summary.recent_orders.map((order) => (
+              <div className="latest__row" key={order.code}>
+                <span className="mini-icon"><Icon name="bag" size={16} /></span>
+                <div><b>#{order.code}</b><small>{order.customer_name} · {new Date(order.created_at).toLocaleString("id-ID")}</small></div>
+                <Status>{statusLabel[order.status]}</Status>
+                <span>{money(order.total)}</span>
+              </div>
+            )) : <p className="table-foot">Belum ada pesanan.</p>}
+          </article>
+        </section>
+        <section className="panel table-panel">
+          <div className="panel__title"><h2>Perhatian Stok</h2><small>Produk dengan stok kurang dari 10 unit</small></div>
+          {summary.low_stock.length ? (
+            <div className="top-products-list">
+              {summary.low_stock.map((product) => (
+                <div key={product.id}><span><b>{product.name}</b><small>Perlu diperiksa atau ditambah</small></span><strong>{product.stock} unit</strong></div>
+              ))}
+            </div>
+          ) : <p className="table-foot">Tidak ada produk dengan stok menipis.</p>}
+        </section>
+      </>}
     </>
   );
 }
