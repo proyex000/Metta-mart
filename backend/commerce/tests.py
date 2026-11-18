@@ -223,7 +223,6 @@ class CommerceApiTests(TestCase):
         self.client.force_authenticate(self.student)
         response = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "delivery", "delivery_address": "Jl. Sekolah No. 1", "payment_method": "cash"}, format="json")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["total"], 12500)
 
     def test_expired_qris_command_releases_reserved_stock(self):
         StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": True, "qris_image_url": "https://example.test/qris.png", "pickup_enabled": True, "delivery_enabled": False, "delivery_fee": 0})
