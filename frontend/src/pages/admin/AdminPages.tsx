@@ -446,7 +446,7 @@ export function Stock() {
     setError("");
     setEditing(product);
   };
-  const save = (event: FormEvent) => {
+  const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!editing) return;
     if (form.price.trim() === "" || form.stock.trim() === "") {
