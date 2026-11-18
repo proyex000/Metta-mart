@@ -1,0 +1,65 @@
+from django.test import TestCase
+from rest_framework.test import APIClient
+from accounts.models import User
+from .models import Order, Product
+
+
+class CommerceApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(identifier="admin-commerce", password="TestPassword!2026", full_name="Admin", role=User.Role.ADMIN, is_staff=True)
+        self.student = User.objects.create_user(identifier="1234567890", password="TestPassword!2026", full_name="Student", role=User.Role.STUDENT)
+        self.other_student = User.objects.create_user(identifier="1234567891", password="TestPassword!2026", full_name="Other Student", role=User.Role.STUDENT)
+        self.product = Product.objects.create(name="Buku Tulis", category="buku", price=5000, stock=10)
+
+    def create_order(self, payment_method="cash"):
+        self.client.force_authenticate(user=self.student)
+        return self.client.post("/api/orders/", {
+            "payment_method": payment_method,
+            "items": [{"product_id": self.product.id, "quantity": 2}],
+        }, format="json")
+
+    def test_order_uses_server_price_and_reduces_stock(self):
+        response = self.create_order()
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["total"], 10000)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 8)
+
+    def test_customer_cannot_read_another_customers_order(self):
+        response = self.create_order()
+        code = response.data["code"]
+        self.client.force_authenticate(user=self.other_student)
+        detail = self.client.get(f"/api/orders/{code}/")
+        self.assertEqual(detail.status_code, 404)
+
+    def test_student_cannot_access_admin_order_queue(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.get("/api/admin/orders/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_cancel_restores_stock_once(self):
+        response = self.create_order()
+        code = response.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        cancelled = self.client.post(f"/api/admin/orders/{code}/cancel/", {}, format="json")
+        self.assertEqual(cancelled.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+        second = self.client.post(f"/api/admin/orders/{code}/cancel/", {}, format="json")
+        self.assertEqual(second.status_code, 400)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_pickup_requires_ready_status(self):
+        response = self.create_order()
+        code = response.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        early = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
+        self.assertEqual(early.status_code, 400)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        ready = self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
+        self.assertEqual(ready.status_code, 200)
+        completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
