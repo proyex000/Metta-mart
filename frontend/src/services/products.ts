@@ -24,7 +24,7 @@ export const productService = {
   subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
   async create(input: ProductInput): Promise<Product> {
     validate(input);
-    const created = await apiRequest<ApiProduct>("/products/", { method: "POST", body: JSON.stringify({ name: input.name.trim(), category: input.category, price: input.price, stock: input.stock }) });
+    const created = await apiRequest<ApiProduct>("/products/", { method: "POST", body: JSON.stringify({ name: input.name.trim(), category: input.category, price: input.price, stock: input.stock, stock_note: input.stock_note || "" }) });
     const product = toProduct(created); items = [...items, product].sort((a,b) => a.name.localeCompare(b.name)); emit(); return product;
   },
   async update(id: number, input: ProductInput): Promise<Product> {
