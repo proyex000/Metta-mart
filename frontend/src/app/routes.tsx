@@ -2,23 +2,20 @@ import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import {
   Dashboard,
   Notifications,
-  Orders,
   Reports,
   Settings,
   Stock,
 } from "../pages/admin/AdminPages";
 import { Brand } from "../components/ui";
+import { Orders as CommerceOrders } from "../pages/admin/OrderManagement";
 import { useAuth } from "../hooks/useAuth";
 import { RoleLayout } from "../layouts/RoleLayout";
 import { LoginPage, RegisterPage, RoleChooser, SplashPage } from "../pages/auth/AuthPages";
 import {
-  CreateOrder,
-  OrderDetail,
   ShopDashboard,
   ShopNotifications,
-  ShopOrders,
-  ShopStock,
 } from "../pages/shop/ShopPages";
+import { CreateOrder, OrderDetail, ShopOrders, ShopStock } from "../pages/shop/ShopCommercePages";
 import { ShopSettings } from "../pages/shop/ShopSettings";
 import type { Role } from "../types";
 
@@ -95,7 +92,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "stock", Component: Stock },
-      { path: "orders", Component: Orders },
+      { path: "orders", Component: CommerceOrders },
       { path: "notifications", Component: Notifications },
       { path: "reports", Component: Reports },
       { path: "settings", Component: Settings },

@@ -1,7 +1,10 @@
 from django.urls import path
+from .config_views import CheckoutConfigAdminView, CheckoutConfigView
 from .views import CategoryDetailView, CategoryListCreateView, CheckoutView, OrderActionView, OrderDetailView, OrderListView, ProductDetailView, ProductListCreateView, StockAdjustmentView, StockMovementListView
 
 urlpatterns = [
+    path("store/checkout-config/", CheckoutConfigView.as_view(), name="checkout-config"),
+    path("admin/checkout-config/", CheckoutConfigAdminView.as_view(), name="admin-checkout-config"),
     path("categories/", CategoryListCreateView.as_view(), name="category-list"),
     path("categories/<int:pk>/", CategoryDetailView.as_view(), name="category-detail"),
     path("products/", ProductListCreateView.as_view(), name="product-list"),

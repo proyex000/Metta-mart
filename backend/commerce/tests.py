@@ -1,6 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
+from core.models import StoreSetting
 from .models import Category, Order, Payment, Product, StockMovement
 
 
@@ -42,6 +43,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(self.product.stock, 10)
 
     def test_qris_order_requires_admin_verification_before_acceptance(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": True, "qris_image_url": "https://example.test/qris.png", "pickup_enabled": True, "delivery_enabled": False, "delivery_fee": 0})
         self.client.force_authenticate(self.student)
         created = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "pickup", "payment_method": "qris"}, format="json")
         code = created.data["code"]

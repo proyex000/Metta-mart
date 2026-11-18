@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { isCategoryId } from "../data/categories";
 import type { Product, ProductInput } from "../types";
-import { adjustStock, createProduct, deleteProduct, listProducts, pageResults, updateProduct } from "./commerce";
+import { adjustStock, createProduct, deleteProduct, listProducts, pageResults, setStock, updateProduct } from "./commerce";
 
 let items: Product[] = [];
 let loaded = false;
@@ -59,8 +59,7 @@ export const productService = {
     const previous = items.find((item) => item.id === id);
     if (!previous) throw new Error("Produk tidak ditemukan.");
     let updated = await updateProduct(id, { name: input.name.trim(), category_slug: input.category, price: input.price });
-    const delta = input.stock - previous.stock;
-    if (delta !== 0) updated = await adjustStock(id, delta, "Penyesuaian stok dari halaman katalog");
+    if (input.stock !== previous.stock) updated = await setStock(id, input.stock, previous.stock, "Penyesuaian stok dari halaman katalog");
     const product = fromApi(updated as Parameters<typeof fromApi>[0]);
     items = items.map((item) => item.id === id ? product : item);
     emit();

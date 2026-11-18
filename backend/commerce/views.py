@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.models import User
 from accounts.permissions import IsAdminRole
-from core.models import AuditLog, StoreSetting
+from core.models import AuditLog, StoreSetting, StoreSetting
 from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
 from .permissions import IsAdminOrReadOnly
 from .serializers import CategorySerializer, CheckoutSerializer, OrderSerializer, ProductSerializer, StockMovementSerializer
@@ -146,6 +146,24 @@ class CheckoutView(APIView):
         serializer = CheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        setting = StoreSetting.objects.filter(key="checkout").first()
+        config = setting.value if setting and isinstance(setting.value, dict) else {}
+        payment_method = data["payment_method"]
+        fulfillment = data["fulfillment"]
+        if payment_method == Payment.Method.CASH and not config.get("cash_enabled", True):
+            raise ValidationError({"payment_method": "Pembayaran tunai sedang dinonaktifkan."})
+        if payment_method == Payment.Method.QRIS and not (config.get("qris_enabled") and config.get("qris_image_url")):
+            raise ValidationError({"payment_method": "QRIS toko belum dikonfigurasi oleh admin."})
+        if fulfillment == Order.Fulfillment.PICKUP and not config.get("pickup_enabled", True):
+            raise ValidationError({"fulfillment": "Pengambilan di toko sedang dinonaktifkan."})
+        if fulfillment == Order.Fulfillment.DELIVERY and not config.get("delivery_enabled", False):
+            raise ValidationError({"fulfillment": "Pengiriman belum diaktifkan oleh admin."})
+        try:
+            delivery_fee = int(config.get("delivery_fee", 0)) if fulfillment == Order.Fulfillment.DELIVERY else 0
+        except (TypeError, ValueError):
+            raise ValidationError({"fulfillment": "Konfigurasi biaya pengiriman tidak valid."})
+        if delivery_fee < 0:
+            raise ValidationError({"fulfillment": "Konfigurasi biaya pengiriman tidak valid."})
         item_ids = [item["product_id"] for item in data["items"]]
         quantities = {item["product_id"]: item["quantity"] for item in data["items"]}
         with transaction.atomic():
@@ -161,10 +179,9 @@ class CheckoutView(APIView):
                     raise ValidationError({"items": f"Stok {product.name} tidak mencukupi. Tersedia: {product.stock}."})
                 subtotal += product.price * quantity
                 lines.append((product, quantity, product.price * quantity))
-            payment_method = data["payment_method"]
             payment_status = Payment.Status.PENDING_VERIFICATION if payment_method == Payment.Method.QRIS else Payment.Status.UNPAID
             order_status = Order.Status.AWAITING_PAYMENT if payment_method == Payment.Method.QRIS else Order.Status.PENDING_REVIEW
-            order = Order.objects.create(customer=request.user, status=order_status, fulfillment=data["fulfillment"], delivery_address=data.get("delivery_address", "").strip(), customer_note=data.get("customer_note", "").strip(), subtotal=subtotal, total=subtotal, expires_at=timezone.now() + timedelta(minutes=20) if payment_method == Payment.Method.QRIS else None)
+            order = Order.objects.create(customer=request.user, status=order_status, fulfillment=data["fulfillment"], delivery_address=data.get("delivery_address", "").strip(), customer_note=data.get("customer_note", "").strip(), subtotal=subtotal, delivery_fee=delivery_fee, total=subtotal + delivery_fee, expires_at=timezone.now() + timedelta(minutes=20) if payment_method == Payment.Method.QRIS else None)
             for product, quantity, line_total in lines:
                 changed = Product.objects.filter(pk=product.pk, stock__gte=quantity).update(stock=F("stock") - quantity)
                 if not changed:

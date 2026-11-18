@@ -37,6 +37,9 @@ export async function deleteProduct(id: number) {
 export async function adjustStock(id: number, quantityDelta: number, note: string) {
   return apiRequest<ApiProduct>(`/products/${id}/stock-adjustments/`, { method: "POST", body: JSON.stringify({ quantity_delta: quantityDelta, note }) });
 }
+export async function setStock(id: number, targetStock: number, expectedStock: number, note: string) {
+  return apiRequest<ApiProduct>(`/products/${id}/stock-adjustments/`, { method: "POST", body: JSON.stringify({ target_stock: targetStock, expected_stock: expectedStock, note }) });
+}
 export async function listOrders(statusFilter?: string) {
   const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : "";
   return apiRequest<Page<ApiOrder> | ApiOrder[]>(`/orders/${query}`);

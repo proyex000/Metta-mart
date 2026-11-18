@@ -445,7 +445,7 @@ export function Stock() {
     setError("");
     setEditing(product);
   };
-  const save = (event: FormEvent) => {
+  const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!editing) return;
     if (form.price.trim() === "" || form.stock.trim() === "") {
@@ -459,8 +459,8 @@ export function Stock() {
       stock: Number(form.stock),
     };
     try {
-      if (editing === "new") productService.create(input);
-      else productService.update(editing.id, input);
+      if (editing === "new") await productService.create(input);
+      else await productService.update(editing.id, input);
       setEditing(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Produk gagal disimpan.");
@@ -549,7 +549,7 @@ export function Stock() {
                       className="icon-button"
                       aria-label={`Hapus ${p.name}`}
                       onClick={() => {
-                        if (window.confirm(`Hapus produk "${p.name}"?`)) productService.remove(p.id);
+                        if (window.confirm(`Hapus produk "${p.name}"?`)) void productService.remove(p.id).catch((reason) => setError(reason instanceof Error ? reason.message : "Produk gagal dihapus."));
                       }}
                     >
                       <Icon name="trash" size={15} />
