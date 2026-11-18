@@ -11,11 +11,11 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
     { to: "/admin", label: "Dashboard", icon: "home" },
     { to: "/admin/stock", label: "Kelola Stok", icon: "box" },
     { to: "/admin/orders", label: "Pesanan", icon: "bag" },
+    { to: "/admin/pos", label: "POS Koperasi", icon: "bag" },
     { to: "/admin/notifications", label: "Notifikasi", icon: "bell" },
     { to: "/admin/reports", label: "Laporan", icon: "chart" },
     { to: "/admin/settings", label: "Pengaturan", icon: "settings" },
   ],
-  cashier: [{ to: "/cashier", label: "POS Kasir", icon: "home" }],
   parent: [
     { to: "/parent", label: "Beranda", icon: "home" },
     { to: "/parent/stock", label: "Stok Barang", icon: "box" },
@@ -69,7 +69,7 @@ export function RoleLayout({ role }: { role: Role }) {
         <button className="sidebar-close" onClick={() => setMenuOpen(false)}>×</button>
         <Brand />
         <div className="role-label">
-          {role === "admin" ? "Administrator" : role === "cashier" ? "Kasir" : role === "parent" ? "Orang Tua" : "Murid"}
+          {role === "admin" ? "Administrator" : role === "parent" ? "Orang Tua" : "Murid"}
         </div>
         <nav>
           {items.map((item) => (
@@ -88,7 +88,7 @@ export function RoleLayout({ role }: { role: Role }) {
         <div className="role-account">
           <Link
             className="role-account-link"
-            to={role === "cashier" ? "/cashier" : `/${role}/settings`}
+            to={`/${role}/settings`}
             onClick={() => setMenuOpen(false)}
             aria-label="Buka akun"
             title="Akun"
@@ -97,7 +97,7 @@ export function RoleLayout({ role }: { role: Role }) {
             <div>
               <b>{session?.name}</b>
               <small>{session?.email}</small>
-              {role !== "cashier" && <small className="role-account-hint">Pengaturan akun</small>}
+              <small className="role-account-hint">Pengaturan akun</small>
             </div>
           </Link>
           <button className="role-logout" aria-label="Keluar" title="Keluar" onClick={() => setConfirm(true)}>
