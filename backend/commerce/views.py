@@ -7,7 +7,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from core.models import AuditLog, StoreSetting
-from .models import InventoryMovement, Order, PaymentEvent, Product
+from .models import InventoryMovement, Order, OrderItem, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
 from .serializers import InventoryMovementSerializer, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
 
