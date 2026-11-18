@@ -32,7 +32,7 @@ export function ShopSettings({ role }: { role: ShopRole }) {
   const [profileError, setProfileError] = useState("");
   const isParent = role === "parent";
 
-  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setProfileSaved(false);
     if (!profileName.trim()) {
@@ -49,8 +49,12 @@ export function ShopSettings({ role }: { role: ShopRole }) {
       return;
     }
     setProfileError("");
-    updateProfile({ name: profileName, email: profileEmail });
-    setProfileSaved(true);
+    try {
+      await updateProfile({ name: profileName, email: profileEmail });
+      setProfileSaved(true);
+    } catch (reason) {
+      setProfileError(reason instanceof Error ? reason.message : "Profil gagal diperbarui.");
+    }
   };
 
   const updatePreference = (key: keyof typeof defaultPreferences, checked: boolean) => {
