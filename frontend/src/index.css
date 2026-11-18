@@ -3560,3 +3560,10 @@ td b {
 .cash-received-field input{width:100%;padding:11px;border:1px solid var(--border,#dce2df);border-radius:9px;font:inherit}
 .change-preview{display:flex;justify-content:space-between;margin:8px 0;color:var(--muted,#737b78)}
 .change-preview b{color:var(--text,#202b27)}
+
+
+.stock-history-list{display:grid;gap:10px;max-height:55vh;overflow:auto}
+.stock-history-list article{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;padding:12px;border:1px solid var(--border,#e5e9e7);border-radius:10px}
+.stock-history-list article>div b,.stock-history-list article>div small{display:block}
+.stock-history-list article small{font-size:12px;color:var(--muted,#737b78)}
+.stock-history-list article>span{grid-column:1/-1;font-size:12px;color:var(--muted,#737b78)}

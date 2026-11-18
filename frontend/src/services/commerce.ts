@@ -90,3 +90,11 @@ export async function createCashMovement(kind: "cash_in" | "cash_out", amount: n
 export async function posCheckout(input: { items: { product_id: number; quantity: number }[]; customer_note?: string; cash_received: number }) {
   return apiRequest<ApiOrder>("/pos/checkout/", { method: "POST", body: JSON.stringify(input) });
 }
+
+export type ApiStockMovement = { id: number; product: number; product_name: string; kind: string; quantity_delta: number; stock_after: number; reference: string; note: string; actor_name: string | null; created_at: string };
+export async function listStockMovements(productId?: number, page = 1) {
+  const query = new URLSearchParams();
+  if (productId) query.set("product", String(productId));
+  if (page > 1) query.set("page", String(page));
+  return apiRequest<Page<ApiStockMovement> | ApiStockMovement[]>(`/admin/stock-movements/${query.size ? `?${query.toString()}` : ""}`);
+}

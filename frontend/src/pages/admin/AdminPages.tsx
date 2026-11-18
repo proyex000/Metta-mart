@@ -2,7 +2,8 @@ import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from 
 import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, stockLabel, useProducts } from "../../services/products";
-import { getCheckoutConfig, updateCheckoutConfig } from "../../services/commerce";
+import { getCheckoutConfig, listStockMovements, updateCheckoutConfig } from "../../services/commerce";
+import type { ApiStockMovement } from "../../services/commerce";
 import type { Product } from "../../types";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
@@ -421,6 +422,25 @@ export function Stock() {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyProductForm);
   const [error, setError] = useState("");
+  const [movementProduct, setMovementProduct] = useState<Product | null>(null);
+  const [movementRows, setMovementRows] = useState<ApiStockMovement[]>([]);
+  const [movementLoading, setMovementLoading] = useState(false);
+  const [movementError, setMovementError] = useState("");
+  const [movementPage, setMovementPage] = useState(1);
+  const [movementHasNext, setMovementHasNext] = useState(false);
+  const [movementHasPrevious, setMovementHasPrevious] = useState(false);
+  const loadMovements = async (product: Product, page: number) => {
+    setMovementLoading(true); setMovementError("");
+    try {
+      const response = await listStockMovements(product.id, page);
+      setMovementRows(Array.isArray(response) ? response : response.results);
+      setMovementHasNext(!Array.isArray(response) && Boolean(response.next));
+      setMovementHasPrevious(!Array.isArray(response) && Boolean(response.previous));
+      setMovementPage(page);
+    } catch (reason) { setMovementError(reason instanceof Error ? reason.message : "Riwayat stok gagal dimuat."); }
+    finally { setMovementLoading(false); }
+  };
+  const openMovements = (product: Product) => { setMovementProduct(product); void loadMovements(product, 1); };
   const filtered = items.filter((p) => {
     const needle = query.trim().toLowerCase();
     return (
@@ -539,6 +559,7 @@ export function Stock() {
                     <Status>{stockLabel(p.stock)}</Status>
                   </td>
                   <td>
+                    <button className="secondary-btn small" onClick={() => openMovements(p)}>Riwayat</button>
                     <button
                       className="icon-button"
                       aria-label={`Ubah ${p.name}`}
@@ -565,6 +586,11 @@ export function Stock() {
           Menampilkan {filtered.length} dari {items.length} produk
         </p>
       </div>
+      {movementProduct && <Modal title={`Riwayat Stok · ${movementProduct.name}`} close={() => setMovementProduct(null)}>
+        {movementError && <p className="auth-error">{movementError}</p>}
+        {movementLoading ? <p>Memuat riwayat...</p> : movementRows.length ? <div className="stock-history-list">{movementRows.map((entry) => <article key={entry.id}><div><b>{entry.kind === "reserved" ? "Reservasi pesanan" : entry.kind === "released" ? "Stok dikembalikan" : entry.kind === "sold" ? "Penjualan POS" : entry.kind === "restock" ? "Barang masuk" : entry.kind === "initial" ? "Stok awal" : "Penyesuaian stok"}</b><small>{new Date(entry.created_at).toLocaleString("id-ID")}</small></div><strong className={entry.quantity_delta < 0 ? "danger" : "success"}>{entry.quantity_delta > 0 ? "+" : ""}{entry.quantity_delta}</strong><span>Stok akhir: {entry.stock_after}</span><small>{entry.note || entry.reference} · {entry.actor_name || "Sistem"}</small></article>)}</div> : <p>Belum ada riwayat perubahan stok.</p>}
+        <div className="pagination-controls"><button className="secondary-btn" disabled={!movementHasPrevious || movementLoading} onClick={() => void loadMovements(movementProduct, movementPage - 1)}>Sebelumnya</button><span>Halaman {movementPage}</span><button className="secondary-btn" disabled={!movementHasNext || movementLoading} onClick={() => void loadMovements(movementProduct, movementPage + 1)}>Selanjutnya</button></div>
+      </Modal>}
       {editing && (
         <Modal title={editing === "new" ? "Tambah Produk" : "Ubah Produk"} close={() => setEditing(null)}>
           <form onSubmit={save} noValidate>

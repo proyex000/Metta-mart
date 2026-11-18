@@ -145,6 +145,15 @@ class POSCheckoutView(APIView):
                 line_total = product.price * quantity
                 subtotal += line_total
                 lines.append((product, quantity, line_total))
+            try:
+                cash_received = int(request.data.get("cash_received"))
+            except (TypeError, ValueError):
+                raise ValidationError({"cash_received": "Jumlah uang yang diterima wajib diisi."})
+            if cash_received < subtotal:
+                raise ValidationError({"cash_received": "Uang yang diterima kurang dari total transaksi."})
+            if cash_received > 1000000000:
+                raise ValidationError({"cash_received": "Jumlah uang yang diterima di luar batas."})
+            change_due = cash_received - subtotal
             order = Order.objects.create(customer=None, created_by=request.user, status=Order.Status.COMPLETED, fulfillment=Order.Fulfillment.PICKUP, customer_note=str(data.get("customer_note", "")).strip(), subtotal=subtotal, total=subtotal)
             for product, quantity, line_total in lines:
                 changed = Product.objects.filter(pk=product.pk, stock__gte=quantity).update(stock=F("stock") - quantity)
@@ -153,7 +162,7 @@ class POSCheckoutView(APIView):
                 product.refresh_from_db()
                 OrderItem.objects.create(order=order, product=product, product_name=product.name, sku=product.sku or "", unit=product.unit, unit_price=product.price, quantity=quantity, line_total=line_total)
                 StockMovement.objects.create(product=product, kind=StockMovement.Kind.SOLD, quantity_delta=-quantity, stock_after=product.stock, reference=order.code, note="Penjualan langsung melalui POS", actor=request.user)
-            Payment.objects.create(order=order, shift=shift, method=Payment.Method.CASH, status=Payment.Status.PAID, amount=order.total, reference=order.code, paid_at=timezone.now(), verified_by=request.user)
+            Payment.objects.create(order=order, shift=shift, method=Payment.Method.CASH, status=Payment.Status.PAID, amount=order.total, cash_received=cash_received, change_due=change_due, reference=order.code, paid_at=timezone.now(), verified_by=request.user)
             OrderStatusHistory.objects.create(order=order, from_status="", to_status=order.status, actor=request.user, note="Transaksi POS selesai dan dibayar tunai")
             AuditLog.objects.create(actor=request.user, event="pos.sale.completed", target_type="order", target_id=order.code, metadata={"total": order.total, "shift_id": shift.pk})
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
