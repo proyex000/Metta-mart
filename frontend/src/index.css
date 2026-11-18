@@ -3525,3 +3525,12 @@ td b {
   white-space: nowrap;
   font-size: 0.9rem;
 }
+
+.pos-product-list { display: grid; gap: 0.65rem; }
+.pos-product-list > article { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 0; border-bottom: 1px solid #e8eef2; }
+.pos-product-list > article:last-child { border-bottom: 0; }
+.pos-product-list > article > div:first-child { display: grid; gap: 0.25rem; min-width: 0; }
+.pos-product-list small { color: #718096; font-size: 0.8rem; }
+.notification-compose { display: grid; gap: 0.9rem; }
+.notification-compose label { display: grid; gap: 0.4rem; }
+.notification-compose input, .notification-compose textarea { width: 100%; }
