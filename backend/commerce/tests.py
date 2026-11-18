@@ -53,6 +53,10 @@ class CommerceApiTests(TestCase):
         self.assertEqual(self.product.stock, 10)
 
     def test_pickup_requires_ready_status(self):
+        from django.utils import timezone
+        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        today = day_codes[timezone.localtime().weekday()]
+        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
         response = self.create_order()
         code = response.data["code"]
         self.client.force_authenticate(user=self.admin)
@@ -66,6 +70,10 @@ class CommerceApiTests(TestCase):
         self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
 
     def test_bank_transfer_requires_manual_verification_before_pickup(self):
+        from django.utils import timezone
+        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        today = day_codes[timezone.localtime().weekday()]
+        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
         response = self.create_order("bank_transfer")
         self.assertEqual(response.status_code, 201)
         code = response.data["code"]
