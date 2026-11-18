@@ -73,6 +73,8 @@ export type AdminDashboardSummary = {
   recent_orders: {
     code: string;
     customer_name: string;
+    beneficiary_name: string | null;
+    sales_channel: "online" | "pos";
     total: number;
     status: CommerceOrder["status"];
     payment_status: CommerceOrder["payment_status"];
