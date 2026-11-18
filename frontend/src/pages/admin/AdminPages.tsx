@@ -3,6 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
+import { adminOrderAction, adminPaymentAction, fetchOrders, type CommerceOrder } from "../../services/commerce";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -629,89 +630,84 @@ export function Stock() {
   );
 }
 
+function adminOrderStatus(status: CommerceOrder["status"]) {
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+}
+function adminPaymentStatus(status: CommerceOrder["payment_status"]) {
+  return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Ditolak", refunded: "Dikembalikan" })[status];
+}
+
 export function Orders() {
   const [tab, setTab] = useState("Semua");
-  const [selected, setSelected] = useState<(typeof orders)[number] | null>(null);
-  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Dikirim", "Selesai"];
-  const shown = tab === "Semua" ? orders : orders.filter((o) => o.status === tab);
+  const [items, setItems] = useState<CommerceOrder[]>([]);
+  const [selected, setSelected] = useState<CommerceOrder | null>(null);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
+  const reload = async () => { const data = await fetchOrders(); setItems(data); };
+  useEffect(() => {
+    reload().catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
+  }, []);
+  const shown = items.filter((order) => (tab === "Semua" || adminOrderStatus(order.status) === tab) && (!query.trim() || order.code.toLowerCase().includes(query.toLowerCase()) || order.customer_name.toLowerCase().includes(query.toLowerCase())));
+  const act = async (action: "accept" | "ready" | "complete-pickup" | "cancel") => {
+    if (!selected || working) return;
+    setWorking(true); setError("");
+    try {
+      const updated = await adminOrderAction(selected.code, action);
+      setSelected(updated);
+      setItems((current) => current.map((item) => item.code === updated.code ? updated : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Status pesanan gagal diperbarui.");
+    } finally { setWorking(false); }
+  };
+  const verify = async (action: "verify" | "reject") => {
+    if (!selected || working) return;
+    setWorking(true); setError("");
+    try {
+      const updated = await adminPaymentAction(selected.code, action);
+      setSelected(updated);
+      setItems((current) => current.map((item) => item.code === updated.code ? updated : item));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Status pembayaran gagal diperbarui.");
+    } finally { setWorking(false); }
+  };
   return (
     <>
-      <Header title="Pesanan" subtitle="Kelola pesanan pelanggan dan atur status pengiriman." />
+      <Header title="Pesanan" subtitle="Terima pesanan, siapkan barang, dan konfirmasi pengambilan di koperasi." />
+      {error && <p className="auth-error" role="alert">{error}</p>}
       <div className="panel table-panel">
-        <div className="tabs">
-          {tabs.map((t) => (
-            <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>
-              {t}
-              {t === "Semua" && " (27)"}
-            </button>
-          ))}
-        </div>
-        <label className="search order-search">
-          <Icon name="search" size={16} />
-          <input placeholder="Cari nomor pesanan / nama pelanggan..." />
-        </label>
-        <div className="desktop-table">
-          <table>
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Kode Pesanan</th>
-                <th>Tanggal</th>
-                <th>Pelanggan</th>
-                <th>Total</th>
-                <th>Status</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((o, i) => (
-                <tr key={o.code}>
-                  <td>{i + 1}</td>
-                  <td>
-                    <b>{o.code}</b>
-                  </td>
-                  <td>{o.date}</td>
-                  <td>{o.customer}</td>
-                  <td>
-                    <b>{money(o.total)}</b>
-                  </td>
-                  <td>
-                    <Status>{o.status}</Status>
-                  </td>
-                  <td>
-                    <button className="primary small" onClick={() => setSelected(o)}>
-                      Detail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div className="tabs">{tabs.map((t) => <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>{t}{t === "Semua" ? ` (${items.length})` : ""}</button>)}</div>
+        <label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari nomor pesanan / nama pelanggan..." /></label>
+        {loading ? <p>Memuat pesanan...</p> : (
+          <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{money(order.total)}</b></td><td><Status>{adminOrderStatus(order.status)}</Status></td><td><button className="primary small" onClick={() => setSelected(order)}>Detail</button></td></tr>)}</tbody>
+          </table></div>
+        )}
+        {!loading && !shown.length && <p className="table-foot">Tidak ada pesanan pada filter ini.</p>}
         <p className="table-foot">Total {shown.length} pesanan</p>
       </div>
       {selected && (
         <Modal title={`Detail ${selected.code}`} close={() => setSelected(null)}>
           <div className="admin-order-detail">
-            <p>
-              <span>Pelanggan</span>
-              <b>{selected.customer}</b>
-            </p>
-            <p>
-              <span>Tanggal</span>
-              <b>{selected.date}</b>
-            </p>
-            <p>
-              <span>Total</span>
-              <b>{money(selected.total)}</b>
-            </p>
-            <p>
-              <span>Status</span>
-              <Status>{selected.status}</Status>
-            </p>
-            <button className="primary wide" onClick={() => setSelected(null)}>
-              Tutup Detail
-            </button>
+            <p><span>Pelanggan</span><b>{selected.customer_name}</b></p>
+            <p><span>Tanggal</span><b>{new Date(selected.created_at).toLocaleString("id-ID")}</b></p>
+            <p><span>Total</span><b>{money(selected.total)}</b></p>
+            <p><span>Status Pesanan</span><Status>{adminOrderStatus(selected.status)}</Status></p>
+            <p><span>Metode Pembayaran</span><b>{selected.payment_method === "bank_transfer" ? "Transfer Bank" : selected.payment_method === "qris" ? "QRIS" : "Tunai"}</b></p>
+            <p><span>Status Pembayaran</span><b>{adminPaymentStatus(selected.payment_status)}</b></p>
+            <h3>Rincian Barang</h3>
+            {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
+            {selected.note && <p><span>Catatan</span><b>{selected.note}</b></p>}
+            {selected.payment_status === "pending_verification" && <div className="form-row"><button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button><button className="secondary" disabled={working} onClick={() => verify("reject")}>Tolak Pembayaran</button></div>}
+            <div className="form-row">
+              {selected.status === "pending" && <button className="primary" disabled={working} onClick={() => act("accept")}>Terima Pesanan</button>}
+              {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>Tandai Siap Diambil</button>}
+              {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>Konfirmasi Pengambilan</button>}
+              {["pending", "accepted"].includes(selected.status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
+            </div>
+            <button className="primary wide" onClick={() => setSelected(null)}>Tutup Detail</button>
           </div>
         </Modal>
       )}
