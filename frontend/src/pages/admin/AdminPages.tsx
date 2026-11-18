@@ -6,7 +6,6 @@ import type { Product } from "../../types";
 import { adminOrderAction, adminPaymentAction, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchInventoryMovements, fetchOrders, type AdminDashboardSummary, type InventoryMovementRow, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
-import { createFamilyLink, deleteFamilyLink, fetchAdminAccounts, fetchFamilyLinks, type AdminAccount, type FamilyLink } from "../../services/family";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -552,9 +551,9 @@ export function Stock() {
                       className="icon-button"
                       aria-label={`Hapus ${p.name}`}
                       onClick={async () => {
-                        if (window.confirm(`Hapus produk "${p.name}"?`)) {
+                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, sistem akan menonaktifkannya agar catatan lama tetap aman.`)) {
                           try { await productService.remove(p.id); }
-                          catch { window.alert("Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
+                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
                         }
                       }}
                     >
@@ -979,7 +978,7 @@ export function POS() {
           </>}
           <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
           <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
-          <p className="table-foot">POS hanya dapat digunakan saat jam operasional. Admin bertanggung jawab memastikan pembayaran diterima sebelum menyelesaikan transaksi.</p>
+          <p className="table-foot">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
         </section>
       </div>
       {error && <p className="auth-error" role="alert">{error}</p>}
@@ -990,7 +989,7 @@ export function POS() {
 
 export function Settings() {
   const { session, updateProfile } = useAuth();
-  type SettingsTab = "store" | "account" | "payment" | "pickup" | "notifications" | "family";
+  type SettingsTab = "store" | "account" | "payment" | "pickup" | "notifications";
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
@@ -1011,34 +1010,6 @@ export function Settings() {
     orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
-  const [accounts, setAccounts] = useState<AdminAccount[]>([]);
-  const [familyLinks, setFamilyLinks] = useState<FamilyLink[]>([]);
-  const [familyParent, setFamilyParent] = useState<number | "">("");
-  const [familyStudent, setFamilyStudent] = useState<number | "">("");
-  const [familyError, setFamilyError] = useState("");
-  const [familyLoading, setFamilyLoading] = useState(false);
-  const [familySaving, setFamilySaving] = useState(false);
-  useEffect(() => {
-    if (tab !== "family") return;
-    setFamilyLoading(true); setFamilyError("");
-    Promise.all([fetchAdminAccounts(), fetchFamilyLinks()])
-      .then(([users, links]) => { setAccounts(users.filter((user) => user.is_active)); setFamilyLinks(links); })
-      .catch((reason) => setFamilyError(reason instanceof Error ? reason.message : "Data relasi keluarga gagal dimuat."))
-      .finally(() => setFamilyLoading(false));
-  }, [tab]);
-  const addFamilyLink = async () => {
-    if (!familyParent || !familyStudent || familySaving) return;
-    setFamilySaving(true); setFamilyError("");
-    try { await createFamilyLink(familyParent, familyStudent); setFamilyLinks(await fetchFamilyLinks()); }
-    catch (reason) { setFamilyError(reason instanceof Error ? reason.message : "Relasi gagal dibuat."); }
-    finally { setFamilySaving(false); }
-  };
-  const removeFamilyLink = async (id: number) => {
-    setFamilyError("");
-    try { await deleteFamilyLink(id); setFamilyLinks((current) => current.filter((link) => link.id !== id)); }
-    catch (reason) { setFamilyError(reason instanceof Error ? reason.message : "Relasi gagal dihapus."); }
-  };
-
   const [settingsLoadError, setSettingsLoadError] = useState("");
   const [values, setValues] = useState<Preferences>(() => {
     try {
@@ -1162,7 +1133,6 @@ export function Settings() {
     { id: "payment", label: "Metode Pembayaran", icon: "bag" },
     { id: "pickup", label: "Jam Operasional & Pengambilan", icon: "clock" },
     { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
-    { id: "family", label: "Relasi Orang Tua & Siswa", icon: "users" },
   ];
   const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" | "time" = "text") => (
     <label key={key}>
@@ -1239,20 +1209,6 @@ export function Settings() {
             </div>
             <div className="form-row">{field("Jam buka", "openTime", "time")}{field("Jam tutup", "closeTime", "time")}</div>
             <label>Instruksi pengambilan<textarea value={values.pickupMessage} onChange={(event) => update("pickupMessage", event.target.value)} /></label>
-          </>}
-          {tab === "family" && <>
-            <h2>Relasi Orang Tua & Siswa</h2>
-            <p>Hubungkan akun orang tua dengan akun siswa yang sudah diverifikasi sekolah. Orang tua hanya dapat membuat pesanan untuk siswa yang terhubung.</p>
-            {familyError && <p className="auth-error" role="alert">{familyError}</p>}
-            {familyLoading ? <p>Memuat akun dan relasi...</p> : <>
-              <div className="form-row">
-                <label>Orang Tua<select value={familyParent} onChange={(event) => setFamilyParent(event.target.value ? Number(event.target.value) : "")}><option value="">Pilih akun orang tua</option>{accounts.filter((user) => user.role === "parent").map((user) => <option key={user.id} value={user.id}>{user.full_name} · {user.identifier}</option>)}</select></label>
-                <label>Siswa<select value={familyStudent} onChange={(event) => setFamilyStudent(event.target.value ? Number(event.target.value) : "")}><option value="">Pilih akun siswa</option>{accounts.filter((user) => user.role === "student").map((user) => <option key={user.id} value={user.id}>{user.full_name} · {user.identifier}</option>)}</select></label>
-              </div>
-              <button type="button" className="primary" disabled={!familyParent || !familyStudent || familySaving} onClick={addFamilyLink}>{familySaving ? "Menghubungkan..." : "Hubungkan Akun"}</button>
-              <h3>Relasi Aktif ({familyLinks.length})</h3>
-              {familyLinks.length ? <div className="top-products-list">{familyLinks.map((link) => <div key={link.id}><span><b>{link.parent_name}</b><small>{link.parent_identifier} ↔ {link.student_name} · {link.student_identifier}</small></span><button type="button" className="secondary small" onClick={() => removeFamilyLink(link.id)}>Putuskan</button></div>)}</div> : <p className="table-foot">Belum ada akun orang tua yang terhubung dengan siswa.</p>}
-            </>}
           </>}
           {tab === "notifications" && <>
             <h2>Notifikasi Sistem</h2>
