@@ -4,12 +4,12 @@ from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.models import User
 from accounts.permissions import IsAdminRole
-from core.models import AuditLog
+from core.models import AuditLog, StoreSetting
 from .models import Category, Order, OrderItem, OrderStatusHistory, Payment, Product, StockMovement
 from .permissions import IsAdminOrReadOnly
 from .serializers import CategorySerializer, CheckoutSerializer, OrderSerializer, ProductSerializer, StockMovementSerializer
@@ -92,18 +92,35 @@ class StockAdjustmentView(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
-        try:
-            delta = int(request.data.get("quantity_delta"))
-        except (TypeError, ValueError):
-            raise ValidationError({"quantity_delta": "Jumlah perubahan stok harus berupa bilangan bulat."})
-        if delta == 0 or abs(delta) > 100000:
-            raise ValidationError({"quantity_delta": "Perubahan stok harus antara -100000 sampai 100000 dan bukan nol."})
         note = str(request.data.get("note", "")).strip()[:240]
+        target_value = request.data.get("target_stock")
         with transaction.atomic():
             product = get_object_or_404(Product.objects.select_for_update(), pk=pk)
-            updated = Product.objects.filter(pk=pk, stock__gte=max(0, -delta)).update(stock=F("stock") + delta)
-            if not updated:
-                raise ValidationError({"quantity_delta": "Stok tidak boleh menjadi negatif."})
+            if target_value is not None:
+                try:
+                    target = int(target_value)
+                    expected = int(request.data.get("expected_stock"))
+                except (TypeError, ValueError):
+                    raise ValidationError({"target_stock": "Stok tujuan dan stok awal wajib berupa bilangan bulat."})
+                if target < 0 or target > 1000000:
+                    raise ValidationError({"target_stock": "Stok tujuan di luar batas yang diizinkan."})
+                if product.stock != expected:
+                    error = APIException("Stok telah berubah sejak halaman dibuka. Muat ulang data sebelum menyimpan.")
+                    error.status_code = 409
+                    raise error
+                delta = target - product.stock
+            else:
+                try:
+                    delta = int(request.data.get("quantity_delta"))
+                except (TypeError, ValueError):
+                    raise ValidationError({"quantity_delta": "Jumlah perubahan stok harus berupa bilangan bulat."})
+                if delta == 0 or abs(delta) > 100000:
+                    raise ValidationError({"quantity_delta": "Perubahan stok harus antara -100000 sampai 100000 dan bukan nol."})
+                if product.stock + delta < 0:
+                    raise ValidationError({"quantity_delta": "Stok tidak boleh menjadi negatif."})
+            if delta == 0:
+                return Response(ProductSerializer(product).data)
+            Product.objects.filter(pk=pk).update(stock=F("stock") + delta)
             product.refresh_from_db()
             StockMovement.objects.create(product=product, kind=StockMovement.Kind.RESTOCK if delta > 0 else StockMovement.Kind.ADJUSTMENT, quantity_delta=delta, stock_after=product.stock, note=note, actor=request.user)
             AuditLog.objects.create(actor=request.user, event="stock.adjusted", target_type="product", target_id=str(product.pk), metadata={"delta": delta, "stock_after": product.stock, "note": note})

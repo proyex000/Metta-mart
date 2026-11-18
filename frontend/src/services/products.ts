@@ -1,75 +1,82 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { isCategoryId } from "../data/categories";
-import { products as seed } from "../data/mock";
 import type { Product, ProductInput } from "../types";
+import { adjustStock, createProduct, deleteProduct, listProducts, pageResults, updateProduct } from "./commerce";
 
-/**
- * Shared product store used by Admin, Student and Parent screens.
- *
- * This is an in-memory stand-in for a real products API. It exists so every
- * role reads the same data; it is NOT persistent and NOT a security boundary.
- * Replace the bodies of list/create/update/remove with API calls once the
- * backend exists; the validation here must be repeated on the server.
- */
-let items: Product[] = seed.map((product) => ({ ...product }));
+let items: Product[] = [];
+let loaded = false;
+let loadingPromise: Promise<void> | null = null;
 const listeners = new Set<() => void>();
-
 const emit = () => listeners.forEach((listener) => listener());
+
+function fromApi(value: Awaited<ReturnType<typeof listProducts>> extends infer T ? T extends { results: (infer P)[] } ? P : T extends (infer P)[] ? P : never : never): Product {
+  return {
+    id: value.id,
+    name: value.name,
+    category: isCategoryId(value.category_slug) ? value.category_slug : "lainnya",
+    price: value.price,
+    stock: value.stock,
+    art: value.category_slug === "seragam-sekolah" ? "shirt" : value.category_slug === "minuman" ? "bottle" : "book",
+  };
+}
 
 function validate(input: ProductInput) {
   if (!input.name.trim()) throw new Error("Nama produk wajib diisi.");
   if (!isCategoryId(input.category)) throw new Error("Kategori tidak valid.");
-  if (!Number.isInteger(input.price) || input.price < 0)
-    throw new Error("Harga harus berupa bilangan bulat Rupiah (0 atau lebih).");
-  if (!Number.isInteger(input.stock) || input.stock < 0)
-    throw new Error("Stok harus berupa bilangan bulat (0 atau lebih).");
+  if (!Number.isSafeInteger(input.price) || input.price < 0) throw new Error("Harga harus berupa bilangan bulat Rupiah.");
+  if (!Number.isSafeInteger(input.stock) || input.stock < 0) throw new Error("Stok harus berupa bilangan bulat nonnegatif.");
+}
+
+async function refresh(force = false) {
+  if (loaded && !force) return;
+  if (loadingPromise) return loadingPromise;
+  loadingPromise = (async () => {
+    const response = await listProducts();
+    items = pageResults(response).map((item) => fromApi(item as Parameters<typeof fromApi>[0]));
+    loaded = true;
+    emit();
+  })();
+  try { await loadingPromise; } finally { loadingPromise = null; }
 }
 
 export const productService = {
   list: () => items,
-  subscribe(listener: () => void) {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  },
-  create(input: ProductInput): Product {
+  subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
+  refresh: () => refresh(true),
+  async create(input: ProductInput): Promise<Product> {
     validate(input);
-    const product: Product = {
-      id: items.reduce((max, item) => Math.max(max, item.id), 0) + 1,
-      name: input.name.trim(),
-      category: input.category,
-      price: input.price,
-      stock: input.stock,
-      art: input.art ?? (input.category === "seragam-sekolah" ? "shirt" : "book"),
-    };
-    items = [...items, product];
+    const created = await createProduct({ name: input.name.trim(), category_slug: input.category, price: input.price });
+    let current = created;
+    if (input.stock > 0) current = await adjustStock(created.id, input.stock, "Stok awal produk");
+    const product = fromApi(current as Parameters<typeof fromApi>[0]);
+    items = [...items, product].sort((a, b) => a.name.localeCompare(b.name, "id"));
+    loaded = true;
     emit();
     return product;
   },
-  update(id: number, input: ProductInput): Product {
+  async update(id: number, input: ProductInput): Promise<Product> {
     validate(input);
-    const current = items.find((item) => item.id === id);
-    if (!current) throw new Error("Produk tidak ditemukan.");
-    const next: Product = {
-      ...current,
-      name: input.name.trim(),
-      category: input.category,
-      price: input.price,
-      stock: input.stock,
-    };
-    items = items.map((item) => (item.id === id ? next : item));
+    const previous = items.find((item) => item.id === id);
+    if (!previous) throw new Error("Produk tidak ditemukan.");
+    let updated = await updateProduct(id, { name: input.name.trim(), category_slug: input.category, price: input.price });
+    const delta = input.stock - previous.stock;
+    if (delta !== 0) updated = await adjustStock(id, delta, "Penyesuaian stok dari halaman katalog");
+    const product = fromApi(updated as Parameters<typeof fromApi>[0]);
+    items = items.map((item) => item.id === id ? product : item);
     emit();
-    return next;
+    return product;
   },
-  remove(id: number) {
+  async remove(id: number) {
+    await deleteProduct(id);
     items = items.filter((item) => item.id !== id);
     emit();
   },
 };
 
 export function useProducts(): Product[] {
-  return useSyncExternalStore(productService.subscribe, productService.list, productService.list);
+  const value = useSyncExternalStore(productService.subscribe, productService.list, productService.list);
+  useEffect(() => { void refresh().catch(() => undefined); }, []);
+  return value;
 }
 
 export function stockLabel(stock: number): "Habis" | "Hampir Habis" | "Tersedia" {
