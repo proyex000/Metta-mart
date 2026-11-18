@@ -199,3 +199,31 @@ class CommerceApiTests(TestCase):
         response = self.client.get("/api/parent/children/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["id"] for row in response.data], [self.student.id])
+
+    def test_admin_pos_creates_paid_completed_sale_and_reduces_stock(self):
+        from django.utils import timezone
+        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        today = day_codes[timezone.localtime().weekday()]
+        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post("/api/admin/pos/checkout/", {
+            "payment_method": "cash",
+            "items": [{"product_id": self.product.id, "quantity": 3}],
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], Order.Status.COMPLETED)
+        self.assertEqual(response.data["payment_status"], Order.PaymentStatus.PAID)
+        self.assertEqual(response.data["sales_channel"], "pos")
+        self.assertEqual(response.data["customer_name"], "Penjualan POS")
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 7)
+
+    def test_student_cannot_use_admin_pos(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/admin/pos/checkout/", {
+            "payment_method": "cash",
+            "items": [{"product_id": self.product.id, "quantity": 1}],
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
