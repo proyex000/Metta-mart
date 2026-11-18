@@ -57,7 +57,7 @@ class OrderCreateSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data):
         rows = validated_data["items"]
-        products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=[r["product_id"] for r in rows], is_active=True)}
+        products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=[r["product_id"] for r in rows], is_active=True).order_by("id")}
         if len(products) != len(rows):
             raise ValidationError({"items": "Satu atau lebih produk tidak tersedia."})
         subtotal = 0
