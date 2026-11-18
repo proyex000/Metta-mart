@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from core.models import AuditLog, StoreSetting
 from .models import InventoryMovement, Order, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
-from .serializers import OrderCreateSerializer, OrderReadSerializer, ProductSerializer
+from .serializers import InventoryMovementSerializer, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
 
 def pickup_is_open(now):
     setting = StoreSetting.objects.filter(key="operating_hours").first()
@@ -179,3 +179,9 @@ class PaymentSubmissionView(APIView):
         PaymentEvent.objects.create(order=order, actor=request.user, event="submitted", note=note)
         AuditLog.objects.create(actor=request.user, event="payment.submitted", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
         return Response(OrderReadSerializer(order).data)
+
+
+class AdminInventoryMovementListView(generics.ListAPIView):
+    permission_classes = [CommerceAdminOnly]
+    queryset = InventoryMovement.objects.select_related("product", "actor").all()
+    serializer_class = InventoryMovementSerializer
