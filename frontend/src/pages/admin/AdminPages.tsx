@@ -1066,7 +1066,7 @@ export function Settings() {
     { id: "pickup", label: "Jam Operasional & Pengambilan", icon: "clock" },
     { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
   ];
-  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" = "text") => (
+  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" | "time" = "text") => (
     <label key={key}>
       {label}
       <input type={type} value={String(values[key])} onChange={(event) => update(key, event.target.value as Preferences[typeof key])} />
@@ -1119,8 +1119,27 @@ export function Settings() {
           {tab === "pickup" && <>
             <h2>Jam Operasional & Pengambilan</h2>
             <p>Pemesanan tetap dapat dilakukan kapan saja. Jam ini hanya mengatur kapan pesanan yang sudah siap boleh diambil.</p>
-            {field("Hari operasional (mon,tue,wed,thu,fri,sat,sun)", "operatingDays")}
-            <div className="form-row">{field("Jam buka (HH:MM)", "openTime")}{field("Jam tutup (HH:MM)", "closeTime")}</div>
+            <div className="settings-day-picker">
+              <span>Hari Operasional</span>
+              {[
+                ["mon", "Senin"], ["tue", "Selasa"], ["wed", "Rabu"], ["thu", "Kamis"],
+                ["fri", "Jumat"], ["sat", "Sabtu"], ["sun", "Minggu"],
+              ].map(([day, label]) => (
+                <label key={day}>
+                  <input
+                    type="checkbox"
+                    checked={values.operatingDays.split(",").includes(day)}
+                    onChange={(event) => {
+                      const current = values.operatingDays.split(",").filter(Boolean);
+                      const next = event.target.checked ? [...current, day] : current.filter((item) => item !== day);
+                      update("operatingDays", next.join(","));
+                    }}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div className="form-row">{field("Jam buka", "openTime", "time")}{field("Jam tutup", "closeTime", "time")}</div>
             <label>Instruksi pengambilan<textarea value={values.pickupMessage} onChange={(event) => update("pickupMessage", event.target.value)} /></label>
           </>}
           {tab === "notifications" && <>
