@@ -79,6 +79,7 @@ class Order(models.Model):
     note = models.CharField(max_length=500, blank=True)
     subtotal = models.PositiveIntegerField(default=0)
     total = models.PositiveIntegerField(default=0)
+    cash_received = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
