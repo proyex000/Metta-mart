@@ -51,6 +51,11 @@ class OrderCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Siswa tersebut belum terhubung dengan akun orang tua ini. Hubungi admin koperasi.")
         return value
 
+    def validate(self, attrs):
+        if self.context["request"].user.role == User.Role.PARENT and not attrs.get("student_id"):
+            raise serializers.ValidationError({"student_id": "Pilih siswa yang terhubung dengan akun orang tua ini."})
+        return attrs
+
     def validate_payment_method(self, value):
         setting = StoreSetting.objects.filter(key="payment_methods").first()
         enabled = setting.value if setting and isinstance(setting.value, dict) else {"cash": True, "bank_transfer": True, "qris": True}
