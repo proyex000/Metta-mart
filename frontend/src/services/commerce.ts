@@ -18,6 +18,9 @@ export type CommerceOrder = {
   note: string;
   subtotal: number;
   total: number;
+  cash_received: number | null;
+  change_due: number | null;
+  sales_channel: "online" | "pos";
   items: CommerceOrderItem[];
   created_at: string;
   accepted_at: string | null;
@@ -81,6 +84,6 @@ export function fetchAdminDashboard() {
   return apiRequest<AdminDashboardSummary>("/admin/dashboard/");
 }
 
-export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string }) {
+export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; cash_received?: number }) {
   return apiRequest<CommerceOrder>("/admin/pos/checkout/", { method: "POST", body: JSON.stringify(input) });
 }
