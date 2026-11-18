@@ -3578,6 +3578,13 @@ td b {
   min-height: 92px;
   resize: vertical;
 }
+.role-content .search input {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 .role-content input:focus,
 .role-content select:focus,
 .role-content textarea:focus {
