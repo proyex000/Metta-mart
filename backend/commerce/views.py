@@ -375,7 +375,7 @@ class AdminPOSCheckoutView(APIView):
         for row in cleaned:
             product = products[row["product_id"]]
             Product.objects.filter(pk=product.pk, stock__gte=row["quantity"]).update(stock=F("stock") - row["quantity"])
-            InventoryMovement.objects.create(product=product, actor=request.user, quantity_delta=-row["quantity"], reason="order_reserved", reference=f"POS:{order.code}")
+            InventoryMovement.objects.create(product=product, actor=request.user, quantity_delta=-row["quantity"], reason="pos_sale", reference=order.code)
             OrderItem.objects.create(order=order, product=product, product_name=product.name, unit_price=product.price, quantity=row["quantity"], line_total=product.price * row["quantity"])
         PaymentEvent.objects.create(order=order, actor=request.user, event="pos_sale", note="Pembayaran diterima dan dikonfirmasi admin pada POS.")
         AuditLog.objects.create(actor=request.user, event="pos.checkout", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": total, "payment_method": method})
