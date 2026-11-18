@@ -112,3 +112,10 @@ export async function markNotificationRead(id: number) {
 export async function markAllNotificationsRead() {
   return apiRequest<{ updated: number }>("/notifications/read-all/", { method: "POST" });
 }
+
+export async function submitPaymentReference(code: string, paymentReference: string) {
+  return apiRequest<ApiOrder>(`/orders/${encodeURIComponent(code)}/actions/`, {
+    method: "POST",
+    body: JSON.stringify({ action: "submit_payment_reference", payment_reference: paymentReference }),
+  });
+}
