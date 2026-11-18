@@ -28,7 +28,10 @@ class OrderItemReadSerializer(serializers.ModelSerializer):
 
 
 class OrderReadSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+
+    def get_customer_name(self, obj):
+        return "Penjualan POS" if obj.sales_channel == "pos" else obj.customer.full_name
     beneficiary_name = serializers.CharField(source="beneficiary.full_name", read_only=True, allow_null=True)
     items = OrderItemReadSerializer(many=True, read_only=True)
 
