@@ -1094,6 +1094,7 @@ export function Settings() {
           </>}
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
+            {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
             {saved && <span role="status">Pengaturan tersimpan di browser ini.</span>}
           </div>
         </form>
