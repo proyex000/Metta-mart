@@ -736,7 +736,7 @@ export function Notifications() {
   const filtered = items.filter((notice) => {
     if (filter === 0) return true;
     if (filter === 1) return notice.title.toLowerCase().includes("diterima");
-    if (filter === 2) return notice.title.toLowerCase().includes("dikirim");
+    if (filter === 2) return notice.title.toLowerCase().includes("siap diambil");
     if (filter === 3) return notice.type === "Promo" || notice.type === "Info";
     return notice.title.toLowerCase().includes("stok") || notice.text.toLowerCase().includes("stok");
   });
@@ -1330,7 +1330,7 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           <div className="tabs mobile-tabs">
             <button className="active">Semua</button>
             <button>Diproses</button>
-            <button>Dikirim</button>
+            <button>Siap Diambil</button>
             <button>Selesai</button>
           </div>
           <div className="mobile-orders">
