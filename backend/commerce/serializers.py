@@ -3,6 +3,7 @@ from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from core.models import StoreSetting
+from accounts.models import ParentStudentLink, User
 from .models import InventoryMovement, Order, OrderItem, Product
 
 
@@ -28,17 +29,27 @@ class OrderItemReadSerializer(serializers.ModelSerializer):
 
 class OrderReadSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    beneficiary_name = serializers.CharField(source="beneficiary.full_name", read_only=True, allow_null=True)
     items = OrderItemReadSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "status", "payment_method", "payment_status", "note", "subtotal", "total", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "beneficiary_name", "status", "payment_method", "payment_status", "note", "subtotal", "total", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
     items = serializers.ListField(child=serializers.DictField(), allow_empty=False)
     payment_method = serializers.ChoiceField(choices=Order.PaymentMethod.choices)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    student_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_student_id(self, value):
+        user = self.context["request"].user
+        if user.role != User.Role.PARENT:
+            raise serializers.ValidationError("Hanya akun orang tua yang dapat memilih siswa penerima.")
+        if not ParentStudentLink.objects.filter(parent=user, student_id=value, student__role=User.Role.STUDENT, student__is_active=True).exists():
+            raise serializers.ValidationError("Siswa tersebut belum terhubung dengan akun orang tua ini. Hubungi admin koperasi.")
+        return value
 
     def validate_payment_method(self, value):
         setting = StoreSetting.objects.filter(key="payment_methods").first()
@@ -78,6 +89,7 @@ class OrderCreateSerializer(serializers.Serializer):
             customer=self.context["request"].user,
             payment_method=validated_data["payment_method"],
             note=validated_data.get("note", "").strip(),
+            beneficiary_id=validated_data.get("student_id"),
             subtotal=subtotal,
             total=subtotal,
         )
