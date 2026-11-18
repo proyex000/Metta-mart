@@ -660,7 +660,7 @@ export function Orders() {
   const shown = tab === "Semua" ? orders : orders.filter((o) => o.status === tab);
   return (
     <>
-      <Header title="Pesanan" subtitle="Kelola pesanan pelanggan dan atur status pengiriman." />
+      <Header title="Pesanan" subtitle="Kelola pesanan pelanggan dan konfirmasi pengambilan." />
       <div className="panel table-panel">
         <div className="tabs">
           {tabs.map((t) => (
