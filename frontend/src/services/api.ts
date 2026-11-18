@@ -3,7 +3,7 @@ type ApiUser = {
   identifier: string;
   full_name: string;
   email: string;
-  role: "admin" | "cashier" | "student" | "parent";
+  role: "admin" | "student" | "parent";
 };
 
 export type AuthSession = {
