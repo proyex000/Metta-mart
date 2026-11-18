@@ -17,7 +17,7 @@ export type Product = {
   art: string;
 };
 
-export type ProductInput = Omit<Product, "id" | "art"> & { art?: string };
+export type ProductInput = Omit<Product, "id" | "art"> & { art?: string; stock_note?: string };
 
 export type Order = {
   code: string;
