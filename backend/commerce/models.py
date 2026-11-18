@@ -23,7 +23,7 @@ class Product(models.Model):
 
     class Meta:
         ordering = ("name",)
-        indexes = [models.Index(fields=("is_active", "category"))]
+        indexes = [models.Index(fields=("is_active", "category"), name="commerce_p_is_acti_9c4c8f_idx")]
 
     def __str__(self):
         return self.name
@@ -66,7 +66,7 @@ class Order(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
-        indexes = [models.Index(fields=("customer", "created_at")), models.Index(fields=("status", "created_at"))]
+        indexes = [models.Index(fields=("customer", "created_at"), name="commerce_o_customer_3e0a12_idx"), models.Index(fields=("status", "created_at"), name="commerce_o_status_83f6a9_idx")]
 
     def save(self, *args, **kwargs):
         if not self.code:
