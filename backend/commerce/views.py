@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.contrib.auth import get_user_model
 from django.db.models import F, Sum, Count
 from datetime import datetime, timedelta
 from django.utils import timezone
@@ -6,10 +7,23 @@ from rest_framework import generics, permissions, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from core.models import AuditLog, StoreSetting
+from core.models import AuditLog, Notification, StoreSetting
 from .models import InventoryMovement, Order, OrderItem, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
 from .serializers import InventoryMovementSerializer, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
+
+
+def notify_user(user, title, message, kind="info", target_code=""):
+    Notification.objects.create(recipient=user, title=title, message=message, kind=kind, target_code=target_code)
+
+
+def notify_admins(title, message, kind="order", target_code=""):
+    User = get_user_model()
+    Notification.objects.bulk_create([
+        Notification(recipient=user, title=title, message=message, kind=kind, target_code=target_code)
+        for user in User.objects.filter(role="admin", is_active=True)
+    ])
+
 
 def pickup_is_open(now):
     setting = StoreSetting.objects.filter(key="operating_hours").first()
@@ -85,6 +99,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
+        notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}.", target_code=order.code)
         return Response(OrderReadSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -136,6 +151,14 @@ class AdminOrderActionView(APIView):
             raise ValidationError({"status": "Perubahan status pesanan tidak valid."})
         order.save()
         AuditLog.objects.create(actor=request.user, event=f"order.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        messages = {
+            "accept": ("Pesanan sedang diproses", f"Pesanan {order.code} telah dikonfirmasi koperasi."),
+            "ready": ("Pesanan siap diambil", f"Pesanan {order.code} sudah siap. Silakan ambil saat jam operasional."),
+            "complete-pickup": ("Pengambilan selesai", f"Pesanan {order.code} telah diserahkan."),
+            "cancel": ("Pesanan dibatalkan", f"Pesanan {order.code} dibatalkan dan stok dikembalikan."),
+        }
+        title, message = messages[action]
+        notify_user(order.customer, title, message, kind="order", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
 
 
@@ -158,6 +181,9 @@ class AdminPaymentActionView(APIView):
         order.save(update_fields=["payment_status", "updated_at"])
         PaymentEvent.objects.create(order=order, actor=request.user, event=action, note=str(request.data.get("note", ""))[:500])
         AuditLog.objects.create(actor=request.user, event=f"payment.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        title = "Pembayaran berhasil diverifikasi" if action == "verify" else "Pembayaran perlu diperiksa kembali"
+        message = f"Status pembayaran pesanan {order.code}: {'lunas' if action == 'verify' else 'ditolak'}. Periksa detail pesanan."
+        notify_user(order.customer, title, message, kind="payment", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
 
 
@@ -179,6 +205,7 @@ class PaymentSubmissionView(APIView):
         order.save(update_fields=["payment_status", "updated_at"])
         PaymentEvent.objects.create(order=order, actor=request.user, event="submitted", note=note)
         AuditLog.objects.create(actor=request.user, event="payment.submitted", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        notify_admins("Konfirmasi pembayaran masuk", f"{request.user.full_name} mengirim konfirmasi pembayaran untuk {order.code}.", kind="payment", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
 
 
