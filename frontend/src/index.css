@@ -3430,14 +3430,36 @@ td b {
   width: 40px;
   height: 40px;
 }
-.role-account small {
-  max-width: 130px;
+/* Account row must fit the 204px sidebar content width: avatar + text + logout */
+.role-account {
+  flex: none;
+  gap: 8px;
 }
-/* Logout: larger icon and a >=44px tap target, weighted like the nav icons */
+.role-account .role-avatar {
+  width: 38px;
+  height: 38px;
+}
+.role-account-link {
+  gap: 8px;
+}
+.role-account-link div {
+  flex: 1;
+  min-width: 0;
+}
+.role-account b,
+.role-account small {
+  max-width: 100%;
+  white-space: nowrap;
+}
+.role-sidebar nav {
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Logout: larger icon and a 44px tap target, weighted like the nav icons */
 .role-account .role-logout {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
   padding: 0;
   display: grid;
   place-items: center;
