@@ -11,6 +11,11 @@ const roleCopy: Record<Role, { title: string; identifier: string; helper: string
   admin: { title: "Owner / Admin", identifier: "Email", helper: "Login / Daftar sebagai admin" },
 };
 
+// Roles offered on the public role chooser. Admin sign-in stays reachable only
+// through the internal /login/admin address. Hiding it is NOT a security
+// control: role permissions must be enforced by the backend.
+const publicRoles: Exclude<Role, "admin">[] = ["student", "parent"];
+
 function validRole(value: string | undefined): value is Role {
   return value === "admin" || value === "parent" || value === "student";
 }
@@ -25,10 +30,10 @@ export function RoleChooser() {
         <p>Pilih peran Anda untuk melanjutkan</p>
         {location.state?.message && <div className="auth-success">{location.state.message}</div>}
         <div className="role-options">
-          {(["student", "parent", "admin"] as Role[]).map((role) => (
+          {publicRoles.map((role) => (
             <Link key={role} to={`/login/${role}`}>
               <span className="role-option-icon">
-                <Icon name={role === "admin" ? "settings" : "user"} size={28} />
+                <Icon name="user" size={28} />
               </span>
               <div>
                 <b>{roleCopy[role].title}</b>
@@ -51,8 +56,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { session, login } = useAuth();
   const selected = validRole(role) ? role : null;
-  const [identifier, setIdentifier] = useState(selected ? demoAccounts[selected].identifier : "");
-  const [password, setPassword] = useState(selected ? demoAccounts[selected].password : "");
+  // Demo credentials are only prefilled for the public roles, never for admin.
+  const demo = selected && selected !== "admin" ? demoAccounts[selected] : null;
+  const [identifier, setIdentifier] = useState(demo?.identifier ?? "");
+  const [password, setPassword] = useState(demo?.password ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   if (!selected) return <Navigate to="/login" replace />;
@@ -100,7 +107,7 @@ export function LoginPage() {
           <label>
             Password
             <div className="auth-input">
-              <Icon name="settings" />
+              <Icon name="lock" />
               <input
                 type="password"
                 value={password}
@@ -119,14 +126,18 @@ export function LoginPage() {
             )}
           </button>
         </form>
-        <p className="auth-switch">
-          Belum punya akun? <Link to={`/register/${selected}`}>Daftar di sini</Link>
-        </p>
-        <div className="demo-account">
-          <b>Akun demo</b>
-          <span>{demoAccounts[selected].identifier}</span>
-          <span>Password: {demoAccounts[selected].password}</span>
-        </div>
+        {selected !== "admin" && (
+          <p className="auth-switch">
+            Belum punya akun? <Link to={`/register/${selected}`}>Daftar di sini</Link>
+          </p>
+        )}
+        {demo && (
+          <div className="demo-account">
+            <b>Akun demo</b>
+            <span>{demo.identifier}</span>
+            <span>Password: {demo.password}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -137,7 +148,8 @@ export function RegisterPage() {
   const navigate = useNavigate();
   const selected = validRole(role) ? role : null;
   const [done, setDone] = useState(false);
-  if (!selected) return <Navigate to="/login" replace />;
+  // Public self-registration is only for student and parent accounts.
+  if (!selected || selected === "admin") return <Navigate to="/login" replace />;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -175,7 +187,7 @@ export function RegisterPage() {
             <label>
               Password
               <div className="auth-input">
-                <Icon name="settings" />
+                <Icon name="lock" />
                 <input
                   name="password"
                   type="password"

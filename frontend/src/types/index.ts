@@ -1,3 +1,5 @@
+import type { CategoryId } from "../data/categories";
+
 export type Role = "admin" | "parent" | "student";
 
 export type Session = {
@@ -9,11 +11,13 @@ export type Session = {
 export type Product = {
   id: number;
   name: string;
-  category: "ATK" | "Buku" | "Minuman";
+  category: CategoryId;
   price: number;
   stock: number;
   art: string;
 };
+
+export type ProductInput = Omit<Product, "id" | "art"> & { art?: string };
 
 export type Order = {
   code: string;

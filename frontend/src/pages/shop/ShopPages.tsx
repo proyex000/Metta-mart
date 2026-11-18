@@ -1,12 +1,22 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { Icon, PageTitle, ProductArt, Status } from "../../components/ui";
-import { money, notices, orders, products } from "../../data/mock";
+import {
+  ALL_CATEGORIES,
+  categories,
+  categoryLabel,
+  isCategoryId,
+  type CategoryId,
+} from "../../data/categories";
+import { money, notices, orders } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
+import { stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
+  const navigate = useNavigate();
+  const products = useProducts();
   const base = `/${role}`;
   return (
     <>
@@ -43,9 +53,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
         <Icon name="search" />
         <input
           placeholder="Cari barang, buku, atau kebutuhan sekolah..."
-          onFocus={() => {
-            location.href = `${base}/stock`;
-          }}
+          onFocus={() => navigate(`${base}/stock`)}
         />
       </label>
       <div className="section-heading">
@@ -53,12 +61,12 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
         <Link to={`${base}/stock`}>Lihat Semua ›</Link>
       </div>
       <section className="category-grid">
-        {["Alat Tulis", "Buku", "Minuman", "Lainnya"].map((item, index) => (
-          <Link to={`${base}/stock`} key={item}>
+        {categories.map((item) => (
+          <Link to={`${base}/stock?category=${item.id}`} key={item.id}>
             <span>
-              <Icon name={index === 1 ? "bag" : "box"} />
+              <Icon name={item.icon} />
             </span>
-            {item}
+            {item.label}
           </Link>
         ))}
       </section>
@@ -103,16 +111,27 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
+  const products = useProducts();
+  const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Semua");
+  const requested = params.get("category");
+  const category: CategoryId | typeof ALL_CATEGORIES = isCategoryId(requested)
+    ? requested
+    : ALL_CATEGORIES;
+  const selectCategory = (next: CategoryId | typeof ALL_CATEGORIES) =>
+    setParams(next === ALL_CATEGORIES ? {} : { category: next }, { replace: true });
   const list = useMemo(
     () =>
-      products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query.toLowerCase()) &&
-          (category === "Semua" || p.category === category),
-      ),
-    [query, category],
+      products.filter((p) => {
+        const needle = query.trim().toLowerCase();
+        return (
+          (!needle ||
+            p.name.toLowerCase().includes(needle) ||
+            categoryLabel(p.category).toLowerCase().includes(needle)) &&
+          (category === ALL_CATEGORIES || p.category === category)
+        );
+      }),
+    [products, query, category],
   );
   return (
     <>
@@ -126,13 +145,13 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
         />
       </label>
       <div className="tabs shop-tabs">
-        {["Semua", "ATK", "Buku", "Minuman"].map((item) => (
+        {[{ id: ALL_CATEGORIES, label: "Semua" }, ...categories].map((item) => (
           <button
-            key={item}
-            className={category === item ? "active" : ""}
-            onClick={() => setCategory(item)}
+            key={item.id}
+            className={category === item.id ? "active" : ""}
+            onClick={() => selectCategory(item.id)}
           >
-            {item}
+            {item.label}
           </button>
         ))}
       </div>
@@ -143,11 +162,11 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
             <div>
               <b>{product.name}</b>
               <span>{money(product.price)}</span>
-              <small>Stok: {product.stock}</small>
+              <small>
+                {categoryLabel(product.category)} · Stok: {product.stock}
+              </small>
             </div>
-            <Status>
-              {product.stock === 0 ? "Habis" : product.stock < 10 ? "Hampir Habis" : "Tersedia"}
-            </Status>
+            <Status>{stockLabel(product.stock)}</Status>
             <Link
               className={product.stock === 0 ? "disabled" : ""}
               to={product.stock ? `/${role}/order?product=${product.id}` : "#"}
@@ -170,7 +189,13 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
 
 export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const navigate = useNavigate();
-  const [counts, setCounts] = useState<Record<number, number>>({ 1: 1 });
+  const products = useProducts();
+  const [params] = useSearchParams();
+  const [counts, setCounts] = useState<Record<number, number>>(() => {
+    const id = Number(params.get("product"));
+    const product = products.find((item) => item.id === id);
+    return product && product.stock > 0 ? { [product.id]: 1 } : {};
+  });
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
@@ -195,8 +220,13 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const selectedPayment = methods.some((method) => method.id === payment) ? payment : methods[0]?.id;
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
-  const change = (id: number, amount: number) =>
-    setCounts((current) => ({ ...current, [id]: Math.max(0, (current[id] || 0) + amount) }));
+  const change = (id: number, amount: number) => {
+    const stock = products.find((product) => product.id === id)?.stock ?? 0;
+    setCounts((current) => ({
+      ...current,
+      [id]: Math.min(stock, Math.max(0, (current[id] || 0) + amount)),
+    }));
+  };
   const submit = () => {
     if (!total || !selectedPayment || sent) return;
     setSent(true);
@@ -219,12 +249,21 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
             <ProductArt type={product.art} />
             <div>
               <b>{product.name}</b>
-              <span>{money(product.price)}</span>
+              <span>
+                {categoryLabel(product.category)} · {money(product.price)}
+              </span>
             </div>
             <div className="quantity">
               <button type="button" aria-label={`Kurangi ${product.name}`} onClick={() => change(product.id, -1)}>−</button>
               <b>{counts[product.id] || 0}</b>
-              <button type="button" aria-label={`Tambah ${product.name}`} onClick={() => change(product.id, 1)}>+</button>
+              <button
+                type="button"
+                aria-label={`Tambah ${product.name}`}
+                disabled={(counts[product.id] || 0) >= product.stock}
+                onClick={() => change(product.id, 1)}
+              >
+                +
+              </button>
             </div>
           </article>
         ))}
@@ -338,6 +377,7 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
 export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
   const { code } = useParams();
   const navigate = useNavigate();
+  const products = useProducts();
   const order = orders.find((item) => item.code === code) || orders[0];
   return (
     <>
@@ -362,6 +402,7 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
             <ProductArt type={product.art} />
             <div>
               <b>{product.name}</b>
+              <small>{categoryLabel(product.category)}</small>
               <span>{money(product.price)}</span>
             </div>
             <span>1×</span>

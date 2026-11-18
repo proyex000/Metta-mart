@@ -19,12 +19,14 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
     { to: "/parent/stock", label: "Stok Barang", icon: "box" },
     { to: "/parent/orders", label: "Pesanan", icon: "bag" },
     { to: "/parent/notifications", label: "Notifikasi", icon: "bell" },
+    { to: "/parent/settings", label: "Pengaturan", icon: "settings" },
   ],
   student: [
     { to: "/student", label: "Beranda", icon: "home" },
     { to: "/student/stock", label: "Stok Barang", icon: "box" },
     { to: "/student/orders", label: "Pesanan Saya", icon: "bag" },
     { to: "/student/notifications", label: "Notifikasi", icon: "bell" },
+    { to: "/student/settings", label: "Pengaturan", icon: "settings" },
   ],
 };
 
@@ -85,8 +87,13 @@ export function RoleLayout({ role }: { role: Role }) {
               <small className="role-account-hint">Pengaturan akun</small>
             </div>
           </Link>
-          <button aria-label="Keluar" title="Keluar" onClick={() => setConfirm(true)}>
-            <Icon name="logout" />
+          <button
+            className="role-logout"
+            aria-label="Keluar"
+            title="Keluar"
+            onClick={() => setConfirm(true)}
+          >
+            <Icon name="logout" size={24} />
           </button>
         </div>
       </aside>
@@ -97,7 +104,7 @@ export function RoleLayout({ role }: { role: Role }) {
         <Outlet />
       </main>
       <nav className="role-bottom-nav">
-        {items.slice(0, 4).map((item) => (
+        {items.slice(0, role === "admin" ? 4 : 5).map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to.split("/").length === 2}>
             <Icon name={item.icon} />
             <span>{item.label.replace(" Barang", "").replace(" Saya", "")}</span>

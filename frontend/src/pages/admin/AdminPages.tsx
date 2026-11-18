@@ -1,5 +1,8 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
+import { productService, stockLabel, useProducts } from "../../services/products";
+import type { Product } from "../../types";
 
 type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
@@ -18,7 +21,8 @@ type IconName =
   | "edit"
   | "trash"
   | "logout"
-  | "chevron";
+  | "chevron"
+  | "shirt";
 
 const iconPaths: Record<IconName, ReactNode> = {
   home: (
@@ -106,6 +110,7 @@ const iconPaths: Record<IconName, ReactNode> = {
     </>
   ),
   chevron: <path d="m9 5 7 7-7 7" />,
+  shirt: <path d="m8 3-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0Z" />,
 };
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
@@ -145,14 +150,6 @@ function Brand({ compact = false }: { compact?: boolean }) {
     </div>
   );
 }
-
-const products = [
-  { id: 1, name: "Buku Tulis", category: "ATK", price: 5000, stock: 120, art: "book" },
-  { id: 2, name: "Pensil 2B", category: "ATK", price: 3000, stock: 50, art: "pencil" },
-  { id: 3, name: "Penghapus", category: "ATK", price: 2000, stock: 8, art: "eraser" },
-  { id: 4, name: "Rautan", category: "ATK", price: 4000, stock: 0, art: "sharpener" },
-  { id: 5, name: "Minuman Botol", category: "Minuman", price: 8000, stock: 35, art: "bottle" },
-];
 
 const orders = [
   {
@@ -406,16 +403,69 @@ export function Dashboard() {
   );
 }
 
+type ProductForm = { name: string; category: CategoryId; price: string; stock: string };
+const emptyProductForm: ProductForm = {
+  name: "",
+  category: categories[0].id,
+  price: "",
+  stock: "",
+};
+type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
+
 export function Stock() {
+  const items = useProducts();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Semua Kategori");
-  const [items, setItems] = useState(products);
-  const [showAdd, setShowAdd] = useState(false);
-  const filtered = items.filter(
-    (p) =>
-      p.name.toLowerCase().includes(query.toLowerCase()) &&
-      (category === "Semua Kategori" || p.category === category),
-  );
+  const [category, setCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
+  const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
+  const [editing, setEditing] = useState<Product | "new" | null>(null);
+  const [form, setForm] = useState<ProductForm>(emptyProductForm);
+  const [error, setError] = useState("");
+  const filtered = items.filter((p) => {
+    const needle = query.trim().toLowerCase();
+    return (
+      (!needle ||
+        p.name.toLowerCase().includes(needle) ||
+        categoryLabel(p.category).toLowerCase().includes(needle)) &&
+      (category === ALL_CATEGORIES || p.category === category) &&
+      (stockFilter === "Semua Stok" || stockLabel(p.stock) === stockFilter)
+    );
+  });
+  const openNew = () => {
+    setForm(emptyProductForm);
+    setError("");
+    setEditing("new");
+  };
+  const openEdit = (product: Product) => {
+    setForm({
+      name: product.name,
+      category: product.category,
+      price: String(product.price),
+      stock: String(product.stock),
+    });
+    setError("");
+    setEditing(product);
+  };
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    if (form.price.trim() === "" || form.stock.trim() === "") {
+      setError("Harga dan stok wajib diisi.");
+      return;
+    }
+    const input = {
+      name: form.name,
+      category: form.category,
+      price: Number(form.price),
+      stock: Number(form.stock),
+    };
+    try {
+      if (editing === "new") productService.create(input);
+      else productService.update(editing.id, input);
+      setEditing(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Produk gagal disimpan.");
+    }
+  };
   return (
     <>
       <Header title="Kelola Stok" subtitle="Atur dan kelola stok produk di MettaMart." />
@@ -429,17 +479,31 @@ export function Stock() {
               placeholder="Cari nama produk..."
             />
           </label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option>Semua Kategori</option>
-            <option>ATK</option>
-            <option>Minuman</option>
+          <select
+            aria-label="Filter kategori"
+            value={category}
+            onChange={(e) =>
+              setCategory(isCategoryId(e.target.value) ? e.target.value : ALL_CATEGORIES)
+            }
+          >
+            <option value={ALL_CATEGORIES}>Semua Kategori</option>
+            {categories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
           </select>
-          <select>
+          <select
+            aria-label="Filter stok"
+            value={stockFilter}
+            onChange={(e) => setStockFilter(e.target.value as StockFilter)}
+          >
             <option>Semua Stok</option>
             <option>Tersedia</option>
             <option>Hampir Habis</option>
+            <option>Habis</option>
           </select>
-          <button className="primary" onClick={() => setShowAdd(true)}>
+          <button className="primary" onClick={openNew}>
             <Icon name="plus" size={16} /> Tambah Produk
           </button>
         </div>
@@ -467,21 +531,26 @@ export function Stock() {
                   <td>
                     <b>{p.name}</b>
                   </td>
-                  <td>{p.category}</td>
+                  <td>{categoryLabel(p.category)}</td>
                   <td>{money(p.price)}</td>
                   <td className={p.stock < 10 ? "danger" : ""}>{p.stock}</td>
                   <td>
-                    <Status>
-                      {p.stock === 0 ? "Habis" : p.stock < 10 ? "Hampir Habis" : "Tersedia"}
-                    </Status>
+                    <Status>{stockLabel(p.stock)}</Status>
                   </td>
                   <td>
-                    <button className="icon-button" onClick={() => setShowAdd(true)}>
+                    <button
+                      className="icon-button"
+                      aria-label={`Ubah ${p.name}`}
+                      onClick={() => openEdit(p)}
+                    >
                       <Icon name="edit" size={15} />
                     </button>
                     <button
                       className="icon-button"
-                      onClick={() => setItems(items.filter((x) => x.id !== p.id))}
+                      aria-label={`Hapus ${p.name}`}
+                      onClick={() => {
+                        if (window.confirm(`Hapus produk "${p.name}"?`)) productService.remove(p.id);
+                      }}
                     >
                       <Icon name="trash" size={15} />
                     </button>
@@ -495,42 +564,60 @@ export function Stock() {
           Menampilkan {filtered.length} dari {items.length} produk
         </p>
       </div>
-      {showAdd && (
-        <Modal title="Tambah Produk" close={() => setShowAdd(false)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setItems([
-                ...items,
-                {
-                  id: Date.now(),
-                  name: "Produk Baru",
-                  category: "ATK",
-                  price: 5000,
-                  stock: 20,
-                  art: "book",
-                },
-              ]);
-              setShowAdd(false);
-            }}
-          >
+      {editing && (
+        <Modal title={editing === "new" ? "Tambah Produk" : "Ubah Produk"} close={() => setEditing(null)}>
+          <form onSubmit={save} noValidate>
+            {error && (
+              <p className="auth-error" role="alert">
+                {error}
+              </p>
+            )}
             <label>
               Nama Produk
-              <input defaultValue="Produk Baru" />
+              <input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Contoh: Kemeja Seragam"
+              />
             </label>
             <div className="form-row">
               <label>
                 Kategori
-                <select>
-                  <option>ATK</option>
-                  <option>Minuman</option>
+                <select
+                  value={form.category}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (isCategoryId(next)) setForm({ ...form, category: next });
+                  }}
+                >
+                  {categories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
                 Stok
-                <input type="number" defaultValue="20" />
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                />
               </label>
             </div>
+            <label>
+              Harga (Rp)
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={form.price}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
+              />
+            </label>
             <button className="primary wide">Simpan Produk</button>
           </form>
         </Modal>
@@ -825,7 +912,7 @@ export function Reports() {
             </div>
             <ul>
               <li>
-                <i /> ATK <b>45%</b>
+                <i /> Alat Tulis <b>45%</b>
               </li>
               <li>
                 <i /> Minuman <b>25%</b>
@@ -1042,7 +1129,11 @@ function Modal({
 }
 
 function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }) {
+  const products = useProducts();
   const [query, setQuery] = useState("");
+  const [mobileCategory, setMobileCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(
+    ALL_CATEGORIES,
+  );
   const [cart, setCart] = useState<number[]>([]);
   const [mobileNotice, setMobileNotice] = useState<(typeof notifications)[number] | null>(null);
   const mobileView =
@@ -1054,8 +1145,13 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
           ? "notifications"
           : "orders";
   const visible = useMemo(
-    () => products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
-    [query],
+    () =>
+      products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query.toLowerCase()) &&
+          (mobileCategory === ALL_CATEGORIES || p.category === mobileCategory),
+      ),
+    [products, query, mobileCategory],
   );
   return (
     <div className="mobile-app">
@@ -1090,12 +1186,18 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
             <button onClick={() => setView("stock")}>Lihat Semua ›</button>
           </div>
           <div className="category-grid">
-            {["Alat Tulis", "Buku", "Minuman", "Lainnya"].map((x, i) => (
-              <button onClick={() => setView("stock")} key={x}>
+            {categories.map((item) => (
+              <button
+                onClick={() => {
+                  setMobileCategory(item.id);
+                  setView("stock");
+                }}
+                key={item.id}
+              >
                 <span>
-                  <Icon name={i === 2 ? "bag" : i === 3 ? "box" : "edit"} />
+                  <Icon name={item.icon === "shirt" ? "shirt" : "box"} />
                 </span>
-                {x}
+                {item.label}
               </button>
             ))}
           </div>
@@ -1141,10 +1243,15 @@ function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }
             />
           </label>
           <div className="tabs mobile-tabs">
-            <button className="active">Semua</button>
-            <button>Alat Tulis</button>
-            <button>Buku</button>
-            <button>Minuman</button>
+            {[{ id: ALL_CATEGORIES, label: "Semua" }, ...categories].map((item) => (
+              <button
+                key={item.id}
+                className={mobileCategory === item.id ? "active" : ""}
+                onClick={() => setMobileCategory(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="mobile-products">
             {visible.map((p) => (
