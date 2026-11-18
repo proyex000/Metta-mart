@@ -70,6 +70,7 @@ class Order(models.Model):
 
     code = models.CharField(max_length=24, unique=True, editable=False)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders")
+    beneficiary = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="beneficiary_orders")
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
     payment_status = models.CharField(max_length=24, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
