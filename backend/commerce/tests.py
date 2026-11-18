@@ -81,9 +81,12 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         code = response.data["code"]
         self.client.force_authenticate(user=self.student)
-        submitted = self.client.post(f"/api/orders/{code}/payment-submission/", {"note": "Referensi transfer TEST-001"}, format="json")
+        submitted = self.client.post(f"/api/orders/{code}/payment-submission/", {"sender_name": "Nama Pengirim", "payment_source": "BCA", "account_last4": "1234", "note": "Transfer pukul 10.00"}, format="json")
         self.assertEqual(submitted.status_code, 200)
         self.assertEqual(submitted.data["payment_status"], Order.PaymentStatus.PENDING)
+        self.assertEqual(submitted.data["payment_sender_name"], "Nama Pengirim")
+        self.assertEqual(submitted.data["payment_source"], "BCA")
+        self.assertEqual(submitted.data["payment_account_last4"], "1234")
         self.client.force_authenticate(user=self.admin)
         self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
         self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
