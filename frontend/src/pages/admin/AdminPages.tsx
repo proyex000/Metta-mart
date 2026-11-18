@@ -260,10 +260,10 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
       </div>
       <div className="topbar__meta">
         <span className="topbar__date">
-          <Icon name="calendar" size={15} /> 12 Oktober 2025
+          <Icon name="calendar" size={15} /> {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
         </span>
         <span className="topbar__time">
-          <Icon name="clock" size={15} /> 10:24
+          <Icon name="clock" size={15} /> {new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
         </span>
         <span className="avatar" aria-label="Avatar Admin">A</span>
         <b>Admin</b>
