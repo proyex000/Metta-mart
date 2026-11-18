@@ -53,7 +53,7 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = ("method", "status", "amount", "cash_received", "change_due", "reference", "paid_at", "verified_by_name", "verification_note")
+        fields = ("method", "status", "amount", "cash_received", "change_due", "reference", "payment_reference", "paid_at", "verified_by_name", "verification_note")
 
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
@@ -91,14 +91,11 @@ class CheckoutItemSerializer(serializers.Serializer):
 
 class CheckoutSerializer(serializers.Serializer):
     items = CheckoutItemSerializer(many=True, allow_empty=False)
-    fulfillment = serializers.ChoiceField(choices=Order.Fulfillment.choices)
-    delivery_address = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+    fulfillment = serializers.ChoiceField(choices=((Order.Fulfillment.PICKUP, "Ambil di koperasi"),), default=Order.Fulfillment.PICKUP)
     customer_note = serializers.CharField(required=False, allow_blank=True, max_length=500)
     payment_method = serializers.ChoiceField(choices=Payment.Method.choices)
 
     def validate(self, attrs):
-        if attrs["fulfillment"] == Order.Fulfillment.DELIVERY and not attrs.get("delivery_address", "").strip():
-            raise serializers.ValidationError({"delivery_address": "Alamat wajib diisi untuk pengiriman."})
         ids = [item["product_id"] for item in attrs["items"]]
         if len(ids) != len(set(ids)):
             raise serializers.ValidationError({"items": "Produk yang sama harus digabung dalam satu baris."})
