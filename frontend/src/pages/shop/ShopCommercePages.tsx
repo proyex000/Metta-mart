@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { Icon, PageTitle, ProductArt, Status } from "../../components/ui";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { useProducts, stockLabel } from "../../services/products";
+import { useAuth } from "../../hooks/useAuth";
 import { apiRequest } from "../../services/api";
 import { createCheckout, getOrder, listOrders, orderAction, pageResults, type ApiOrder } from "../../services/commerce";
 import type { Role } from "../../types";
@@ -12,6 +13,29 @@ const formatDate = (value: string) => new Date(value).toLocaleString("id-ID", { 
 const labels: Record<string, string> = { awaiting_payment: "Menunggu pembayaran", pending_review: "Menunggu konfirmasi", accepted: "Diterima", processing: "Diproses", ready: "Siap diambil", out_for_delivery: "Dalam pengiriman", completed: "Selesai", rejected: "Ditolak", cancelled: "Dibatalkan", expired: "Kedaluwarsa" };
 type CheckoutConfig = { cash_enabled: boolean; qris_enabled: boolean; qris_image_url: string; pickup_enabled: boolean; delivery_enabled: boolean; delivery_fee: number };
 const defaultConfig: CheckoutConfig = { cash_enabled: true, qris_enabled: false, qris_image_url: "", pickup_enabled: true, delivery_enabled: false, delivery_fee: 0 };
+
+
+export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
+  const { session } = useAuth();
+  const navigate = useNavigate();
+  const products = useProducts();
+  const [orders, setOrders] = useState<ApiOrder[]>([]);
+  const base = "/" + role;
+  useEffect(() => {
+    let active = true;
+    listOrders().then((response) => { if (active) setOrders(pageResults(response)); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  return <>
+    <PageTitle title={"Halo, " + (session?.name || "Pengguna")} subtitle={role === "parent" ? "Lihat katalog dan pantau pesanan akun Anda." : "Temukan kebutuhan sekolah yang tersedia di koperasi."} />
+    <label className="search shop-search"><Icon name="search" /><input placeholder="Cari barang, buku, atau kebutuhan sekolah..." onFocus={() => navigate(base + "/stock")} /></label>
+    <div className="section-heading"><h2>Kategori</h2><Link to={base + "/stock"}>Lihat Semua ›</Link></div>
+    <section className="category-grid">{categories.map((item) => <Link to={base + "/stock?category=" + item.id} key={item.id}><span><Icon name={item.icon} /></span>{item.label}</Link>)}</section>
+    <div className="section-heading"><h2>{role === "parent" ? "Pesanan Terbaru" : "Stok Tersedia"}</h2><Link to={role === "parent" ? base + "/orders" : base + "/stock"}>Lihat Semua ›</Link></div>
+    {role === "parent" ? <section className="shop-orders shop-dashboard-orders">{orders.slice(0, 3).map((order) => <article key={order.code}><div><b>#{order.code}</b><Status>{labels[order.status] || order.status}</Status></div><small>{formatDate(order.created_at)}</small><footer><span>Total <strong>{money(order.total)}</strong></span><Link to={base + "/orders/" + order.code}>Lihat Detail ›</Link></footer></article>)}{!orders.length && <div className="empty-state"><p>Belum ada pesanan pada akun ini.</p></div>}</section> : <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={base + "/order?product=" + product.id}>Pesan</Link></article>)}{!products.length && <div className="empty-state"><p>Katalog belum memiliki produk aktif.</p></div>}</section>}
+    <section className="shop-promo"><Icon name="bag" size={28} /><div><b>MettaMart</b><p>Pesan kebutuhan sekolah dan pantau statusnya melalui akun Anda.</p></div></section>
+  </>;
+}
 
 export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
   const products = useProducts();

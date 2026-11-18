@@ -11,11 +11,8 @@ import { Orders as CommerceOrders } from "../pages/admin/OrderManagement";
 import { useAuth } from "../hooks/useAuth";
 import { RoleLayout } from "../layouts/RoleLayout";
 import { LoginPage, RegisterPage, RoleChooser, SplashPage } from "../pages/auth/AuthPages";
-import {
-  ShopDashboard,
-  ShopNotifications,
-} from "../pages/shop/ShopPages";
-import { CreateOrder, OrderDetail, ShopOrders, ShopStock } from "../pages/shop/ShopCommercePages";
+import { ShopNotifications } from "../pages/shop/ShopPages";
+import { CreateOrder, OrderDetail, ShopDashboard, ShopOrders, ShopStock } from "../pages/shop/ShopCommercePages";
 import { ShopSettings } from "../pages/shop/ShopSettings";
 import type { Role } from "../types";
 

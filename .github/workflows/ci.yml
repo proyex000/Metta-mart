@@ -33,7 +33,7 @@ jobs:
       - name: Check Django configuration
         run: python manage.py check
       - name: Check migration consistency
-        run: python manage.py makemigrations --dry-run --verbosity 3
+        run: python manage.py makemigrations --check --dry-run
       - name: Apply migrations
         run: python manage.py migrate --noinput
       - name: Run backend tests

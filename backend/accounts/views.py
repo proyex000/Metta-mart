@@ -78,6 +78,7 @@ class RegisterView(generics.GenericAPIView):
 
 class AdminUserListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminRole]
+    pagination_class = None
     queryset = User.objects.all().order_by("full_name")
 
     def get_serializer_class(self):
