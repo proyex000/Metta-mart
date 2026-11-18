@@ -97,8 +97,8 @@ export function ShopSettings({ role }: { role: ShopRole }) {
               <input required value={profileName} onChange={(event) => setProfileName(event.target.value)} />
             </label>
             <label className="shop-settings-field">
-              <span>{isParent ? "Email akun" : "NISN / identitas akun"}</span>
-              <input required type={isParent ? "email" : "text"} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} />
+              <span>{isParent ? "Email akun" : "Email kontak (opsional)"}</span>
+              <input required={isParent} type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} />
             </label>
             <div className="shop-settings-field">
               <span>Jenis akun</span>
@@ -106,7 +106,7 @@ export function ShopSettings({ role }: { role: ShopRole }) {
             </div>
             <button className="shop-settings-save-button" type="submit">Simpan profil</button>
             {profileError && <p className="auth-error" role="alert">{profileError}</p>}
-            {profileSaved && <p className="shop-settings-save-state" role="status">Profil diperbarui untuk sesi ini.</p>}
+            {profileSaved && <p className="shop-settings-save-state" role="status">Profil berhasil diperbarui di server.</p>}
             <p className="shop-settings-note">Data profil tersimpan di browser pada prototipe ini. Sinkronisasi server memerlukan API backend.</p>
           </form>
         </section>
