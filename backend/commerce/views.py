@@ -295,26 +295,40 @@ class OrderActionView(APIView):
                 if order.payment.status == Payment.Status.PENDING_VERIFICATION:
                     order.payment.status = Payment.Status.EXPIRED
                     order.payment.save(update_fields=("status", "updated_at"))
-                elif order.payment.status == Payment.Status.PAID and order.payment.method == Payment.Method.QRIS:
+                elif order.payment.status == Payment.Status.PAID and order.payment.method != Payment.Method.CASH:
                     order.payment.status = Payment.Status.REFUND_PENDING
-                    order.payment.verification_note = "Pesanan dibatalkan; pengembalian dana QRIS perlu diproses manual."
+                    order.payment.verification_note = "Pesanan dibatalkan; pengembalian dana perlu diproses manual."
                     order.payment.save(update_fields=("status", "verification_note", "updated_at"))
                 record_order_status(order, Order.Status.CANCELLED, request.user, note or "Dibatalkan")
                 if role != User.Role.ADMIN:
                     notify_admins("order.cancelled", "Pesanan dibatalkan", "Pesanan " + order.code + " dibatalkan pelanggan.")
+            elif action == "submit_payment_reference":
+                if role not in {User.Role.STUDENT, User.Role.PARENT} or order.customer_id != request.user.id:
+                    raise PermissionDenied("Hanya pemilik pesanan yang dapat mengirim referensi pembayaran.")
+                if order.status != Order.Status.AWAITING_PAYMENT or order.payment.method != Payment.Method.BANK_TRANSFER:
+                    raise ValidationError("Pesanan ini tidak menunggu pembayaran transfer bank.")
+                if order.payment.status not in {Payment.Status.UNPAID, Payment.Status.FAILED}:
+                    raise ValidationError("Referensi pembayaran sudah dikirim atau pesanan tidak dapat dibayar.")
+                payment_reference = str(request.data.get("payment_reference", "")).strip()
+                if not payment_reference or len(payment_reference) > 120:
+                    raise ValidationError({"payment_reference": "Masukkan nomor referensi transfer yang valid (maksimal 120 karakter)."})
+                order.payment.payment_reference = payment_reference
+                order.payment.status = Payment.Status.PENDING_VERIFICATION
+                order.payment.save(update_fields=("payment_reference", "status", "updated_at"))
+                notify_admins("payment.transfer.submitted", "Referensi transfer masuk", "Pesanan " + order.code + " menunggu verifikasi transfer.")
             elif action == "verify_payment":
                 if role != User.Role.ADMIN:
-                    raise PermissionDenied("Hanya admin yang dapat memverifikasi pembayaran QRIS.")
-                if order.status != Order.Status.AWAITING_PAYMENT or order.payment.method != Payment.Method.QRIS or order.payment.status != Payment.Status.PENDING_VERIFICATION:
-                    raise ValidationError("Pesanan ini tidak sedang menunggu verifikasi QRIS.")
-                if order.expires_at and order.expires_at <= timezone.now():
-                    raise ValidationError("Batas pembayaran telah berakhir. Pembayaran tidak dapat diverifikasi.")
+                    raise PermissionDenied("Hanya admin yang dapat memverifikasi pembayaran.")
+                if order.status != Order.Status.AWAITING_PAYMENT or order.payment.method not in {Payment.Method.QRIS, Payment.Method.BANK_TRANSFER} or order.payment.status != Payment.Status.PENDING_VERIFICATION:
+                    raise ValidationError("Pesanan ini tidak sedang menunggu verifikasi pembayaran.")
+                if order.payment.method == Payment.Method.QRIS and order.expires_at and order.expires_at <= timezone.now():
+                    raise ValidationError("Batas pembayaran QRIS telah berakhir. Pembayaran tidak dapat diverifikasi.")
                 order.payment.status = Payment.Status.PAID
                 order.payment.paid_at = timezone.now()
                 order.payment.verified_by = request.user
                 order.payment.verification_note = note
                 order.payment.save(update_fields=("status", "paid_at", "verified_by", "verification_note", "updated_at"))
-                record_order_status(order, Order.Status.PENDING_REVIEW, request.user, "Pembayaran QRIS diverifikasi admin")
+                record_order_status(order, Order.Status.PENDING_REVIEW, request.user, "Pembayaran diverifikasi admin")
             elif action == "mark_refunded":
                 if role != User.Role.ADMIN:
                     raise PermissionDenied("Hanya admin yang dapat mencatat pengembalian dana.")
