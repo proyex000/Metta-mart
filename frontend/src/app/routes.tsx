@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
 import {
-  Dashboard,
   Notifications,
   Reports,
   Settings,
@@ -8,6 +7,8 @@ import {
 } from "../pages/admin/AdminPages";
 import { Brand } from "../components/ui";
 import { Orders as CommerceOrders } from "../pages/admin/OrderManagement";
+import { Dashboard as CommerceDashboard } from "../pages/admin/AdminDashboard";
+import { CashierPOS } from "../pages/cashier/CashierPOS";
 import { useAuth } from "../hooks/useAuth";
 import { RoleLayout } from "../layouts/RoleLayout";
 import { LoginPage, RegisterPage, RoleChooser, SplashPage } from "../pages/auth/AuthPages";
@@ -32,22 +33,6 @@ function SessionRedirect() {
   return session ? <Navigate to={`/${session.role}`} replace /> : <SplashPage />;
 }
 
-function CashierHome() {
-  return (
-    <section className="role-page">
-      <header className="role-page-title">
-        <div>
-          <h1>Dashboard Kasir</h1>
-          <p>Akun kasir sudah aktif. Modul POS akan dibangun pada Phase 3.</p>
-        </div>
-      </header>
-      <div className="empty-state">
-        <h2>Modul kasir belum tersedia</h2>
-        <p>Transaksi penjualan belum dapat dilakukan sampai POS dan manajemen shift selesai dibangun.</p>
-      </div>
-    </section>
-  );
-}
 
 function NotFound() {
   const { session } = useAuth();
@@ -87,7 +72,7 @@ export const router = createBrowserRouter([
     path: "/admin",
     element: <ProtectedRole role="admin" />,
     children: [
-      { index: true, Component: Dashboard },
+      { index: true, Component: CommerceDashboard },
       { path: "stock", Component: Stock },
       { path: "orders", Component: CommerceOrders },
       { path: "notifications", Component: Notifications },
@@ -99,7 +84,7 @@ export const router = createBrowserRouter([
   {
     path: "/cashier",
     element: <ProtectedRole role="cashier" />,
-    children: [{ index: true, Component: CashierHome }, { path: "*", Component: RoleNotFound }],
+    children: [{ index: true, Component: CashierPOS }, { path: "*", Component: RoleNotFound }],
   },
   {
     path: "/parent",

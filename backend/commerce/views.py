@@ -53,6 +53,13 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
         else:
             instance.delete()
 
+    def perform_destroy(self, instance):
+        if instance.products.exists():
+            instance.is_active = False
+            instance.save(update_fields=("is_active",))
+        else:
+            instance.delete()
+
 
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
@@ -60,7 +67,8 @@ class ProductListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Product.objects.select_related("category")
-        if self.request.user.role != User.Role.ADMIN:
+        include_inactive = self.request.user.role == User.Role.ADMIN and self.request.query_params.get("include_inactive") == "true"
+        if not include_inactive:
             queryset = queryset.filter(is_active=True, category__is_active=True)
         category = self.request.query_params.get("category")
         search = self.request.query_params.get("search", "").strip()
@@ -188,7 +196,7 @@ class CheckoutView(APIView):
                 lines.append((product, quantity, product.price * quantity))
             payment_status = Payment.Status.PENDING_VERIFICATION if payment_method == Payment.Method.QRIS else Payment.Status.UNPAID
             order_status = Order.Status.AWAITING_PAYMENT if payment_method == Payment.Method.QRIS else Order.Status.PENDING_REVIEW
-            order = Order.objects.create(customer=request.user, status=order_status, fulfillment=data["fulfillment"], delivery_address=data.get("delivery_address", "").strip(), customer_note=data.get("customer_note", "").strip(), subtotal=subtotal, delivery_fee=delivery_fee, total=subtotal + delivery_fee, expires_at=timezone.now() + timedelta(minutes=20) if payment_method == Payment.Method.QRIS else None)
+            order = Order.objects.create(customer=request.user, created_by=request.user, status=order_status, fulfillment=data["fulfillment"], delivery_address=data.get("delivery_address", "").strip(), customer_note=data.get("customer_note", "").strip(), subtotal=subtotal, delivery_fee=delivery_fee, total=subtotal + delivery_fee, expires_at=timezone.now() + timedelta(minutes=20) if payment_method == Payment.Method.QRIS else None)
             for product, quantity, line_total in lines:
                 changed = Product.objects.filter(pk=product.pk, stock__gte=quantity).update(stock=F("stock") - quantity)
                 if not changed:
@@ -256,12 +264,23 @@ class OrderActionView(APIView):
                     raise ValidationError("Pesanan ini tidak sedang menunggu verifikasi QRIS.")
                 if order.expires_at and order.expires_at <= timezone.now():
                     raise ValidationError("Batas pembayaran telah berakhir. Pembayaran tidak dapat diverifikasi.")
+                if order.expires_at and order.expires_at <= timezone.now():
+                    raise ValidationError("Batas pembayaran telah berakhir. Pembayaran tidak dapat diverifikasi.")
                 order.payment.status = Payment.Status.PAID
                 order.payment.paid_at = timezone.now()
                 order.payment.verified_by = request.user
                 order.payment.verification_note = note
                 order.payment.save(update_fields=("status", "paid_at", "verified_by", "verification_note", "updated_at"))
                 record_order_status(order, Order.Status.PENDING_REVIEW, request.user, "Pembayaran QRIS diverifikasi admin")
+            elif action == "mark_refunded":
+                if role != User.Role.ADMIN:
+                    raise PermissionDenied("Hanya admin yang dapat mencatat pengembalian dana.")
+                if order.payment.status != Payment.Status.REFUND_PENDING:
+                    raise ValidationError("Pembayaran ini tidak sedang menunggu pengembalian dana.")
+                order.payment.status = Payment.Status.REFUNDED
+                order.payment.verified_by = request.user
+                order.payment.verification_note = note or "Pengembalian dana telah dilakukan dan dikonfirmasi admin."
+                order.payment.save(update_fields=("status", "verified_by", "verification_note", "updated_at"))
             elif action == "mark_refunded":
                 if role != User.Role.ADMIN:
                     raise PermissionDenied("Hanya admin yang dapat mencatat pengembalian dana.")
@@ -305,6 +324,8 @@ class OrderActionView(APIView):
                     raise ValidationError("Perubahan status tidak sesuai alur pesanan.")
                 if action == "dispatch" and order.fulfillment != Order.Fulfillment.DELIVERY:
                     raise ValidationError("Pesanan ambil di toko tidak dapat dikirim.")
+                if action == "complete" and ((order.fulfillment == Order.Fulfillment.PICKUP and order.status != Order.Status.READY) or (order.fulfillment == Order.Fulfillment.DELIVERY and order.status != Order.Status.OUT_FOR_DELIVERY)):
+                    raise ValidationError("Status pesanan belum sesuai dengan metode pemenuhan.")
                 if action == "complete" and ((order.fulfillment == Order.Fulfillment.PICKUP and order.status != Order.Status.READY) or (order.fulfillment == Order.Fulfillment.DELIVERY and order.status != Order.Status.OUT_FOR_DELIVERY)):
                     raise ValidationError("Status pesanan belum sesuai dengan metode pemenuhan.")
                 if action == "complete" and order.payment.method == Payment.Method.QRIS and order.payment.status != Payment.Status.PAID:

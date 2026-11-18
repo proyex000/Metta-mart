@@ -1,8 +1,14 @@
 from django.urls import path
 from .config_views import CheckoutConfigAdminView, CheckoutConfigView
+from .pos_views import CashMovementView, CloseShiftView, CurrentShiftView, OpenShiftView, POSCheckoutView
 from .views import CategoryDetailView, CategoryListCreateView, CheckoutView, OrderActionView, OrderDetailView, OrderListView, ProductDetailView, ProductListCreateView, StockAdjustmentView, StockMovementListView
 
 urlpatterns = [
+    path("pos/shifts/current/", CurrentShiftView.as_view(), name="pos-current-shift"),
+    path("pos/shifts/open/", OpenShiftView.as_view(), name="pos-open-shift"),
+    path("pos/shifts/close/", CloseShiftView.as_view(), name="pos-close-shift"),
+    path("pos/shifts/movements/", CashMovementView.as_view(), name="pos-cash-movement"),
+    path("pos/checkout/", POSCheckoutView.as_view(), name="pos-checkout"),
     path("store/checkout-config/", CheckoutConfigView.as_view(), name="checkout-config"),
     path("admin/checkout-config/", CheckoutConfigAdminView.as_view(), name="admin-checkout-config"),
     path("categories/", CategoryListCreateView.as_view(), name="category-list"),

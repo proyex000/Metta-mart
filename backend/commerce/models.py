@@ -84,7 +84,8 @@ class Order(models.Model):
         DELIVERY = "delivery", "Pengiriman"
 
     code = models.CharField(max_length=32, unique=True, editable=False)
-    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="commerce_orders")
+    customer = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="commerce_orders")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="created_commerce_orders")
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.PENDING_REVIEW)
     fulfillment = models.CharField(max_length=12, choices=Fulfillment.choices)
     delivery_address = models.TextField(blank=True)
@@ -118,6 +119,43 @@ class OrderItem(models.Model):
     line_total = models.PositiveBigIntegerField()
 
 
+
+class CashierShift(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Terbuka"
+        CLOSED = "closed", "Ditutup"
+
+    cashier = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="cashier_shifts")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
+    opening_cash = models.PositiveBigIntegerField(default=0)
+    expected_cash = models.PositiveBigIntegerField(default=0)
+    closing_cash = models.PositiveBigIntegerField(null=True, blank=True)
+    opening_note = models.CharField(max_length=240, blank=True)
+    closing_note = models.CharField(max_length=240, blank=True)
+    opened_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-opened_at",)
+        indexes = [models.Index(fields=("cashier", "status"), name="commerce_shift_user_status_idx")]
+
+
+class CashMovement(models.Model):
+    class Kind(models.TextChoices):
+        CASH_IN = "cash_in", "Kas masuk"
+        CASH_OUT = "cash_out", "Kas keluar"
+
+    shift = models.ForeignKey(CashierShift, on_delete=models.PROTECT, related_name="cash_movements")
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    amount = models.PositiveBigIntegerField()
+    note = models.CharField(max_length=240)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+
+
 class Payment(models.Model):
     class Method(models.TextChoices):
         CASH = "cash", "Tunai"
@@ -133,6 +171,7 @@ class Payment(models.Model):
         REFUNDED = "refunded", "Dikembalikan"
 
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="payment")
+    shift = models.ForeignKey(CashierShift, null=True, blank=True, on_delete=models.SET_NULL, related_name="payments")
     method = models.CharField(max_length=12, choices=Method.choices)
     status = models.CharField(max_length=24, choices=Status.choices)
     amount = models.PositiveBigIntegerField()

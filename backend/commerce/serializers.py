@@ -57,15 +57,22 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
-    customer_identifier = serializers.CharField(source="customer.identifier", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_identifier = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True, default=None)
+
+    def get_customer_name(self, obj):
+        return obj.customer.full_name if obj.customer_id else "Pelanggan toko"
+
+    def get_customer_identifier(self, obj):
+        return obj.customer.identifier if obj.customer_id else ""
     items = OrderItemSerializer(many=True, read_only=True)
     payment = PaymentSerializer(read_only=True)
     status_history = OrderStatusHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer", "customer_name", "customer_identifier", "status", "fulfillment", "delivery_address", "customer_note", "admin_note", "subtotal", "delivery_fee", "total", "expires_at", "items", "payment", "status_history", "created_at", "updated_at")
+        fields = ("id", "code", "customer", "customer_name", "customer_identifier", "created_by_name", "status", "fulfillment", "delivery_address", "customer_note", "admin_note", "subtotal", "delivery_fee", "total", "expires_at", "items", "payment", "status_history", "created_at", "updated_at")
         read_only_fields = fields
 
 

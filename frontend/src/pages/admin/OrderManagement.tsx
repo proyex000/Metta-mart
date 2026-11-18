@@ -30,12 +30,17 @@ export function Orders() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const response = await listOrders(statusFilter || undefined);
+      const response = await listOrders(statusFilter || undefined, page);
       setOrders(pageResults(response));
       setCount(Array.isArray(response) ? response.length : response.count);
+      setHasNext(!Array.isArray(response) && Boolean(response.next));
+      setHasPrevious(!Array.isArray(response) && Boolean(response.previous));
       if (selected) {
         try { setSelected(await getOrder(selected.code)); } catch { setSelected(null); }
       }
@@ -43,7 +48,7 @@ export function Orders() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Daftar pesanan gagal dimuat.");
     } finally { setLoading(false); }
-  }, [statusFilter, selected?.code]);
+  }, [statusFilter, selected?.code, page]);
 
   useEffect(() => {
     void refresh();
@@ -62,9 +67,11 @@ export function Orders() {
     try {
       const updated = await orderAction(selected.code, action, note.trim());
       setSelected(updated); setNote("");
-      const response = await listOrders(statusFilter || undefined);
+      const response = await listOrders(statusFilter || undefined, page);
       setOrders(pageResults(response));
       setCount(Array.isArray(response) ? response.length : response.count);
+      setHasNext(!Array.isArray(response) && Boolean(response.next));
+      setHasPrevious(!Array.isArray(response) && Boolean(response.previous));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Aksi pesanan gagal diproses.");
     } finally { setBusy(false); }
@@ -84,11 +91,12 @@ export function Orders() {
   return <>
     <header className="topbar"><div><h1>Pesanan</h1><p>Terima, tolak, verifikasi pembayaran, dan pantau proses pesanan.</p></div><button className="secondary-btn" onClick={() => void refresh()}>Muat ulang</button></header>
     <div className="panel table-panel">
-      <div className="tabs">{tabs.map((tab) => <button key={tab.value || "all"} className={statusFilter === tab.value ? "active" : ""} onClick={() => setStatusFilter(tab.value)}>{tab.label}</button>)}</div>
+      <div className="tabs">{tabs.map((tab) => <button key={tab.value || "all"} className={statusFilter === tab.value ? "active" : ""} onClick={() => { setPage(1); setStatusFilter(tab.value); }}>{tab.label}</button>)}</div>
       <label className="search order-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode pesanan / nama / identitas pelanggan..." /></label>
       {error && <p className="auth-error" role="alert">{error}</p>}
       {loading ? <p className="empty-state">Memuat pesanan dari server...</p> : shown.length ? <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Pemenuhan</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{dateTime(order.created_at)}</td><td>{order.customer_name}<small className="table-subtext">{order.customer_identifier}</small></td><td>{order.fulfillment === "pickup" ? "Ambil di toko" : "Pengiriman"}</td><td><b>{money(order.total)}</b></td><td><span className="status status--amber">{statusLabels[order.status] || order.status}</span></td><td><button className="primary small" onClick={() => { setSelected(order); setNote(""); }}>Detail</button></td></tr>)}</tbody></table></div> : <div className="empty-state"><h2>Belum ada pesanan</h2><p>Pesanan baru akan muncul di sini setelah pelanggan checkout.</p></div>}
       <p className="table-foot">Menampilkan {shown.length} pesanan pada halaman ini · Total cocok: {count}</p>
+      <div className="pagination-controls"><button className="secondary-btn" disabled={!hasPrevious} onClick={() => setPage((value) => Math.max(1, value - 1))}>Sebelumnya</button><span>Halaman {page}</span><button className="secondary-btn" disabled={!hasNext} onClick={() => setPage((value) => value + 1)}>Selanjutnya</button></div>
     </div>
     {selected && <div className="modal-backdrop" onMouseDown={() => setSelected(null)}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="order-detail-title" onMouseDown={(event) => event.stopPropagation()}><div className="panel__title"><h2 id="order-detail-title">Detail {selected.code}</h2><button type="button" onClick={() => setSelected(null)}>×</button></div>
       <div className="admin-order-detail"><p><span>Pelanggan</span><b>{selected.customer_name} · {selected.customer_identifier}</b></p><p><span>Dibuat</span><b>{dateTime(selected.created_at)}</b></p><p><span>Status pesanan</span><b>{statusLabels[selected.status] || selected.status}</b></p><p><span>Status pembayaran</span><b>{paymentLabels[selected.payment.status] || selected.payment.status} · {selected.payment.method.toUpperCase()}</b></p><p><span>Total</span><b>{money(selected.total)}</b></p><p><span>Pengambilan</span><b>{selected.fulfillment === "pickup" ? "Ambil di toko" : `Kirim ke: ${selected.delivery_address}`}</b></p>{selected.customer_note && <p><span>Catatan pelanggan</span><b>{selected.customer_note}</b></p>}

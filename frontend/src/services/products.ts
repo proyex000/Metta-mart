@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { isCategoryId } from "../data/categories";
 import type { Product, ProductInput } from "../types";
 import { adjustStock, createProduct, deleteProduct, listProducts, pageResults, setStock, updateProduct } from "./commerce";
+import type { ApiProduct } from "./commerce";
 
 let items: Product[] = [];
 let loaded = false;
@@ -9,7 +10,7 @@ let loadingPromise: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
 
-function fromApi(value: Awaited<ReturnType<typeof listProducts>> extends infer T ? T extends { results: (infer P)[] } ? P : T extends (infer P)[] ? P : never : never): Product {
+function fromApi(value: ApiProduct): Product {
   return {
     id: value.id,
     name: value.name,
@@ -31,8 +32,15 @@ async function refresh(force = false) {
   if (loaded && !force) return;
   if (loadingPromise) return loadingPromise;
   loadingPromise = (async () => {
-    const response = await listProducts();
-    items = pageResults(response).map((item) => fromApi(item as Parameters<typeof fromApi>[0]));
+    const all: ApiProduct[] = [];
+    let page = 1;
+    while (page <= 1000) {
+      const response = await listProducts({ page });
+      all.push(...pageResults(response));
+      if (Array.isArray(response) || !response.next) break;
+      page += 1;
+    }
+    items = all.map(fromApi);
     loaded = true;
     emit();
   })();
@@ -48,7 +56,7 @@ export const productService = {
     const created = await createProduct({ name: input.name.trim(), category_slug: input.category, price: input.price });
     let current = created;
     if (input.stock > 0) current = await adjustStock(created.id, input.stock, "Stok awal produk");
-    const product = fromApi(current as Parameters<typeof fromApi>[0]);
+    const product = fromApi(current);
     items = [...items, product].sort((a, b) => a.name.localeCompare(b.name, "id"));
     loaded = true;
     emit();
@@ -60,7 +68,7 @@ export const productService = {
     if (!previous) throw new Error("Produk tidak ditemukan.");
     let updated = await updateProduct(id, { name: input.name.trim(), category_slug: input.category, price: input.price });
     if (input.stock !== previous.stock) updated = await setStock(id, input.stock, previous.stock, "Penyesuaian stok dari halaman katalog");
-    const product = fromApi(updated as Parameters<typeof fromApi>[0]);
+    const product = fromApi(updated);
     items = items.map((item) => item.id === id ? product : item);
     emit();
     return product;

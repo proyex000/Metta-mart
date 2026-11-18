@@ -23,6 +23,11 @@ Backend menggunakan Django, Django REST Framework, session cookie HttpOnly, CSRF
 - Catalog: `GET/POST /api/categories/`, `GET/PATCH/DELETE /api/categories/{id}/`, `GET/POST /api/products/`, `GET/PATCH/DELETE /api/products/{id}/`.
 - Inventory: `POST /api/products/{id}/stock-adjustments/`, `GET /api/admin/stock-movements/`.
 - Orders: `POST /api/orders/checkout/`, `GET /api/orders/`, `GET /api/orders/{code}/`, `POST /api/orders/{code}/actions/`.
+- POS/shift: `GET /api/pos/shifts/current/`, `POST /api/pos/shifts/open/`, `POST /api/pos/shifts/close/`, `POST /api/pos/shifts/movements/`, `POST /api/pos/checkout/`.
+
+## POS and cashier shifts
+
+Cashier/Admin must open a shift with an opening cash balance before POS checkout. Each POS cash sale reduces stock and is linked to the active shift. Expected cash is calculated from opening cash + paid cash sales + cash-in - cash-out. Closing a shift records the physical closing cash and variance. POS transactions are completed immediately and recorded as paid cash sales.
 
 ## Order flow
 

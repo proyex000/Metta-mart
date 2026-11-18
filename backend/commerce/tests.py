@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
-from .models import Category, Order, Payment, Product, StockMovement
+from .models import CashierShift, Category, Order, Payment, Product, StockMovement
 
 
 class CommerceApiTests(TestCase):
@@ -13,6 +13,7 @@ class CommerceApiTests(TestCase):
         self.client = APIClient()
         self.admin = User.objects.create_user("admin@test.local", "TestPassword!2026", full_name="Admin", role=User.Role.ADMIN, is_staff=True)
         self.student = User.objects.create_user("1234567890", "TestPassword!2026", full_name="Student", role=User.Role.STUDENT)
+        self.cashier = User.objects.create_user("cashier@test.local", "TestPassword!2026", full_name="Cashier", role=User.Role.CASHIER)
         self.category = Category.objects.create(name="Kategori Uji", slug="kategori-uji")
         self.product = Product.objects.create(name="Buku", category=self.category, price=5000, stock=10)
 
@@ -74,6 +75,39 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.data["status"], Order.Status.REJECTED)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
+
+
+    def test_pos_sale_requires_open_shift_and_updates_cash_expected(self):
+        self.client.force_authenticate(self.cashier)
+        blocked = self.client.post("/api/pos/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}]}, format="json")
+        self.assertEqual(blocked.status_code, 400)
+        opened = self.client.post("/api/pos/shifts/open/", {"opening_cash": 50000, "note": "Modal awal"}, format="json")
+        self.assertEqual(opened.status_code, 201)
+        sale = self.client.post("/api/pos/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "customer_note": "Penjualan langsung"}, format="json")
+        self.assertEqual(sale.status_code, 201)
+        self.assertEqual(sale.data["status"], Order.Status.COMPLETED)
+        self.assertEqual(sale.data["customer_name"], "Pelanggan toko")
+        self.assertEqual(sale.data["created_by_name"], "Cashier")
+        current = self.client.get("/api/pos/shifts/current/")
+        self.assertEqual(current.data["shift"]["expected_cash"], 55000)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 9)
+        closed = self.client.post("/api/pos/shifts/close/", {"closing_cash": 54000, "note": "Selisih kas"}, format="json")
+        self.assertEqual(closed.status_code, 200)
+        self.assertEqual(closed.data["variance"], -1000)
+        self.assertIsNone(self.client.get("/api/pos/shifts/current/").data["shift"])
+
+    def test_cashier_cannot_open_two_concurrent_shifts(self):
+        self.client.force_authenticate(self.cashier)
+        first = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")
+        second = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 400)
+
+    def test_student_cannot_access_pos(self):
+        self.client.force_authenticate(self.student)
+        response = self.client.get("/api/pos/shifts/current/")
+        self.assertEqual(response.status_code, 403)
 
 
     def test_cancel_after_qris_verification_requires_manual_refund(self):

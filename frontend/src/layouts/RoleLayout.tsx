@@ -14,7 +14,7 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
     { to: "/admin/reports", label: "Laporan", icon: "chart" },
     { to: "/admin/settings", label: "Pengaturan", icon: "settings" },
   ],
-  cashier: [{ to: "/cashier", label: "Dashboard Kasir", icon: "home" }],
+  cashier: [{ to: "/cashier", label: "POS Kasir", icon: "home" }],
   parent: [
     { to: "/parent", label: "Beranda", icon: "home" },
     { to: "/parent/stock", label: "Stok Barang", icon: "box" },
