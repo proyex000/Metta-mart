@@ -1,6 +1,6 @@
 # Metta-Mart Backend — Phase 1
 
-Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOnly, CSRF, dan MySQL/TiDB untuk deployment.
+Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOnly, CSRF, dan mysqlclient untuk koneksi MySQL/TiDB.
 
 ## Persiapan Windows
 
