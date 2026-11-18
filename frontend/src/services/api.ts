@@ -18,7 +18,7 @@ function toSession(user: ApiUser): AuthSession {
   return {
     role: user.role,
     name: user.full_name,
-    email: user.email || user.identifier,
+    email: user.email,
   };
 }
 
