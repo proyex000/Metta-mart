@@ -7,7 +7,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from core.models import AuditLog, StoreSetting
-from .models import Order, PaymentEvent, Product
+from .models import InventoryMovement, Order, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
 from .serializers import OrderCreateSerializer, OrderReadSerializer, ProductSerializer
 
@@ -32,6 +32,11 @@ def pickup_is_open(now):
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
 
+    def perform_create(self, serializer):
+        product = serializer.save()
+        if product.stock:
+            InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=product.stock, reason="initial_stock")
+
     def get_queryset(self):
         qs = Product.objects.all()
         if self.request.user.role != "admin":
@@ -46,6 +51,14 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [CommerceAdminOnly]
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        previous_stock = serializer.instance.stock
+        product = serializer.save()
+        delta = product.stock - previous_stock
+        if delta:
+            InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment")
 
     def perform_destroy(self, instance):
         if instance.order_items.exists():
@@ -116,6 +129,7 @@ class AdminOrderActionView(APIView):
                 raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan melalui alur biasa."})
             for item in order.items.all():
                 Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
+                InventoryMovement.objects.create(product_id=item.product_id, actor=request.user, quantity_delta=item.quantity, reason="order_cancelled", reference=order.code)
             order.status, order.cancelled_at = Order.Status.CANCELLED, now
         else:
             raise ValidationError({"status": "Perubahan status pesanan tidak valid."})
