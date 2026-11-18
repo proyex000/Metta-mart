@@ -239,3 +239,53 @@ class AdminSalesReportView(APIView):
             "daily": daily,
             "top_products": top_products,
         })
+
+class AdminDashboardView(APIView):
+    permission_classes = [CommerceAdminOnly]
+
+    def get(self, request):
+        from accounts.models import User
+        today = timezone.localdate()
+        seven_days_ago = today - timedelta(days=6)
+        products = Product.objects.filter(is_active=True)
+        orders = Order.objects.all()
+        completed_paid = orders.filter(
+            status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+            completed_at__isnull=False,
+        )
+        daily_rows = completed_paid.filter(
+            completed_at__date__gte=seven_days_ago,
+            completed_at__date__lte=today,
+        ).values("completed_at__date").annotate(
+            revenue=Sum("total"), orders=Count("id")
+        ).order_by("completed_at__date")
+        by_day = {row["completed_at__date"].isoformat(): row for row in daily_rows}
+        daily = []
+        for offset in range(6, -1, -1):
+            day = today - timedelta(days=offset)
+            row = by_day.get(day.isoformat(), {})
+            daily.append({
+                "date": day.isoformat(),
+                "revenue": row.get("revenue") or 0,
+                "orders": row.get("orders") or 0,
+            })
+        recent = orders.select_related("customer").prefetch_related("items")[:6]
+        return Response({
+            "products": products.count(),
+            "orders_pending": orders.filter(status=Order.Status.PENDING).count(),
+            "orders_processing": orders.filter(status=Order.Status.ACCEPTED).count(),
+            "orders_ready": orders.filter(status=Order.Status.READY).count(),
+            "customers": User.objects.filter(role__in=(User.Role.STUDENT, User.Role.PARENT), is_active=True).count(),
+            "low_stock": list(products.filter(stock__lt=10).order_by("stock", "name").values("id", "name", "stock")[:8]),
+            "today_revenue": completed_paid.filter(completed_at__date=today).aggregate(total=Sum("total"))["total"] or 0,
+            "daily": daily,
+            "recent_orders": [{
+                "code": order.code,
+                "customer_name": order.customer.full_name,
+                "total": order.total,
+                "status": order.status,
+                "payment_status": order.payment_status,
+                "created_at": order.created_at,
+            } for order in recent],
+        })
