@@ -39,7 +39,7 @@ export const orders: Order[] = [
     date: "11 Okt 2025, 14:20",
     customer: "Andi Pratama",
     total: 16000,
-    status: "Dikirim",
+    status: "Siap Diambil",
   },
   {
     code: "MTM-0126",
