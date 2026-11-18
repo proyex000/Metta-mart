@@ -9,6 +9,7 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
   admin: [
     { to: "/admin", label: "Dashboard", icon: "home" },
     { to: "/admin/stock", label: "Kelola Stok", icon: "box" },
+    { to: "/admin/pos", label: "POS Koperasi", icon: "bag" },
     { to: "/admin/orders", label: "Pesanan", icon: "bag" },
     { to: "/admin/notifications", label: "Notifikasi", icon: "bell" },
     { to: "/admin/reports", label: "Laporan", icon: "chart" },
