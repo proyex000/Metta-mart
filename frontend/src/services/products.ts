@@ -1,12 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { isCategoryId } from "../data/categories";
-import { products as seed } from "../data/mock";
 import { apiRequest } from "./api";
 import type { Product, ProductInput } from "../types";
 
 type ApiProduct = { id: number; name: string; category: Product["category"]; price: number; stock: number; is_active: boolean };
-let items: Product[] = seed.map((product) => ({ ...product }));
-let loaded = false;
+let items: Product[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
 const toProduct = (p: ApiProduct): Product => ({ id: p.id, name: p.name, category: p.category, price: p.price, stock: p.stock, art: p.category === "seragam-sekolah" ? "shirt" : p.category === "minuman" ? "bottle" : "book" });
@@ -19,7 +17,6 @@ function validate(input: ProductInput) {
 export async function refreshProducts() {
   const data = await apiRequest<ApiProduct[]>("/products/");
   items = data.filter((p) => p.is_active).map(toProduct);
-  loaded = true;
   emit();
 }
 export const productService = {
