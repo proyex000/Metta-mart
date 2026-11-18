@@ -851,6 +851,7 @@ export function POS() {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "qris">("cash");
   const [enabled, setEnabled] = useState({ cash: true, bank_transfer: true, qris: true });
   const [note, setNote] = useState("");
+  const [cashReceived, setCashReceived] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<CommerceOrder | null>(null);
@@ -879,8 +880,9 @@ export function POS() {
         items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
         payment_method: paymentMethod,
         note,
+        ...(paymentMethod === "cash" ? { cash_received: Number(cashReceived) } : {}),
       });
-      setReceipt(order); setCounts({}); setNote("");
+      setReceipt(order); setCounts({}); setNote(""); setCashReceived("");
       await refreshProducts();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Transaksi POS gagal disimpan.");
@@ -912,13 +914,17 @@ export function POS() {
           {!selected.length && <p className="table-foot">Pilih produk untuk memulai transaksi.</p>}
           <div className="detail-total"><span>Total</span><strong>{money(total)}</strong></div>
           <label>Metode Pembayaran<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>{enabled.cash && <option value="cash">Tunai</option>}{enabled.bank_transfer && <option value="bank_transfer">Transfer Bank (dikonfirmasi admin)</option>}{enabled.qris && <option value="qris">QRIS (dikonfirmasi admin)</option>}</select></label>
+          {paymentMethod === "cash" && <>
+            <label>Uang Diterima (Rp)<input type="number" min={total} step={1} value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={String(total)} /></label>
+            <p className="table-foot">Kembalian: <b>{money(Math.max(0, Number(cashReceived || 0) - total))}</b></p>
+          </>}
           <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
-          <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod]} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
+          <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
           <p className="table-foot">POS hanya dapat digunakan saat jam operasional. Admin bertanggung jawab memastikan pembayaran diterima sebelum menyelesaikan transaksi.</p>
         </section>
       </div>
       {error && <p className="auth-error" role="alert">{error}</p>}
-      {receipt && <section className="panel table-panel"><h2>Transaksi Berhasil</h2><p>Kode: <b>{receipt.code}</b></p><p>Total: <b>{money(receipt.total)}</b></p><p>Status: Selesai · Lunas</p><button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button></section>}
+      {receipt && <section className="panel table-panel"><h2>Transaksi Berhasil</h2><p>Kode: <b>{receipt.code}</b></p><p>Total: <b>{money(receipt.total)}</b></p><p>Status: Selesai · Lunas</p>{receipt.cash_received !== null && <p>Uang diterima: {money(receipt.cash_received)} · Kembalian: {money(receipt.change_due || 0)}</p>}<button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button></section>}
     </>
   );
 }
