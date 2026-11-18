@@ -1,10 +1,10 @@
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from accounts.permissions import IsAdminRole
 from core.models import AuditLog
 from .models import Order, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
@@ -47,9 +47,6 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def get_serializer_class(self):
         return OrderCreateSerializer if self.request.method == "POST" else OrderReadSerializer
 
-    def get_serializer_context(self):
-        return super().get_serializer_context()
-
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -88,7 +85,7 @@ class AdminOrderActionView(APIView):
         elif action == "complete-pickup" and order.status == Order.Status.READY:
             order.status, order.completed_at = Order.Status.COMPLETED, now
         elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED):
-            for item in order.items.select_related("product"):
+            for item in order.items.all():
                 Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
             order.status, order.cancelled_at = Order.Status.CANCELLED, now
         else:
@@ -114,4 +111,23 @@ class AdminPaymentActionView(APIView):
         order.save(update_fields=["payment_status", "updated_at"])
         PaymentEvent.objects.create(order=order, actor=request.user, event=action, note=str(request.data.get("note", ""))[:500])
         AuditLog.objects.create(actor=request.user, event=f"payment.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        return Response(OrderReadSerializer(order).data)
+
+
+class PaymentSubmissionView(APIView):
+    def post(self, request, code):
+        order = Order.objects.filter(code=code, customer=request.user).first()
+        if not order:
+            return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
+        if order.payment_method == Order.PaymentMethod.CASH:
+            raise ValidationError({"payment": "Pembayaran tunai dikonfirmasi admin saat penyerahan."})
+        if order.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED):
+            raise ValidationError({"payment": "Status pembayaran tidak dapat diubah."})
+        note = str(request.data.get("note", "")).strip()[:500]
+        if not note:
+            raise ValidationError({"note": "Isi referensi atau keterangan pembayaran untuk diperiksa admin."})
+        order.payment_status = Order.PaymentStatus.PENDING
+        order.save(update_fields=["payment_status", "updated_at"])
+        PaymentEvent.objects.create(order=order, actor=request.user, event="submitted", note=note)
+        AuditLog.objects.create(actor=request.user, event="payment.submitted", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
         return Response(OrderReadSerializer(order).data)
