@@ -80,3 +80,7 @@ export type AdminDashboardSummary = {
 export function fetchAdminDashboard() {
   return apiRequest<AdminDashboardSummary>("/admin/dashboard/");
 }
+
+export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string }) {
+  return apiRequest<CommerceOrder>("/admin/pos/checkout/", { method: "POST", body: JSON.stringify(input) });
+}
