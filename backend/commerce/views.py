@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Sum, Count
 from datetime import datetime
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -185,3 +185,56 @@ class AdminInventoryMovementListView(generics.ListAPIView):
     permission_classes = [CommerceAdminOnly]
     queryset = InventoryMovement.objects.select_related("product", "actor").all()
     serializer_class = InventoryMovementSerializer
+
+
+class AdminSalesReportView(APIView):
+    permission_classes = [CommerceAdminOnly]
+
+    def get(self, request):
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        paid_orders = Order.objects.filter(
+            status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+            completed_at__isnull=False,
+        )
+        today_orders = paid_orders.filter(completed_at__date=today)
+        month_orders = paid_orders.filter(completed_at__date__gte=month_start, completed_at__date__lte=today)
+        today_summary = today_orders.aggregate(total=Sum("total"), count=Count("id"))
+        month_summary = month_orders.aggregate(total=Sum("total"), count=Count("id"))
+        daily_rows = month_orders.filter(
+            completed_at__date__gte=today - timezone.timedelta(days=6)
+        ).values("completed_at__date").annotate(total=Sum("total"), count=Count("id")).order_by("completed_at__date")
+        daily_by_date = {row["completed_at__date"].isoformat(): row for row in daily_rows}
+        daily = []
+        for offset in range(6, -1, -1):
+            day = today - timezone.timedelta(days=offset)
+            row = daily_by_date.get(day.isoformat(), {})
+            daily.append({
+                "date": day.isoformat(),
+                "total": row.get("total") or 0,
+                "orders": row.get("count") or 0,
+            })
+        top_products = list(
+            OrderItem.objects.filter(
+                order__status=Order.Status.COMPLETED,
+                order__payment_status=Order.PaymentStatus.PAID,
+                order__completed_at__date__gte=month_start,
+                order__completed_at__date__lte=today,
+            ).values("product_name").annotate(
+                quantity=Sum("quantity"), revenue=Sum("line_total")
+            ).order_by("-revenue")[:5]
+        )
+        month_total = month_summary["total"] or 0
+        month_count = month_summary["count"] or 0
+        return Response({
+            "period": {"from": month_start.isoformat(), "to": today.isoformat()},
+            "today": {"revenue": today_summary["total"] or 0, "orders": today_summary["count"] or 0},
+            "month": {
+                "revenue": month_total,
+                "orders": month_count,
+                "average_order": round(month_total / month_count) if month_count else 0,
+            },
+            "daily": daily,
+            "top_products": top_products,
+        })
