@@ -13,6 +13,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
 import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
+import { fetchStorefrontSettings } from "../../services/settings";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
@@ -203,11 +204,15 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [createdCode, setCreatedCode] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
+  const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => setPaymentSettings(settings.payment_methods)).catch(() => undefined);
+  }, []);
   const methods = [
-    { id: "cash" as const, title: "Tunai", description: "Bayar tunai saat pengambilan di koperasi.", symbol: "Rp" },
-    { id: "qris" as const, title: "QRIS", description: "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin.", symbol: "QR" },
-    { id: "bankTransfer" as const, title: "Transfer bank", description: "Transfer ke rekening resmi koperasi dan kirim referensi pembayaran.", symbol: "TF" },
-  ];
+    { id: "cash" as const, title: "Tunai", description: "Bayar tunai saat pengambilan di koperasi.", symbol: "Rp", enabled: paymentSettings.cash },
+    { id: "qris" as const, title: "QRIS", description: "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin.", symbol: "QR", enabled: paymentSettings.qris },
+    { id: "bankTransfer" as const, title: "Transfer bank", description: "Transfer ke rekening resmi koperasi dan kirim referensi pembayaran.", symbol: "TF", enabled: paymentSettings.bank_transfer },
+  ].filter((method) => method.enabled);
   const selectedPayment = methods.some((method) => method.id === payment) ? payment : methods[0]?.id;
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
