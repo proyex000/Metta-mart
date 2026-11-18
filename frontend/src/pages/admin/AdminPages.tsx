@@ -962,6 +962,7 @@ export function Settings() {
     }
   });
   const [saved, setSaved] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState("");
   const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
   const [logoMessage, setLogoMessage] = useState("");
   const [logoError, setLogoError] = useState("");
@@ -1009,10 +1010,19 @@ export function Settings() {
     setValues((current) => ({ ...current, [key]: value }));
     setSaved(false);
   };
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setProfileSaveError("");
+    if (tab === "account") {
+      try {
+        await updateProfile({ name: values.adminName, email: values.adminEmail });
+      } catch (reason) {
+        setSaved(false);
+        setProfileSaveError(reason instanceof Error ? reason.message : "Profil gagal diperbarui.");
+        return;
+      }
+    }
     localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
-    if (tab === "account") updateProfile({ name: values.adminName, email: values.adminEmail });
     setSaved(true);
   };
   const tabs: { id: SettingsTab; label: string; icon: IconName }[] = [
