@@ -84,6 +84,23 @@ class CommerceApiTests(TestCase):
         accepted = self.client.post(f"/api/orders/{code}/actions/", {"action": "accept"}, format="json")
         self.assertEqual(accepted.data["status"], Order.Status.ACCEPTED)
 
+    def test_expired_qris_order_releases_stock_when_orders_are_loaded(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": True, "qris_image_url": "https://example.test/qris.png", "pickup_enabled": True, "delivery_enabled": False, "delivery_fee": 0})
+        self.client.force_authenticate(self.student)
+        created = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 2}], "fulfillment": "pickup", "payment_method": "qris"}, format="json")
+        order = Order.objects.get(code=created.data["code"])
+        order.expires_at = timezone.now() - timedelta(minutes=1)
+        order.save(update_fields=("expires_at",))
+        response = self.client.get("/api/orders/")
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.EXPIRED)
+        self.assertEqual(order.payment.status, Payment.Status.EXPIRED)
+        self.assertEqual(self.product.stock, 10)
+        self.assertEqual(StockMovement.objects.filter(reference=order.code, kind=StockMovement.Kind.RELEASED).count(), 1)
+
+
     def test_customer_cannot_read_another_customers_order(self):
         other = User.objects.create_user("0987654321", "TestPassword!2026", full_name="Other", role=User.Role.STUDENT)
         order = Order.objects.create(customer=other, fulfillment=Order.Fulfillment.PICKUP)

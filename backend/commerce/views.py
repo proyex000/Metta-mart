@@ -35,6 +35,33 @@ def release_order_stock(order, actor, note):
         StockMovement.objects.create(product=product, kind=StockMovement.Kind.RELEASED, quantity_delta=item.quantity, stock_after=product.stock, reference=order.code, note=note, actor=actor)
 
 
+def expire_due_qris_orders(now=None, batch_size=100):
+    now = now or timezone.now()
+    candidates = Order.objects.filter(
+        status=Order.Status.AWAITING_PAYMENT,
+        payment__status=Payment.Status.PENDING_VERIFICATION,
+        expires_at__lte=now,
+    ).order_by("pk").values_list("pk", flat=True)[:batch_size]
+    expired_count = 0
+    for order_id in list(candidates):
+        with transaction.atomic():
+            order = Order.objects.select_for_update().select_related("payment", "customer").filter(
+                pk=order_id,
+                status=Order.Status.AWAITING_PAYMENT,
+                payment__status=Payment.Status.PENDING_VERIFICATION,
+                expires_at__lte=now,
+            ).first()
+            if order is None:
+                continue
+            release_order_stock(order, None, "QRIS kedaluwarsa; stok dikembalikan")
+            order.payment.status = Payment.Status.EXPIRED
+            order.payment.save(update_fields=("status", "updated_at"))
+            record_order_status(order, Order.Status.EXPIRED, None, "Batas pembayaran QRIS berakhir")
+            AuditLog.objects.create(event="order.expired", target_type="order", target_id=order.code)
+            expired_count += 1
+    return expired_count
+
+
 class CategoryListCreateView(generics.ListCreateAPIView):
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -152,6 +179,7 @@ class CheckoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        expire_due_qris_orders()
         if request.user.role not in {User.Role.STUDENT, User.Role.PARENT}:
             raise PermissionDenied("Checkout online hanya tersedia untuk akun siswa dan orang tua.")
         serializer = CheckoutSerializer(data=request.data)
@@ -212,6 +240,7 @@ class OrderListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        expire_due_qris_orders()
         queryset = Order.objects.select_related("customer", "payment").prefetch_related("items", "status_history")
         if self.request.user.role not in {User.Role.ADMIN, User.Role.CASHIER}:
             queryset = queryset.filter(customer=self.request.user)
