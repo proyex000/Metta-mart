@@ -15,6 +15,7 @@ import type { Role } from "../../types";
 import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings } from "../../services/settings";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
+import { fetchLinkedStudents, type LinkedStudent } from "../../services/family";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
@@ -241,6 +242,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
         payment_method: selectedPayment === "bankTransfer" ? "bank_transfer" : selectedPayment,
         note,
+        ...(role === "parent" && selectedStudent ? { student_id: selectedStudent } : {}),
       });
       setCreatedCode(order.code);
       setSent(true);
@@ -255,6 +257,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   return (
     <>
       <PageTitle title="Pesan Barang" subtitle="Pilih jumlah barang dan metode pembayaran." />
+      {role === "parent" && <section className="payment-section"><h2>Pesanan Untuk Anak</h2>{familyLoading ? <p>Memuat data anak...</p> : children.length ? <label>Pilih siswa penerima<select value={selectedStudent} onChange={(event) => setSelectedStudent(Number(event.target.value))} disabled={sent}><option value="">Pilih siswa</option>{children.map((child) => <option key={child.id} value={child.id}>{child.full_name} · {child.identifier}</option>)}</select></label> : <p className="payment-unavailable">Belum ada siswa yang terhubung dengan akun ini. Minta admin koperasi menghubungkan akun orang tua dan siswa terlebih dahulu.</p>}</section>}
       <section className="order-summary-card">
         <div>
           <small>Total Belanja</small>
@@ -346,7 +349,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         </p>
       )}
       {submitError && <p className="payment-unavailable" role="alert">{submitError}</p>}
-      <button className="primary wide order-submit" disabled={!total || sent || submitting || !methods.length} onClick={submit}>
+      <button className="primary wide order-submit" disabled={!total || sent || submitting || !methods.length || familyLoading || (role === "parent" && !selectedStudent)} onClick={submit}>
         {submitting ? "Mengirim pesanan..." : sent ? "Pesanan berhasil dibuat" : "Kirim Pesanan"}
       </button>
       {sent && <Link className="primary wide" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
