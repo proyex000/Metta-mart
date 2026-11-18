@@ -104,3 +104,28 @@ class CommerceApiTests(TestCase):
         StoreSetting.objects.create(key="operating_hours", value={"days": [], "open_time": "", "close_time": ""})
         response = self.create_order("cash")
         self.assertEqual(response.status_code, 201)
+
+    def test_sales_report_is_admin_only_and_uses_completed_paid_orders(self):
+        from django.utils import timezone
+        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        today = day_codes[timezone.localtime().weekday()]
+        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
+        created = self.create_order("cash")
+        code = created.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
+        completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
+        self.assertEqual(completed.status_code, 200)
+
+        self.client.force_authenticate(user=self.student)
+        denied = self.client.get("/api/admin/reports/summary/")
+        self.assertEqual(denied.status_code, 403)
+
+        self.client.force_authenticate(user=self.admin)
+        report = self.client.get("/api/admin/reports/summary/")
+        self.assertEqual(report.status_code, 200)
+        self.assertEqual(report.data["today"]["revenue"], 10000)
+        self.assertEqual(report.data["month"]["orders"], 1)
+        self.assertEqual(report.data["month"]["average_order"], 10000)
+        self.assertEqual(len(report.data["daily"]), 7)
