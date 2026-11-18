@@ -42,7 +42,7 @@ class OrderCreateSerializer(serializers.Serializer):
 
     def validate_payment_method(self, value):
         setting = StoreSetting.objects.filter(key="payment_methods").first()
-        enabled = setting.value if setting else {"cash": True, "bank_transfer": True, "qris": True}
+        enabled = setting.value if setting and isinstance(setting.value, dict) else {"cash": True, "bank_transfer": True, "qris": True}
         if not enabled.get(value, False):
             raise serializers.ValidationError("Metode pembayaran ini sedang tidak tersedia.")
         return value
