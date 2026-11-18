@@ -1,23 +1,20 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { Brand, Icon } from "../../components/ui";
-import { demoAccounts } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
 import type { Role } from "../../types";
 
 const roleCopy: Record<Role, { title: string; identifier: string; helper: string }> = {
-  student: { title: "Siswa", identifier: "NISN", helper: "Login / Daftar sebagai siswa" },
-  parent: { title: "Wali", identifier: "Email Gmail", helper: "Login / Daftar sebagai wali" },
-  admin: { title: "Owner / Admin", identifier: "Email", helper: "Login / Daftar sebagai admin" },
+  student: { title: "Siswa", identifier: "NISN (10 digit)", helper: "Login / Daftar sebagai siswa" },
+  parent: { title: "Orang Tua", identifier: "Email", helper: "Login / Daftar sebagai orang tua" },
+  admin: { title: "Admin", identifier: "Email", helper: "Login sebagai administrator" },
+  cashier: { title: "Kasir", identifier: "Email / ID akun", helper: "Login sebagai petugas koperasi" },
 };
 
-// Roles offered on the public role chooser. Admin sign-in stays reachable only
-// through the internal /login/admin address. Hiding it is NOT a security
-// control: role permissions must be enforced by the backend.
-const publicRoles: Exclude<Role, "admin">[] = ["student", "parent"];
+const publicRoles: Exclude<Role, "admin" | "cashier">[] = ["student", "parent"];
 
 function validRole(value: string | undefined): value is Role {
-  return value === "admin" || value === "parent" || value === "student";
+  return value === "admin" || value === "cashier" || value === "parent" || value === "student";
 }
 
 export function RoleChooser() {
@@ -32,9 +29,7 @@ export function RoleChooser() {
         <div className="role-options">
           {publicRoles.map((role) => (
             <Link key={role} to={`/login/${role}`}>
-              <span className="role-option-icon">
-                <Icon name="user" size={28} />
-              </span>
+              <span className="role-option-icon"><Icon name="user" size={28} /></span>
               <div>
                 <b>{roleCopy[role].title}</b>
                 <small>{roleCopy[role].helper}</small>
@@ -43,9 +38,7 @@ export function RoleChooser() {
             </Link>
           ))}
         </div>
-        <small className="demo-warning">
-          Prototipe ini menggunakan autentikasi mock, bukan keamanan produksi.
-        </small>
+        <small className="demo-warning">Akun admin dan kasir dibuat oleh administrator koperasi.</small>
       </div>
     </div>
   );
@@ -54,40 +47,39 @@ export function RoleChooser() {
 export function LoginPage() {
   const { role } = useParams();
   const navigate = useNavigate();
-  const { session, login } = useAuth();
+  const { session, loading: sessionLoading, login } = useAuth();
   const selected = validRole(role) ? role : null;
-  // Demo credentials are only prefilled for the public roles, never for admin.
-  const demo = selected && selected !== "admin" ? demoAccounts[selected] : null;
-  const [identifier, setIdentifier] = useState(demo?.identifier ?? "");
-  const [password, setPassword] = useState(demo?.password ?? "");
-  const [loading, setLoading] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
   if (!selected) return <Navigate to="/login" replace />;
+  if (sessionLoading) return <div className="splash"><Brand /><span className="spinner" /><p>Memeriksa sesi...</p></div>;
   if (session) return <Navigate to={`/${session.role}`} replace />;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
-    if (!identifier.trim() || password.length < 6) {
-      setError("Isi identitas dan password minimal 6 karakter.");
+    if (!identifier.trim() || !password) {
+      setError("Isi identitas dan password.");
       return;
     }
-    setLoading(true);
+    setSubmitting(true);
     try {
       await login(selected, identifier, password);
       navigate(`/${selected}`, { replace: true });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Login gagal.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
+
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <Link to="/login" className="auth-back">
-          <Icon name="back" /> Ganti peran
-        </Link>
+        <Link to="/login" className="auth-back"><Icon name="back" /> Ganti peran</Link>
         <Brand />
         <h1>Login {roleCopy[selected].title}</h1>
         <p>Masuk dengan akun Anda</p>
@@ -97,46 +89,22 @@ export function LoginPage() {
             {roleCopy[selected].identifier}
             <div className="auth-input">
               <Icon name="user" />
-              <input
-                value={identifier}
-                onChange={(event) => setIdentifier(event.target.value)}
-                autoComplete="username"
-              />
+              <input value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" required />
             </div>
           </label>
           <label>
             Password
             <div className="auth-input">
               <Icon name="lock" />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-              />
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
             </div>
           </label>
-          <button className="primary wide" disabled={loading}>
-            {loading ? (
-              <>
-                <span className="spinner" /> Memeriksa akun...
-              </>
-            ) : (
-              "Login"
-            )}
+          <button className="primary wide" disabled={submitting}>
+            {submitting ? <><span className="spinner" /> Memeriksa akun...</> : "Login"}
           </button>
         </form>
-        {selected !== "admin" && (
-          <p className="auth-switch">
-            Belum punya akun? <Link to={`/register/${selected}`}>Daftar di sini</Link>
-          </p>
-        )}
-        {demo && (
-          <div className="demo-account">
-            <b>Akun demo</b>
-            <span>{demo.identifier}</span>
-            <span>Password: {demo.password}</span>
-          </div>
+        {(selected === "student" || selected === "parent") && (
+          <p className="auth-switch">Belum punya akun? <Link to={`/register/${selected}`}>Daftar di sini</Link></p>
         )}
       </div>
     </div>
@@ -146,63 +114,61 @@ export function LoginPage() {
 export function RegisterPage() {
   const { role } = useParams();
   const navigate = useNavigate();
-  const selected = validRole(role) ? role : null;
-  const [done, setDone] = useState(false);
-  // Public self-registration is only for student and parent accounts.
-  if (!selected || selected === "admin") return <Navigate to="/login" replace />;
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const { register } = useAuth();
+  const selected = role === "student" || role === "parent" ? role : null;
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!selected) return <Navigate to="/login" replace />;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setError("");
     const data = new FormData(event.currentTarget);
-    if (String(data.get("password")).length < 6) return;
-    setDone(true);
-    setTimeout(() => navigate(`/login/${selected}`), 900);
+    const identifier = String(data.get("identifier") || "").trim();
+    const fullName = String(data.get("name") || "").trim();
+    const password = String(data.get("password") || "");
+    if (!identifier || !fullName || password.length < 10) {
+      setError("Lengkapi data. Password minimal 10 karakter.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await register({ role: selected, identifier, fullName, password });
+      navigate(`/${selected}`, { replace: true });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Pendaftaran gagal.");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <Link to={`/login/${selected}`} className="auth-back">
-          <Icon name="back" /> Kembali
-        </Link>
+        <Link to={`/login/${selected}`} className="auth-back"><Icon name="back" /> Kembali</Link>
         <Brand />
         <h1>Daftar {roleCopy[selected].title}</h1>
         <p>Buat akun baru untuk melanjutkan</p>
-        {done ? (
-          <div className="auth-success">Pendaftaran demo berhasil. Mengarahkan ke login...</div>
-        ) : (
-          <form onSubmit={submit}>
-            <label>
-              {roleCopy[selected].identifier}
-              <div className="auth-input">
-                <Icon name="user" />
-                <input name="identifier" required placeholder={roleCopy[selected].identifier} />
-              </div>
-            </label>
-            <label>
-              Nama Lengkap
-              <div className="auth-input">
-                <Icon name="user" />
-                <input name="name" required placeholder="Nama lengkap" />
-              </div>
-            </label>
-            <label>
-              Password
-              <div className="auth-input">
-                <Icon name="lock" />
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  minLength={6}
-                  placeholder="Minimal 6 karakter"
-                />
-              </div>
-            </label>
-            <button className="primary wide">Daftar</button>
-          </form>
-        )}
-        <p className="auth-switch">
-          Sudah punya akun? <Link to={`/login/${selected}`}>Login di sini</Link>
-        </p>
+        <form onSubmit={submit}>
+          {error && <div className="auth-error">{error}</div>}
+          <label>
+            {roleCopy[selected].identifier}
+            <div className="auth-input"><Icon name="user" /><input name="identifier" required placeholder={roleCopy[selected].identifier} /></div>
+          </label>
+          <label>
+            Nama Lengkap
+            <div className="auth-input"><Icon name="user" /><input name="name" required placeholder="Nama lengkap" /></div>
+          </label>
+          <label>
+            Password
+            <div className="auth-input"><Icon name="lock" /><input name="password" type="password" required minLength={10} placeholder="Minimal 10 karakter" /></div>
+          </label>
+          <button className="primary wide" disabled={submitting}>
+            {submitting ? <><span className="spinner" /> Membuat akun...</> : "Daftar"}
+          </button>
+        </form>
+        <p className="auth-switch">Sudah punya akun? <Link to={`/login/${selected}`}>Login di sini</Link></p>
       </div>
     </div>
   );
@@ -214,11 +180,5 @@ export function SplashPage() {
     const timer = setTimeout(() => navigate("/login", { replace: true }), 900);
     return () => clearTimeout(timer);
   }, [navigate]);
-  return (
-    <div className="splash">
-      <Brand />
-      <span className="spinner" />
-      <p>Menyiapkan MettaMart...</p>
-    </div>
-  );
+  return <div className="splash"><Brand /><span className="spinner" /><p>Menyiapkan MettaMart...</p></div>;
 }
