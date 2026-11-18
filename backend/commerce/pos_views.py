@@ -154,6 +154,15 @@ class POSCheckoutView(APIView):
             if cash_received > 1000000000:
                 raise ValidationError({"cash_received": "Jumlah uang yang diterima di luar batas."})
             change_due = cash_received - subtotal
+            try:
+                cash_received = int(request.data.get("cash_received"))
+            except (TypeError, ValueError):
+                raise ValidationError({"cash_received": "Jumlah uang yang diterima wajib diisi."})
+            if cash_received < subtotal:
+                raise ValidationError({"cash_received": "Uang yang diterima kurang dari total transaksi."})
+            if cash_received > 1000000000:
+                raise ValidationError({"cash_received": "Jumlah uang yang diterima di luar batas."})
+            change_due = cash_received - subtotal
             order = Order.objects.create(customer=None, created_by=request.user, status=Order.Status.COMPLETED, fulfillment=Order.Fulfillment.PICKUP, customer_note=str(data.get("customer_note", "")).strip(), subtotal=subtotal, total=subtotal)
             for product, quantity, line_total in lines:
                 changed = Product.objects.filter(pk=product.pk, stock__gte=quantity).update(stock=F("stock") - quantity)
