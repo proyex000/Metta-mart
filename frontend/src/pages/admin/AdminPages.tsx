@@ -459,8 +459,8 @@ export function Stock() {
       stock: Number(form.stock),
     };
     try {
-      if (editing === "new") productService.create(input);
-      else productService.update(editing.id, input);
+      if (editing === "new") await productService.create(input);
+      else await productService.update(editing.id, input);
       setEditing(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Produk gagal disimpan.");
@@ -548,8 +548,11 @@ export function Stock() {
                     <button
                       className="icon-button"
                       aria-label={`Hapus ${p.name}`}
-                      onClick={() => {
-                        if (window.confirm(`Hapus produk "${p.name}"?`)) productService.remove(p.id);
+                      onClick={async () => {
+                        if (window.confirm(`Hapus produk "${p.name}"?`)) {
+                          try { await productService.remove(p.id); }
+                          catch { window.alert("Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
+                        }
                       }}
                     >
                       <Icon name="trash" size={15} />
