@@ -15,6 +15,9 @@ export type CommerceOrder = {
   status: "pending" | "accepted" | "ready_for_pickup" | "completed" | "cancelled";
   payment_method: "cash" | "bank_transfer" | "qris";
   payment_status: "unpaid" | "pending_verification" | "paid" | "failed" | "refunded";
+  payment_sender_name: string;
+  payment_source: string;
+  payment_account_last4: string;
   note: string;
   subtotal: number;
   total: number;
@@ -39,8 +42,8 @@ export function fetchOrders() {
 export function fetchOrder(code: string) {
   return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/`);
 }
-export function submitPayment(code: string, note: string) {
-  return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/payment-submission/`, { method: "POST", body: JSON.stringify({ note }) });
+export function submitPayment(code: string, input: { sender_name: string; payment_source: string; account_last4?: string; note?: string }) {
+  return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/payment-submission/`, { method: "POST", body: JSON.stringify(input) });
 }
 export function adminOrderAction(code: string, action: "accept" | "ready" | "complete-pickup" | "cancel") {
   return apiRequest<CommerceOrder>(`/admin/orders/${encodeURIComponent(code)}/${action}/`, { method: "POST", body: JSON.stringify({}) });
