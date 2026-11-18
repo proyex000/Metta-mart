@@ -177,3 +177,25 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["sent_to"], 2)
         self.assertEqual(Notification.objects.filter(title="Info koperasi").count(), 2)
+
+    def test_parent_can_only_order_for_admin_linked_student(self):
+        from accounts.models import ParentStudentLink, User
+        parent = User.objects.create_user(identifier="parent@example.com", password="TestPassword!2026", full_name="Parent", role=User.Role.PARENT, email="parent@example.com")
+        ParentStudentLink.objects.create(parent=parent, student=self.student)
+        self.client.force_authenticate(user=parent)
+        missing = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        self.assertEqual(missing.status_code, 400)
+        invalid = self.client.post("/api/orders/", {"payment_method": "cash", "student_id": self.other_student.id, "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        valid = self.client.post("/api/orders/", {"payment_method": "cash", "student_id": self.student.id, "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        self.assertEqual(valid.status_code, 201)
+        self.assertEqual(valid.data["beneficiary_name"], self.student.full_name)
+
+    def test_parent_children_endpoint_returns_only_verified_links(self):
+        from accounts.models import ParentStudentLink, User
+        parent = User.objects.create_user(identifier="parent2@example.com", password="TestPassword!2026", full_name="Parent 2", role=User.Role.PARENT, email="parent2@example.com")
+        ParentStudentLink.objects.create(parent=parent, student=self.student)
+        self.client.force_authenticate(user=parent)
+        response = self.client.get("/api/parent/children/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["id"] for row in response.data], [self.student.id])
