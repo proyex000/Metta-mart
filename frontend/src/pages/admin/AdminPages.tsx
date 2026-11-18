@@ -656,6 +656,11 @@ export function Orders() {
   const [items, setItems] = useState<CommerceOrder[]>([]);
   const [selected, setSelected] = useState<CommerceOrder | null>(null);
   const [query, setQuery] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
+  const [channelFilter, setChannelFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
@@ -664,7 +669,35 @@ export function Orders() {
   useEffect(() => {
     reload().catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
   }, []);
-  const shown = items.filter((order) => (tab === "Semua" || adminOrderStatus(order.status) === tab) && (!query.trim() || order.code.toLowerCase().includes(query.toLowerCase()) || order.customer_name.toLowerCase().includes(query.toLowerCase())));
+  const shown = items.filter((order) => {
+    const date = new Date(order.created_at).toLocaleDateString("en-CA");
+    const needle = query.trim().toLowerCase();
+    return (tab === "Semua" || adminOrderStatus(order.status) === tab)
+      && (!needle || order.code.toLowerCase().includes(needle) || order.customer_name.toLowerCase().includes(needle) || (order.beneficiary_name || "").toLowerCase().includes(needle))
+      && (paymentFilter === "all" || order.payment_status === paymentFilter)
+      && (methodFilter === "all" || order.payment_method === methodFilter)
+      && (channelFilter === "all" || order.sales_channel === channelFilter)
+      && (!dateFrom || date >= dateFrom)
+      && (!dateTo || date <= dateTo);
+  });
+  const exportCsv = () => {
+    const escapeCell = (value: unknown) => {
+      const raw = String(value ?? "");
+      const safe = /^[=+@\\-\\t\\r]/.test(raw) ? "'" + raw : raw;
+      return '"' + safe.replace(/"/g, '""') + '"';
+    };
+    const rows = [
+      ["Kode", "Tanggal", "Pelanggan", "Penerima", "Kanal", "Metode", "Status Pesanan", "Status Pembayaran", "Total", "Nama Pengirim", "Bank/E-wallet", "Akhir Rekening"],
+      ...shown.map((order) => [order.code, new Date(order.created_at).toLocaleString("id-ID"), order.customer_name, order.beneficiary_name || "", order.sales_channel, order.payment_method, adminOrderStatus(order.status), adminPaymentStatus(order.payment_status), order.total, order.payment_sender_name, order.payment_source, order.payment_account_last4]),
+    ];
+    const csv = "\\uFEFF" + rows.map((row) => row.map(escapeCell).join(",")).join("\\r\\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `mettamart-transaksi-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
   const act = async (action: "accept" | "ready" | "complete-pickup" | "cancel") => {
     if (!selected || working) return;
     setWorking(true); setError("");
@@ -693,7 +726,7 @@ export function Orders() {
       {error && <p className="auth-error" role="alert">{error}</p>}
       <div className="panel table-panel">
         <div className="tabs">{tabs.map((t) => <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>{t}{t === "Semua" ? ` (${items.length})` : ""}</button>)}</div>
-        <label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari nomor pesanan / nama pelanggan..." /></label>
+        <div className="toolbar"><label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode / pelanggan / penerima..." /></label><select aria-label="Filter status pembayaran" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">Semua Pembayaran</option><option value="unpaid">Belum Dibayar</option><option value="pending_verification">Menunggu Verifikasi</option><option value="paid">Lunas</option><option value="failed">Ditolak</option></select><select aria-label="Filter metode pembayaran" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">Semua Metode</option><option value="cash">Tunai</option><option value="bank_transfer">Transfer</option><option value="qris">QRIS</option></select><select aria-label="Filter kanal transaksi" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}><option value="all">Semua Kanal</option><option value="online">Online</option><option value="pos">POS</option></select><label>Dari<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Sampai<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label><button className="secondary" type="button" onClick={exportCsv} disabled={!shown.length}>Ekspor CSV ({shown.length})</button></div>
         {loading ? <p>Memuat pesanan...</p> : (
           <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
             <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{money(order.total)}</b></td><td><Status>{adminOrderStatus(order.status)}</Status></td><td><button className="primary small" onClick={() => setSelected(order)}>Detail</button></td></tr>)}</tbody>
@@ -712,6 +745,7 @@ export function Orders() {
             <p><span>Status Pesanan</span><Status>{adminOrderStatus(selected.status)}</Status></p>
             <p><span>Metode Pembayaran</span><b>{selected.payment_method === "bank_transfer" ? "Transfer Bank" : selected.payment_method === "qris" ? "QRIS" : "Tunai"}</b></p>
             <p><span>Status Pembayaran</span><b>{adminPaymentStatus(selected.payment_status)}</b></p>
+            {selected.payment_method !== "cash" && selected.payment_sender_name && <><p><span>Nama Pengirim</span><b>{selected.payment_sender_name}</b></p><p><span>Bank / E-wallet Asal</span><b>{selected.payment_source}</b></p>{selected.payment_account_last4 && <p><span>4 Digit Akhir Rekening</span><b>•••• {selected.payment_account_last4}</b></p>}</>}
             <h3>Rincian Barang</h3>
             {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
             {selected.note && <p><span>Catatan</span><b>{selected.note}</b></p>}
