@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { Icon, PageTitle, ProductArt, Status } from "../../components/ui";
 import {
@@ -12,6 +12,7 @@ import { money, notices, orders } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
 import { stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
+import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
@@ -198,25 +199,15 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   });
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [createdCode, setCreatedCode] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
-  const paymentSettings = useMemo(() => {
-    const defaults = { cash: true, qris: true, bankTransfer: false };
-    try {
-      const saved = JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}");
-      return {
-        cash: typeof saved.cash === "boolean" ? saved.cash : defaults.cash,
-        qris: typeof saved.qris === "boolean" ? saved.qris : defaults.qris,
-        bankTransfer: typeof saved.bankTransfer === "boolean" ? saved.bankTransfer : defaults.bankTransfer,
-      };
-    } catch {
-      return defaults;
-    }
-  }, []);
   const methods = [
-    { id: "cash" as const, title: "Tunai di kasir", description: "Bayar langsung saat mengambil pesanan.", symbol: "Rp" },
-    { id: "qris" as const, title: "QRIS", description: "Minta kode QRIS resmi kepada kasir/admin saat pembayaran.", symbol: "QR" },
-    { id: "bankTransfer" as const, title: "Transfer bank", description: "Instruksi rekening dan verifikasi diberikan oleh admin.", symbol: "TF" },
-  ].filter((method) => paymentSettings[method.id]);
+    { id: "cash" as const, title: "Tunai", description: "Bayar tunai saat pengambilan di koperasi.", symbol: "Rp" },
+    { id: "qris" as const, title: "QRIS", description: "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin.", symbol: "QR" },
+    { id: "bankTransfer" as const, title: "Transfer bank", description: "Transfer ke rekening resmi koperasi dan kirim referensi pembayaran.", symbol: "TF" },
+  ];
   const selectedPayment = methods.some((method) => method.id === payment) ? payment : methods[0]?.id;
   const selected = products.filter((product) => counts[product.id]);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
@@ -227,10 +218,23 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       [id]: Math.min(stock, Math.max(0, (current[id] || 0) + amount)),
     }));
   };
-  const submit = () => {
-    if (!total || !selectedPayment || sent) return;
-    setSent(true);
-    setTimeout(() => navigate(`/${role}/orders`), 1400);
+  const submit = async () => {
+    if (!total || !selectedPayment || sent || submitting) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const order = await createOrder({
+        items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
+        payment_method: selectedPayment === "bankTransfer" ? "bank_transfer" : selectedPayment,
+        note,
+      });
+      setCreatedCode(order.code);
+      setSent(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Pesanan gagal dibuat. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   };
   return (
     <>
@@ -322,51 +326,53 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       </section>
       {sent && (
         <p className="payment-success" role="status">
-          Pesanan berhasil dikirim. Metode pembayaran: {methods.find((method) => method.id === selectedPayment)?.title}. Lanjutkan konfirmasi pembayaran dengan kasir/admin.
+          Pesanan {createdCode} berhasil dibuat. Status awal: menunggu konfirmasi admin. Pembayaran belum dianggap lunas.
         </p>
       )}
-      <button className="primary wide order-submit" disabled={!total || sent || !methods.length} onClick={submit}>
-        {sent ? "Pesanan berhasil dikirim" : "Kirim Pesanan"}
+      {submitError && <p className="payment-unavailable" role="alert">{submitError}</p>}
+      <button className="primary wide order-submit" disabled={!total || sent || submitting || !methods.length} onClick={submit}>
+        {submitting ? "Mengirim pesanan..." : sent ? "Pesanan berhasil dibuat" : "Kirim Pesanan"}
       </button>
-      <p className="payment-disclaimer">Pembayaran di aplikasi ini masih berupa simulasi pilihan metode. QRIS, transfer, dan konfirmasi transaksi belum terhubung ke payment gateway.</p>
+      {sent && <Link className="primary wide" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
+      <p className="payment-disclaimer">Pemesanan dapat dilakukan kapan saja. Pengambilan hanya dapat dilakukan saat koperasi buka dan pesanan sudah berstatus siap diambil.</p>
     </>
   );
 }
 
+function orderStatusText(status: CommerceOrder["status"]) {
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+}
+function paymentStatusText(status: CommerceOrder["payment_status"]) {
+  return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Perlu Konfirmasi Ulang", refunded: "Dikembalikan" })[status];
+}
+
 export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
   const [tab, setTab] = useState("Semua");
-  const shown = tab === "Semua" ? orders : orders.filter((order) => order.status === tab);
+  const [items, setItems] = useState<CommerceOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    fetchOrders().then(setItems).catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
+  }, []);
+  const shown = tab === "Semua" ? items : items.filter((order) => orderStatusText(order.status) === tab);
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
   return (
     <>
-      <PageTitle
-        title={role === "student" ? "Pesanan Saya" : "Pesanan"}
-        subtitle="Pantau status pesanan dengan mudah."
-      />
+      <PageTitle title={role === "student" ? "Pesanan Saya" : "Pesanan"} subtitle="Pantau status pesanan dan pengambilan." />
       <div className="tabs shop-tabs">
-        {["Semua", "Diproses", "Dikirim", "Selesai"].map((item) => (
-          <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>
-            {item}
-          </button>
-        ))}
+        {tabs.map((item) => <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item}</button>)}
       </div>
+      {loading && <p>Memuat pesanan...</p>}
+      {error && <p className="payment-unavailable" role="alert">{error}</p>}
+      {!loading && !error && !shown.length && <div className="empty-state"><h2>Belum ada pesanan</h2><p>Pesanan yang dibuat akan muncul di sini.</p></div>}
       <section className="shop-orders">
         {shown.map((order) => (
           <article key={order.code}>
-            <div>
-              <b>#{order.code}</b>
-              <Status>{order.status}</Status>
-            </div>
-            <small>{order.date}</small>
-            <p>
-              <ProductArt type={order.code === "MTM-0127" ? "bottle" : "book"} /> Buku Tulis &
-              Pensil 2B
-            </p>
-            <footer>
-              <span>
-                Total <strong>{money(order.total)}</strong>
-              </span>
-              <Link to={`/${role}/orders/${order.code}`}>Lihat Detail ›</Link>
-            </footer>
+            <div><b>#{order.code}</b><Status>{orderStatusText(order.status)}</Status></div>
+            <small>{new Date(order.created_at).toLocaleString("id-ID")}</small>
+            <p>{order.items.map((item) => `${item.product_name} × ${item.quantity}`).join(", ")}</p>
+            <small>Pembayaran: {paymentStatusText(order.payment_status)}</small>
+            <footer><span>Total <strong>{money(order.total)}</strong></span><Link to={`/${role}/orders/${order.code}`}>Lihat Detail ›</Link></footer>
           </article>
         ))}
       </section>
@@ -375,64 +381,47 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
-  const { code } = useParams();
+  const { code = "" } = useParams();
   const navigate = useNavigate();
-  const products = useProducts();
-  const order = orders.find((item) => item.code === code) || orders[0];
+  const [order, setOrder] = useState<CommerceOrder | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [sendingPayment, setSendingPayment] = useState(false);
+  useEffect(() => {
+    fetchOrder(code).then(setOrder).catch((reason) => setError(reason instanceof Error ? reason.message : "Detail pesanan gagal dimuat.")).finally(() => setLoading(false));
+  }, [code]);
+  const sendPayment = async () => {
+    if (!paymentNote.trim() || sendingPayment) return;
+    setSendingPayment(true); setPaymentMessage("");
+    try {
+      setOrder(await submitPayment(code, paymentNote));
+      setPaymentMessage("Referensi pembayaran berhasil dikirim dan menunggu verifikasi admin.");
+      setPaymentNote("");
+    } catch (reason) {
+      setPaymentMessage(reason instanceof Error ? reason.message : "Referensi pembayaran gagal dikirim.");
+    } finally { setSendingPayment(false); }
+  };
+  if (loading) return <p>Memuat detail pesanan...</p>;
+  if (error || !order) return <div className="empty-state"><h2>Pesanan tidak ditemukan</h2><p>{error || "Periksa kembali nomor pesanan."}</p><button className="primary" onClick={() => navigate(-1)}>Kembali</button></div>;
+  const status = orderStatusText(order.status);
   return (
     <>
-      <button className="back-button" onClick={() => navigate(-1)}>
-        <Icon name="back" /> Kembali
-      </button>
-      <PageTitle title="Detail Pesanan" subtitle={`#${order.code} · ${order.date}`} />
+      <button className="back-button" onClick={() => navigate(-1)}><Icon name="back" /> Kembali</button>
+      <PageTitle title="Detail Pesanan" subtitle={`#${order.code} · ${new Date(order.created_at).toLocaleString("id-ID")}`} />
       <section className="detail-card">
-        <div className="detail-head">
-          <span className="mini-icon">
-            <Icon name="box" />
-          </span>
-          <div>
-            <b>#{order.code}</b>
-            <small>{order.date}</small>
-          </div>
-          <Status>{order.status}</Status>
-        </div>
+        <div className="detail-head"><span className="mini-icon"><Icon name="box" /></span><div><b>#{order.code}</b><small>{new Date(order.created_at).toLocaleString("id-ID")}</small></div><Status>{status}</Status></div>
         <h2>Item Pesanan</h2>
-        {products.slice(0, 2).map((product) => (
-          <div className="detail-product" key={product.id}>
-            <ProductArt type={product.art} />
-            <div>
-              <b>{product.name}</b>
-              <small>{categoryLabel(product.category)}</small>
-              <span>{money(product.price)}</span>
-            </div>
-            <span>1×</span>
-          </div>
-        ))}
-        <div className="detail-total">
-          <span>Total Belanja</span>
-          <strong>{money(order.total)}</strong>
-        </div>
-        <h2>Informasi Pengiriman</h2>
-        <dl>
-          <dt>Pengirim</dt>
-          <dd>Admin MettaMart</dd>
-          <dt>Status</dt>
-          <dd>
-            <Status>{order.status}</Status>
-          </dd>
-        </dl>
-        <div className="timeline">
-          <b>Pesanan Diterima</b>
-          <span>Sedang Diproses</span>
-          <span>Dikirim</span>
-          <span>Selesai</span>
-        </div>
-        <button
-          className="primary wide"
-          onClick={() => alert("Pesan bantuan telah dikirim ke admin.")}
-        >
-          Hubungi Admin
-        </button>
+        {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small><span>{money(item.line_total)}</span></div></div>)}
+        <div className="detail-total"><span>Total Belanja</span><strong>{money(order.total)}</strong></div>
+        <h2>Informasi Pengambilan</h2>
+        <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
+        <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? "Siap diambil" : "Belum siap diambil"}</span><span>{order.completed_at ? "Pengambilan selesai" : "Menunggu pengambilan"}</span></div>
+        {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
+          <section className="payment-section"><h2>Konfirmasi Pembayaran</h2><p>Masukkan nomor referensi atau keterangan transfer/QRIS. Admin tetap harus memverifikasi sebelum status menjadi lunas.</p><textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Nomor referensi atau keterangan pembayaran" /><button className="primary wide" disabled={!paymentNote.trim() || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Konfirmasi"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
+        )}
+        <button className="primary wide" onClick={() => alert("Silakan hubungi admin koperasi melalui kanal komunikasi sekolah.")}>Hubungi Admin</button>
       </section>
     </>
   );
