@@ -338,7 +338,7 @@ class OrderActionView(APIView):
                 order.payment.verified_by = request.user
                 order.payment.verification_note = note or "Referensi pembayaran tidak cocok. Kirim referensi yang benar."
                 order.payment.save(update_fields=("status", "verified_by", "verification_note", "updated_at"))
-                notify_user(order.customer, "payment.transfer.rejected", "Referensi transfer perlu diperbaiki", order.payment.verification_note, "/orders/" + order.code)
+                notify_user(order.customer, "payment.transfer.rejected", "Referensi transfer perlu diperbaiki", order.payment.verification_note, "/" + order.customer.role + "/orders/" + order.code)
             elif action == "mark_refunded":
                 if role != User.Role.ADMIN:
                     raise PermissionDenied("Hanya admin yang dapat mencatat pengembalian dana.")
