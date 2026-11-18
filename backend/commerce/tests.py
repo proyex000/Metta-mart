@@ -164,7 +164,7 @@ class CommerceApiTests(TestCase):
         self.assertIsNone(self.client.get("/api/pos/shifts/current/").data["shift"])
 
     def test_pos_checkout_rejects_underpayment_without_changing_stock(self):
-        self.client.force_authenticate(self.cashier)
+        self.client.force_authenticate(self.admin)
         self.client.post("/api/pos/shifts/open/", {"opening_cash": 10000}, format="json")
         response = self.client.post("/api/pos/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "cash_received": 4000}, format="json")
         self.assertEqual(response.status_code, 400)
@@ -173,14 +173,14 @@ class CommerceApiTests(TestCase):
         self.assertEqual(Order.objects.count(), 0)
 
     def test_cash_out_cannot_exceed_expected_drawer_balance(self):
-        self.client.force_authenticate(self.cashier)
+        self.client.force_authenticate(self.admin)
         self.client.post("/api/pos/shifts/open/", {"opening_cash": 1000}, format="json")
         response = self.client.post("/api/pos/shifts/movements/", {"kind": "cash_out", "amount": 1500, "note": "Pengeluaran"}, format="json")
         self.assertEqual(response.status_code, 400)
 
 
     def test_admin_cannot_open_two_concurrent_shifts(self):
-        self.client.force_authenticate(self.cashier)
+        self.client.force_authenticate(self.admin)
         first = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")
         second = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")
         self.assertEqual(first.status_code, 201)
@@ -218,12 +218,11 @@ class CommerceApiTests(TestCase):
         refunded = self.client.post("/api/orders/" + code + "/actions/", {"action": "mark_refunded", "note": "Refund dikirim ke pelanggan"}, format="json")
         self.assertEqual(refunded.data["payment"]["status"], Payment.Status.REFUNDED)
 
-    def test_delivery_fee_is_calculated_from_server_setting(self):
-        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "qris_enabled": False, "pickup_enabled": True, "delivery_enabled": True, "delivery_fee": 7500})
+    def test_delivery_checkout_is_rejected(self):
+        StoreSetting.objects.create(key="checkout", value={"cash_enabled": True, "pickup_enabled": True})
         self.client.force_authenticate(self.student)
         response = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "delivery", "delivery_address": "Jl. Sekolah No. 1", "payment_method": "cash"}, format="json")
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["delivery_fee"], 7500)
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["total"], 12500)
 
     def test_expired_qris_command_releases_reserved_stock(self):
@@ -240,7 +239,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(order.payment.status, Payment.Status.EXPIRED)
         self.assertEqual(self.product.stock, 10)
 
-    def test_delivery_requires_address(self):
+    def test_delivery_fulfillment_is_not_supported(self):
         self.client.force_authenticate(self.student)
         response = self.client.post("/api/orders/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "fulfillment": "delivery", "payment_method": "cash"}, format="json")
         self.assertEqual(response.status_code, 400)
