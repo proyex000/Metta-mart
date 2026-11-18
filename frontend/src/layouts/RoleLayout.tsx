@@ -14,6 +14,7 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
     { to: "/admin/reports", label: "Laporan", icon: "chart" },
     { to: "/admin/settings", label: "Pengaturan", icon: "settings" },
   ],
+  cashier: [{ to: "/cashier", label: "Dashboard Kasir", icon: "home" }],
   parent: [
     { to: "/parent", label: "Beranda", icon: "home" },
     { to: "/parent/stock", label: "Stok Barang", icon: "box" },
@@ -36,9 +37,12 @@ export function RoleLayout({ role }: { role: Role }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const items = navigation[role];
-  const exit = () => {
-    logout();
-    navigate("/login", { replace: true, state: { message: "Anda berhasil keluar." } });
+  const exit = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate("/login", { replace: true, state: { message: "Anda berhasil keluar." } });
+    }
   };
 
   return (
@@ -51,12 +55,10 @@ export function RoleLayout({ role }: { role: Role }) {
         <span className="role-avatar">{session?.name.charAt(0)}</span>
       </header>
       <aside className={`role-sidebar ${menuOpen ? "open" : ""}`}>
-        <button className="sidebar-close" onClick={() => setMenuOpen(false)}>
-          ×
-        </button>
+        <button className="sidebar-close" onClick={() => setMenuOpen(false)}>×</button>
         <Brand />
         <div className="role-label">
-          {role === "admin" ? "Administrator" : role === "parent" ? "Orang Tua" : "Murid"}
+          {role === "admin" ? "Administrator" : role === "cashier" ? "Kasir" : role === "parent" ? "Orang Tua" : "Murid"}
         </div>
         <nav>
           {items.map((item) => (
@@ -75,34 +77,25 @@ export function RoleLayout({ role }: { role: Role }) {
         <div className="role-account">
           <Link
             className="role-account-link"
-            to={`/${role}/settings`}
+            to={role === "cashier" ? "/cashier" : `/${role}/settings`}
             onClick={() => setMenuOpen(false)}
-            aria-label="Buka pengaturan akun"
-            title="Pengaturan akun"
+            aria-label="Buka akun"
+            title="Akun"
           >
             <span className="role-avatar">{session?.name.charAt(0)}</span>
             <div>
               <b>{session?.name}</b>
               <small>{session?.email}</small>
-              <small className="role-account-hint">Pengaturan akun</small>
+              {role !== "cashier" && <small className="role-account-hint">Pengaturan akun</small>}
             </div>
           </Link>
-          <button
-            className="role-logout"
-            aria-label="Keluar"
-            title="Keluar"
-            onClick={() => setConfirm(true)}
-          >
+          <button className="role-logout" aria-label="Keluar" title="Keluar" onClick={() => setConfirm(true)}>
             <Icon name="logout" size={24} />
           </button>
         </div>
       </aside>
-      {menuOpen && (
-        <button className="menu-scrim" onClick={() => setMenuOpen(false)} aria-label="Tutup menu" />
-      )}
-      <main className="role-content">
-        <Outlet />
-      </main>
+      {menuOpen && <button className="menu-scrim" onClick={() => setMenuOpen(false)} aria-label="Tutup menu" />}
+      <main className="role-content"><Outlet /></main>
       <nav className="role-bottom-nav">
         {items.slice(0, role === "admin" ? 4 : 5).map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to.split("/").length === 2}>
@@ -115,14 +108,10 @@ export function RoleLayout({ role }: { role: Role }) {
         <div className="modal-backdrop">
           <div className="modal confirm-modal">
             <h2>Keluar dari MettaMart?</h2>
-            <p>Sesi demo Anda akan diakhiri dan Anda akan kembali ke halaman login.</p>
+            <p>Sesi akun Anda akan diakhiri dan Anda akan kembali ke halaman login.</p>
             <div>
-              <button className="secondary-btn" onClick={() => setConfirm(false)}>
-                Batal
-              </button>
-              <button className="primary" onClick={exit}>
-                Ya, Keluar
-              </button>
+              <button className="secondary-btn" onClick={() => setConfirm(false)}>Batal</button>
+              <button className="primary" onClick={exit}>Ya, Keluar</button>
             </div>
           </div>
         </div>
