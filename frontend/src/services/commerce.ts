@@ -7,7 +7,7 @@ export type ApiProduct = {
 };
 
 export type ApiOrderItem = { id: number; product: number | null; product_name: string; sku: string; unit: string; unit_price: number; quantity: number; line_total: number };
-export type ApiPayment = { method: "cash" | "qris"; status: string; amount: number; reference: string; paid_at: string | null; verified_by_name: string | null; verification_note: string };
+export type ApiPayment = { method: "cash" | "qris"; status: string; amount: number; cash_received: number | null; change_due: number; reference: string; paid_at: string | null; verified_by_name: string | null; verification_note: string };
 export type ApiOrder = {
   id: number; code: string; customer: number | null; customer_name: string; customer_identifier: string; created_by_name?: string | null;
   status: string; fulfillment: "pickup" | "delivery"; delivery_address: string; customer_note: string;
@@ -87,6 +87,6 @@ export async function closeShift(closingCash: number, note = "") {
 export async function createCashMovement(kind: "cash_in" | "cash_out", amount: number, note: string) {
   return apiRequest<{ id: number; kind: string; amount: number; note: string; created_at: string }>("/pos/shifts/movements/", { method: "POST", body: JSON.stringify({ kind, amount, note }) });
 }
-export async function posCheckout(input: { items: { product_id: number; quantity: number }[]; customer_note?: string }) {
+export async function posCheckout(input: { items: { product_id: number; quantity: number }[]; customer_note?: string; cash_received: number }) {
   return apiRequest<ApiOrder>("/pos/checkout/", { method: "POST", body: JSON.stringify(input) });
 }

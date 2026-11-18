@@ -175,6 +175,8 @@ class Payment(models.Model):
     method = models.CharField(max_length=12, choices=Method.choices)
     status = models.CharField(max_length=24, choices=Status.choices)
     amount = models.PositiveBigIntegerField()
+    cash_received = models.PositiveBigIntegerField(null=True, blank=True)
+    change_due = models.PositiveBigIntegerField(default=0)
     reference = models.CharField(max_length=80, unique=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)

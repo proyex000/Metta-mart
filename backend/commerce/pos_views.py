@@ -112,6 +112,8 @@ class CashMovementView(APIView):
             shift = current_shift(request.user, lock=True)
             if not shift:
                 raise ValidationError("Buka shift sebelum mencatat kas masuk/keluar.")
+            if kind == CashMovement.Kind.CASH_OUT and amount > shift_totals(shift)["expected_cash"]:
+                raise ValidationError({"amount": "Kas keluar melebihi saldo kas yang seharusnya tersedia."})
             movement = CashMovement.objects.create(shift=shift, kind=kind, amount=amount, note=note, actor=request.user)
             AuditLog.objects.create(actor=request.user, event="pos.cash_movement", target_type="cashier_shift", target_id=str(shift.pk), metadata={"kind": kind, "amount": amount, "note": note})
         return Response({"id": movement.pk, "kind": movement.kind, "amount": movement.amount, "note": movement.note, "created_at": movement.created_at}, status=status.HTTP_201_CREATED)

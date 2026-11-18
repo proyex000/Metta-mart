@@ -27,7 +27,7 @@ Backend menggunakan Django, Django REST Framework, session cookie HttpOnly, CSRF
 
 ## POS and cashier shifts
 
-Cashier/Admin must open a shift with an opening cash balance before POS checkout. Each POS cash sale reduces stock and is linked to the active shift. Expected cash is calculated from opening cash + paid cash sales + cash-in - cash-out. Closing a shift records the physical closing cash and variance. POS transactions are completed immediately and recorded as paid cash sales.
+Cashier/Admin must open a shift with an opening cash balance before POS checkout. Each POS cash sale reduces stock and is linked to the active shift. Expected cash is calculated from opening cash + paid cash sales + cash-in - cash-out. Cash-out cannot exceed the expected drawer balance. POS requires the tendered cash to cover the total and records cash received/change due. Closing a shift records the physical closing cash and variance. POS transactions are completed immediately and recorded as paid cash sales.
 
 ## Order flow
 

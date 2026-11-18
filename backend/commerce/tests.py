@@ -97,6 +97,22 @@ class CommerceApiTests(TestCase):
         self.assertEqual(closed.data["variance"], -1000)
         self.assertIsNone(self.client.get("/api/pos/shifts/current/").data["shift"])
 
+    def test_pos_checkout_rejects_underpayment_without_changing_stock(self):
+        self.client.force_authenticate(self.cashier)
+        self.client.post("/api/pos/shifts/open/", {"opening_cash": 10000}, format="json")
+        response = self.client.post("/api/pos/checkout/", {"items": [{"product_id": self.product.pk, "quantity": 1}], "cash_received": 4000}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_cash_out_cannot_exceed_expected_drawer_balance(self):
+        self.client.force_authenticate(self.cashier)
+        self.client.post("/api/pos/shifts/open/", {"opening_cash": 1000}, format="json")
+        response = self.client.post("/api/pos/shifts/movements/", {"kind": "cash_out", "amount": 1500, "note": "Pengeluaran"}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+
     def test_cashier_cannot_open_two_concurrent_shifts(self):
         self.client.force_authenticate(self.cashier)
         first = self.client.post("/api/pos/shifts/open/", {"opening_cash": 0}, format="json")

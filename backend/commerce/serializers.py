@@ -45,7 +45,7 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = ("method", "status", "amount", "reference", "paid_at", "verified_by_name", "verification_note")
+        fields = ("method", "status", "amount", "cash_received", "change_due", "reference", "paid_at", "verified_by_name", "verification_note")
 
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):

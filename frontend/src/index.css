@@ -3554,3 +3554,9 @@ td b {
 @media(max-width:980px){.pos-layout{grid-template-columns:1fr}.pos-cart{position:static}.shift-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.pos-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cash-control-panel,.shift-close-panel{align-items:stretch;flex-direction:column}.cash-movement-form,.shift-close-panel>div:last-child{display:grid;grid-template-columns:1fr}.cash-movement-form input,.shift-close-panel input{width:100%}.shift-summary-grid strong{font-size:17px}}
 @media print{body *{visibility:hidden!important}.pos-receipt,.pos-receipt *{visibility:visible!important}.pos-receipt{position:absolute;inset:0;width:100%;max-width:none;box-shadow:none;border:0}.modal-backdrop{position:static;background:#fff;padding:0}}
+
+
+.cash-received-field{display:grid;gap:6px;margin:14px 0;font-size:13px;font-weight:650}
+.cash-received-field input{width:100%;padding:11px;border:1px solid var(--border,#dce2df);border-radius:9px;font:inherit}
+.change-preview{display:flex;justify-content:space-between;margin:8px 0;color:var(--muted,#737b78)}
+.change-preview b{color:var(--text,#202b27)}
