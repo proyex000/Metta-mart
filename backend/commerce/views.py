@@ -89,7 +89,9 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                     notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
     def perform_destroy(self, instance):
-        if instance.order_items.exists():
+        # Produk yang punya riwayat (pesanan atau mutasi stok) tidak boleh dihapus permanen
+        # agar audit persediaan tetap utuh; cukup diarsipkan (is_active=False) dan hilang dari katalog.
+        if instance.order_items.exists() or instance.stock_movements.exists():
             instance.is_active = False
             instance.save(update_fields=["is_active", "updated_at"])
         else:

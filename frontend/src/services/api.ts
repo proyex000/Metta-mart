@@ -30,6 +30,27 @@ async function csrfToken(): Promise<string> {
   return data.csrfToken;
 }
 
+// Ambil pesan error pertama dari respons DRF: {detail}, {field: ["pesan"]}, atau ["pesan"].
+function firstErrorMessage(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstErrorMessage(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+    for (const key of Object.keys(record)) {
+      const found = firstErrorMessage(record[key]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method || "GET").toUpperCase();
   const headers = new Headers(init.headers);
@@ -46,8 +67,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (response.status === 204) return undefined as T;
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const detail = data.detail || data.identifier?.[0] || data.password?.[0] || data.full_name?.[0];
-    throw new Error(typeof detail === "string" ? detail : "Permintaan ke server gagal.");
+    throw new Error(firstErrorMessage(data) || "Permintaan ke server gagal.");
   }
   return data as T;
 }
