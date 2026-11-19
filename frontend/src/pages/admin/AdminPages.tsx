@@ -551,9 +551,9 @@ export function Stock() {
                       className="icon-button"
                       aria-label={`Hapus ${p.name}`}
                       onClick={async () => {
-                        if (window.confirm(`Hapus produk "${p.name}"?`)) {
+                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, sistem akan menonaktifkannya agar catatan lama tetap aman.`)) {
                           try { await productService.remove(p.id); }
-                          catch { window.alert("Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
+                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
                         }
                       }}
                     >
@@ -978,7 +978,7 @@ export function POS() {
           </>}
           <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
           <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
-          <p className="table-foot">POS hanya dapat digunakan saat jam operasional. Admin bertanggung jawab memastikan pembayaran diterima sebelum menyelesaikan transaksi.</p>
+          <p className="table-foot">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
         </section>
       </div>
       {error && <p className="auth-error" role="alert">{error}</p>}
@@ -1010,7 +1010,6 @@ export function Settings() {
     orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
   };
   const [tab, setTab] = useState<SettingsTab>("store");
-
   const [settingsLoadError, setSettingsLoadError] = useState("");
   const [values, setValues] = useState<Preferences>(() => {
     try {

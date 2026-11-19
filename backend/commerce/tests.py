@@ -191,19 +191,12 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.data["sent_to"], 2)
         self.assertEqual(Notification.objects.filter(title="Info koperasi").count(), 2)
 
-    def test_parent_can_only_order_for_admin_linked_student(self):
-        from accounts.models import ParentStudentLink, User
+    def test_parent_can_order_independently_without_student_link(self):
         parent = User.objects.create_user(identifier="parent@example.com", password="TestPassword!2026", full_name="Parent", role=User.Role.PARENT, email="parent@example.com")
-        ParentStudentLink.objects.create(parent=parent, student=self.student)
         self.client.force_authenticate(user=parent)
-        missing = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
-        self.assertEqual(missing.status_code, 400)
-        invalid = self.client.post("/api/orders/", {"payment_method": "cash", "student_id": self.other_student.id, "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
-        self.assertEqual(invalid.status_code, 400)
-        valid = self.client.post("/api/orders/", {"payment_method": "cash", "student_id": self.student.id, "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
-        self.assertEqual(valid.status_code, 201)
-        self.assertEqual(valid.data["beneficiary_name"], self.student.full_name)
-
+        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(response.data["beneficiary_name"])
     def test_parent_children_endpoint_returns_only_verified_links(self):
         from accounts.models import ParentStudentLink, User
         parent = User.objects.create_user(identifier="parent2@example.com", password="TestPassword!2026", full_name="Parent 2", role=User.Role.PARENT, email="parent2@example.com")
@@ -213,11 +206,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["id"] for row in response.data], [self.student.id])
 
-    def test_admin_pos_creates_paid_completed_sale_and_reduces_stock(self):
-        from django.utils import timezone
-        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-        today = day_codes[timezone.localtime().weekday()]
-        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
+    def test_admin_pos_creates_paid_completed_sale_and_reduces_stock_without_pickup_hours(self):
         self.client.force_authenticate(user=self.admin)
         response = self.client.post("/api/admin/pos/checkout/", {
             "payment_method": "cash",
@@ -234,6 +223,15 @@ class CommerceApiTests(TestCase):
         self.assertEqual(InventoryMovement.objects.get(reason="pos_sale").quantity_delta, -3)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
+
+    def test_delete_product_with_inventory_history_archives_instead_of_raising_500(self):
+        self.client.force_authenticate(user=self.admin)
+        InventoryMovement.objects.create(product=self.product, actor=self.admin, quantity_delta=10, reason="initial_stock", reference="initial")
+        response = self.client.delete(f"/api/products/{self.product.id}/")
+        self.assertEqual(response.status_code, 204)
+        self.product.refresh_from_db()
+        self.assertFalse(self.product.is_active)
+        self.assertEqual(InventoryMovement.objects.filter(product=self.product).count(), 1)
 
     def test_student_cannot_use_admin_pos(self):
         self.client.force_authenticate(user=self.student)

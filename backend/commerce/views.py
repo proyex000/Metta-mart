@@ -89,13 +89,13 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                     notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
     def perform_destroy(self, instance):
-        # Produk yang punya riwayat (pesanan atau mutasi stok) tidak boleh dihapus permanen
-        # agar audit persediaan tetap utuh; cukup diarsipkan (is_active=False) dan hilang dari katalog.
-        if instance.order_items.exists() or instance.stock_movements.exists():
-            instance.is_active = False
-            instance.save(update_fields=["is_active", "updated_at"])
-        else:
-            instance.delete()
+        # Keep products referenced by stock history or orders so audit trails remain valid.
+        if instance.stock_movements.exists() or instance.order_items.exists():
+            if instance.is_active:
+                instance.is_active = False
+                instance.save(update_fields=["is_active", "updated_at"])
+            return
+        instance.delete()
 
 
 class OrderListCreateView(generics.ListCreateAPIView):
@@ -365,8 +365,6 @@ class AdminPOSCheckoutView(APIView):
         if not enabled.get(method, False):
             raise ValidationError({"payment_method": "Metode pembayaran ini sedang dinonaktifkan."})
         now = timezone.now()
-        if not pickup_is_open(now):
-            raise ValidationError({"operating_hours": "Transaksi POS hanya dapat dilakukan saat koperasi buka. Atur jam operasional terlebih dahulu."})
         cleaned = []
         seen = set()
         for row in rows:
