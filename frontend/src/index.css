@@ -3535,6 +3535,103 @@ td b {
 .notification-compose label { display: grid; gap: 0.4rem; }
 .notification-compose input, .notification-compose textarea { width: 100%; }
 
+/* ---------- Perbaikan UI (Nov 2026) ---------- */
+
+/* Tombol sekunder: TSX memakai class "secondary", sebelumnya hanya ".secondary-btn" yang punya gaya. */
+.secondary,
+.secondary-btn {
+  min-height: 38px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #536a7c;
+  background: #fff;
+  border: 1px solid #dbe4ea;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.secondary:hover:not(:disabled),
+.secondary-btn:hover:not(:disabled) {
+  color: var(--red);
+  background: #fff6f3;
+  border-color: #f3c3b8;
+}
+.secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.secondary:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+/* Pemilih hari operasional (Pengaturan > Jam Operasional) */
+.settings-day-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+.settings-day-picker > span {
+  grid-column: 1 / -1;
+  color: #31485b;
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-day-picker label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  background: #fff;
+  border: 1px solid #dbe4ea;
+  border-radius: 8px;
+  color: #43596b;
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings-day-picker label:has(input:checked) {
+  color: var(--red);
+  background: #fff6f3;
+  border-color: #f3c3b8;
+}
+.settings-day-picker input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--red);
+}
+
+/* Dekorasi sudut tidak boleh menutupi atau menangkap klik pada konten. */
+.workspace::after,
+.sidebar::before,
+.sidebar::after {
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Tabel & toolbar tidak boleh meluber di layar sempit. */
+.toolbar {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: center;
+}
+.toolbar > .search {
+  grid-column: span 2;
+}
+.toolbar > select,
+.toolbar > input,
+.toolbar > label {
+  min-width: 0;
+}
+.desktop-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
 
 /* Final layout hardening: consistent spacing, readable forms and overflow-safe tables. */
 .role-shell,

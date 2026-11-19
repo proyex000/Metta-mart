@@ -252,3 +252,22 @@ class CommerceApiTests(TestCase):
         movement = InventoryMovement.objects.get(product=self.product, reason="manual_adjustment")
         self.assertEqual(movement.quantity_delta, 2)
         self.assertEqual(movement.reference, "Barang masuk dari pemasok")
+
+    def test_delete_product_with_stock_history_archives_instead_of_crashing(self):
+        self.client.force_authenticate(user=self.admin)
+        created = self.client.post("/api/products/", {"name": "Pensil", "category": "alat-tulis", "price": 2000, "stock": 5}, format="json")
+        self.assertEqual(created.status_code, 201)
+        product_id = created.data["id"]
+        self.assertTrue(InventoryMovement.objects.filter(product_id=product_id).exists())
+        response = self.client.delete(f"/api/products/{product_id}/")
+        self.assertEqual(response.status_code, 204)
+        archived = Product.objects.get(pk=product_id)
+        self.assertFalse(archived.is_active)
+        self.assertTrue(InventoryMovement.objects.filter(product_id=product_id).exists())
+
+    def test_delete_product_without_history_is_removed(self):
+        self.client.force_authenticate(user=self.admin)
+        clean = Product.objects.create(name="Penghapus", category="alat-tulis", price=1000, stock=0)
+        response = self.client.delete(f"/api/products/{clean.id}/")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Product.objects.filter(pk=clean.id).exists())
