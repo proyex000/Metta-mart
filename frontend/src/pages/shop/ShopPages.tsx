@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { Icon, PageTitle, ProductArt, Status } from "../../components/ui";
+import { Icon, Modal, PageTitle, ProductArt, Status } from "../../components/ui";
 import {
   ALL_CATEGORIES,
   categories,
@@ -13,7 +13,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
 import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
-import { fetchStorefrontSettings } from "../../services/settings";
+import { fetchStorefrontSettings, type StorefrontSettings } from "../../services/settings";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 
 export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
@@ -354,6 +354,43 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
   );
 }
 
+const DAY_LABELS: Record<string, string> = { mon: "Senin", tue: "Selasa", wed: "Rabu", thu: "Kamis", fri: "Jumat", sat: "Sabtu", sun: "Minggu" };
+const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+// Ubah nomor lokal (08xx / +62 / 62) menjadi format wa.me (62xx); kosong bila tidak valid.
+function whatsappNumber(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return "";
+  if (digits.startsWith("62")) return digits;
+  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
+  return digits;
+}
+
+function ContactInfo({ store, error, orderCode }: { store: StorefrontSettings | null; error: string; orderCode: string }) {
+  if (error) return <p className="payment-unavailable" role="alert">{error}</p>;
+  if (!store) return <p className="contact-info__loading">Memuat info kontak...</p>;
+  const { phone, email, address, name } = store.store_profile;
+  const wa = whatsappNumber(phone);
+  const hours = store.operating_hours;
+  const days = DAY_ORDER.filter((day) => hours.days.includes(day)).map((day) => DAY_LABELS[day]).join(", ");
+  const message = encodeURIComponent(`Halo admin ${name || "koperasi"}, saya ingin menanyakan pesanan #${orderCode}.`);
+  return (
+    <div className="contact-info">
+      <p>Hubungi koperasi untuk menanyakan pesanan <b>#{orderCode}</b>.</p>
+      <dl>
+        <dt>WhatsApp</dt>
+        <dd>{phone || "Belum diatur admin"}</dd>
+        {email && <><dt>Email</dt><dd><a href={`mailto:${email}`}>{email}</a></dd></>}
+        {address && <><dt>Lokasi</dt><dd>{address}</dd></>}
+        {days && <><dt>Jam layanan</dt><dd>{days} · {hours.open_time}–{hours.close_time}</dd></>}
+      </dl>
+      {wa
+        ? <a className="primary wide" href={`https://wa.me/${wa}?text=${message}`} target="_blank" rel="noopener noreferrer">Chat via WhatsApp</a>
+        : <p className="table-foot">Nomor WhatsApp koperasi belum diatur. Silakan datang langsung ke koperasi pada jam layanan.</p>}
+    </div>
+  );
+}
+
 export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
   const { code = "" } = useParams();
   const navigate = useNavigate();
@@ -366,6 +403,15 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
   const [accountLast4, setAccountLast4] = useState("");
   const [paymentMessage, setPaymentMessage] = useState("");
   const [sendingPayment, setSendingPayment] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [store, setStore] = useState<StorefrontSettings | null>(null);
+  const [storeError, setStoreError] = useState("");
+  const openContact = () => {
+    setContactOpen(true);
+    if (store) return;
+    setStoreError("");
+    fetchStorefrontSettings().then(setStore).catch(() => setStoreError("Info kontak koperasi gagal dimuat. Coba lagi beberapa saat."));
+  };
   useEffect(() => {
     fetchOrder(code).then(setOrder).catch((reason) => setError(reason instanceof Error ? reason.message : "Detail pesanan gagal dimuat.")).finally(() => setLoading(false));
   }, [code]);
@@ -390,11 +436,13 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
     <>
       <button className="back-button" onClick={() => navigate(-1)}><Icon name="back" /> Kembali</button>
       <PageTitle title="Detail Pesanan" subtitle={`#${order.code} · ${new Date(order.created_at).toLocaleString("id-ID")}`} />
-      <section className="detail-card">
+      <section className="detail-card order-detail">
         <div className="detail-head"><span className="mini-icon"><Icon name="box" /></span><div><b>#{order.code}</b><small>{new Date(order.created_at).toLocaleString("id-ID")}</small></div><Status>{status}</Status></div>
         <h2>Item Pesanan</h2>
-        {order.beneficiary_name && <p className="table-foot">Pesanan untuk siswa: <b>{order.beneficiary_name}</b></p>}
-        {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small><span>{money(item.line_total)}</span></div></div>)}
+        {order.beneficiary_name && <p className="order-detail__for">Pesanan untuk siswa: <b>{order.beneficiary_name}</b></p>}
+        <div className="order-detail__items">
+          {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small></div><strong>{money(item.line_total)}</strong></div>)}
+        </div>
         <div className="detail-total"><span>Total Belanja</span><strong>{money(order.total)}</strong></div>
         <h2>Informasi Pengambilan</h2>
         <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
@@ -402,32 +450,41 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
         {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
           <section className="payment-section"><h2>Identitas Pembayaran</h2><p>Isi identitas rekening atau e-wallet yang digunakan untuk transfer. Admin akan mencocokkannya dengan dana yang masuk. Ini bukan bukti pembayaran otomatis.</p><label>Nama pemilik rekening/e-wallet<input value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={120} placeholder="Nama sesuai akun pengirim" /></label><label>Bank atau e-wallet asal<input value={paymentSource} onChange={(event) => setPaymentSource(event.target.value)} maxLength={80} placeholder="Contoh: BCA, Mandiri, DANA, GoPay" /></label><label>4 digit terakhir rekening (opsional)<input inputMode="numeric" value={accountLast4} onChange={(event) => setAccountLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} maxLength={4} placeholder="1234" /></label><label>Catatan tambahan (opsional)<textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} maxLength={300} placeholder="Contoh: transfer pukul 14.30" /></label><button className="primary wide" disabled={!senderName.trim() || !paymentSource.trim() || (accountLast4.length > 0 && accountLast4.length !== 4) || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Identitas Pembayaran"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
         )}
-        <button className="primary wide" onClick={() => alert("Silakan hubungi admin koperasi melalui kanal komunikasi sekolah.")}>Hubungi Admin</button>
+        <button className="primary wide" onClick={openContact}>Hubungi Admin</button>
       </section>
+      {contactOpen && (
+        <Modal title="Hubungi Admin Koperasi" close={() => setContactOpen(false)}>
+          <ContactInfo store={store} error={storeError} orderCode={order.code} />
+          <button type="button" className="secondary contact-info__close" onClick={() => setContactOpen(false)}>Tutup</button>
+        </Modal>
+      )}
     </>
   );
 }
 
 export function ShopNotifications() {
+  const { session } = useAuth();
+  const role = session?.role === "parent" ? "parent" : "student";
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [working, setWorking] = useState<number | null>(null);
+  const [selected, setSelected] = useState<AppNotification | null>(null);
   useEffect(() => {
     fetchNotifications().then(setItems)
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Notifikasi gagal dimuat."))
       .finally(() => setLoading(false));
   }, []);
   const openNotice = async (notice: AppNotification) => {
-    if (notice.is_read || working === notice.id) return;
-    setWorking(notice.id);
+    setSelected({ ...notice, is_read: true });
+    if (notice.is_read) return;
     try {
       await markNotificationRead(notice.id);
       setItems((current) => current.map((item) => item.id === notice.id ? { ...item, is_read: true } : item));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Status notifikasi gagal diperbarui.");
-    } finally { setWorking(null); }
+    }
   };
+  const kindLabel = ({ order: "Pesanan", payment: "Pembayaran", stock: "Stok", announcement: "Pengumuman" } as Record<string, string>);
   return (
     <>
       <PageTitle title="Notifikasi" subtitle="Informasi pesanan dan pengumuman dari koperasi." />
@@ -436,7 +493,7 @@ export function ShopNotifications() {
       {!loading && !error && !items.length && <div className="empty-state"><h2>Belum ada notifikasi</h2><p>Informasi terbaru dari koperasi akan muncul di sini.</p></div>}
       <section className="shop-notices">
         {items.map((notice) => (
-          <button className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => openNotice(notice)}>
+          <button type="button" className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => openNotice(notice)} aria-label={`Lihat detail: ${notice.title}`}>
             <span className="mini-icon"><Icon name={notice.kind === "payment" ? "bag" : "bell"} /></span>
             <div>
               <b>{notice.title}</b>
@@ -444,10 +501,30 @@ export function ShopNotifications() {
               <time>{new Date(notice.created_at).toLocaleString("id-ID")}</time>
               {notice.target_code && <small>Pesanan {notice.target_code}</small>}
             </div>
-            {!notice.is_read && <span aria-label="Belum dibaca">Baru</span>}
+            <span className="notice-detail-chip">Detail</span>
           </button>
         ))}
       </section>
+      {selected && (
+        <Modal title="Detail Notifikasi" close={() => setSelected(null)}>
+          <div className="notice-detail">
+            <div className="notice-detail__meta">
+              <span className="mini-icon"><Icon name={selected.kind === "payment" ? "bag" : "bell"} /></span>
+              <div>
+                <span className="notice-detail__kind">{kindLabel[selected.kind] || "Informasi"}</span>
+                <time>{new Date(selected.created_at).toLocaleString("id-ID")}</time>
+              </div>
+            </div>
+            <h3>{selected.title}</h3>
+            <p>{selected.message}</p>
+            {selected.target_code && <dl><dt>Pesanan terkait</dt><dd>#{selected.target_code}</dd></dl>}
+            <div className="notice-detail__actions">
+              {selected.target_code && <Link className="primary" to={`/${role}/orders/${selected.target_code}`}>Buka Pesanan</Link>}
+              <button type="button" className="secondary" onClick={() => setSelected(null)}>Tutup</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

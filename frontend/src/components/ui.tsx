@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 export type IconName =
   | "home"
@@ -152,5 +152,24 @@ export function PageTitle({
       </div>
       {action}
     </header>
+  );
+}
+
+export function Modal({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+  return (
+    <div className="modal-backdrop" onMouseDown={close}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="panel__title">
+          <h2>{title}</h2>
+          <button type="button" onClick={close} aria-label="Tutup">×</button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
