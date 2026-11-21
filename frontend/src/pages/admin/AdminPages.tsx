@@ -935,6 +935,7 @@ export function POS() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<CommerceOrder | null>(null);
+  const [search, setSearch] = useState("");
   useEffect(() => {
     fetchStorefrontSettings().then((settings) => {
       setEnabled(settings.payment_methods);
@@ -946,6 +947,8 @@ export function POS() {
   }, []);
   const selected = products.filter((product) => (counts[product.id] || 0) > 0);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
+  const keyword = search.trim().toLowerCase();
+  const visibleProducts = keyword ? products.filter((product) => product.name.toLowerCase().includes(keyword)) : products;
   const change = (id: number, delta: number) => {
     const product = products.find((item) => item.id === id);
     if (!product) return;
@@ -974,8 +977,12 @@ export function POS() {
       <div className="pos-layout">
         <section className="panel table-panel pos-products">
           <div className="panel__title"><h2>Pilih Produk</h2><small>Stok diperbarui dari server</small></div>
+          <label className="search pos-search">
+            <Icon name="search" size={16} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama produk..." aria-label="Cari produk" />
+          </label>
           <div className="pos-product-list">
-            {products.map((product) => (
+            {visibleProducts.map((product) => (
               <article key={product.id} className={counts[product.id] ? "is-selected" : ""}>
                 <div><b>{product.name}</b><small>{money(product.price)} · Stok {product.stock}</small></div>
                 <div className="quantity">
@@ -986,6 +993,7 @@ export function POS() {
               </article>
             ))}
             {!products.length && <p className="table-foot">Belum ada produk aktif.</p>}
+            {!!products.length && !visibleProducts.length && <p className="table-foot">Tidak ada produk yang cocok dengan “{search.trim()}”.</p>}
           </div>
         </section>
         <section className="panel table-panel pos-summary">

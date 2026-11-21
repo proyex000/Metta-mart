@@ -4235,3 +4235,82 @@ td b {
     justify-self: start;
   }
 }
+
+/* Popup notifikasi: baris aksi */
+.notice-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.notice-detail__actions .secondary {
+  justify-self: auto;
+}
+a.primary {
+  text-decoration: none;
+}
+
+/* Popup Hubungi Admin */
+.contact-info {
+  display: grid;
+  gap: 16px;
+}
+.contact-info > p {
+  margin: 0;
+  color: #607485;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.contact-info dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 18px;
+  margin: 0;
+  padding: 14px 16px;
+  background: #f7f9fa;
+  border: 1px solid #e8eef2;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.contact-info dt {
+  color: #82919e;
+}
+.contact-info dd {
+  margin: 0;
+  color: #31485b;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.contact-info dd a {
+  color: inherit;
+}
+.contact-info .primary.wide {
+  min-height: 44px;
+}
+.contact-info__loading {
+  margin: 0;
+  padding: 18px 0;
+  color: #8a99a5;
+  font-size: 13px;
+  text-align: center;
+}
+.contact-info__close {
+  margin-top: 14px;
+  justify-self: end;
+  display: flex;
+  margin-left: auto;
+}
+
+/* Pencarian produk di POS */
+.pos-search {
+  margin: 4px 0 8px;
+}
+@media (max-width: 480px) {
+  .contact-info dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .contact-info dd {
+    margin-bottom: 8px;
+  }
+}
