@@ -3809,3 +3809,429 @@ td b {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ---------- Rapikan UI: notifikasi, POS, detail pesanan (Nov 2026) ---------- */
+
+/* Daftar notifikasi: kolom aksi menyesuaikan isi agar chip tidak keluar frame */
+.shop-notices button {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+}
+.shop-notices time {
+  display: block;
+  font-size: 12px;
+}
+.shop-notices button > span:last-child:not(.mini-icon) {
+  padding: 4px 10px;
+  color: #d93c43;
+  background: #fff0ed;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.shop-notices .notice-detail-chip {
+  text-transform: uppercase;
+}
+.shop-notices button:hover .notice-detail-chip,
+.shop-notices button:focus-visible .notice-detail-chip {
+  color: #fff;
+  background: var(--red);
+}
+
+/* Popup detail notifikasi */
+.notice-detail {
+  display: grid;
+  gap: 14px;
+}
+.notice-detail__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.notice-detail__meta > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.notice-detail__kind {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.notice-detail__meta time {
+  color: #91a0ac;
+  font-size: 12px;
+}
+.notice-detail h3 {
+  color: #31485b;
+  font-size: 17px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.notice-detail p {
+  margin: 0;
+  padding: 14px;
+  color: #546a7b;
+  background: #f7f9fa;
+  border: 1px solid #e8eef2;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.notice-detail dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.notice-detail dt {
+  color: #82919e;
+}
+.notice-detail dd {
+  margin: 0;
+  color: #31485b;
+  font-weight: 600;
+}
+.notice-detail .secondary {
+  justify-self: end;
+}
+.modal .panel__title button {
+  line-height: 1;
+}
+
+/* POS Koperasi */
+.pos-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  align-items: start;
+}
+.pos-products,
+.pos-summary {
+  min-width: 0;
+  padding: 20px;
+}
+.pos-summary {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 16px;
+}
+.pos-summary .panel__title {
+  margin: 0;
+}
+.pos-summary .panel__title small,
+.pos-products .panel__title small {
+  color: #8a99a5;
+  font-size: 12px;
+}
+.pos-product-list > article {
+  padding: 12px 10px;
+  border-radius: 9px;
+  transition: background-color 0.15s;
+}
+.pos-product-list > article.is-selected {
+  background: #fff8f6;
+}
+.pos-product-list > article > div:first-child b {
+  color: #31485b;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.pos-product-list .quantity {
+  flex: none;
+}
+.pos-product-list .quantity > b {
+  min-width: 22px;
+  text-align: center;
+  font-size: 14px;
+}
+.pos-summary__items {
+  display: grid;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #e8eef2;
+  border-radius: 10px;
+}
+.pos-summary__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #eef2f5;
+}
+.pos-summary__item:last-child {
+  border-bottom: 0;
+}
+.pos-summary__item > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.pos-summary__item b {
+  color: #31485b;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.pos-summary__item small {
+  color: #8a99a5;
+  font-size: 12px;
+}
+.pos-summary__item strong {
+  flex: none;
+  color: #31485b;
+  font-size: 13px;
+}
+.pos-summary__empty {
+  margin: 0;
+  padding: 22px 14px;
+  color: #8a99a5;
+  font-size: 13px;
+  text-align: center;
+}
+.pos-summary__total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f7f9fa;
+  border-radius: 10px;
+}
+.pos-summary__total span {
+  color: #607485;
+  font-size: 14px;
+}
+.pos-summary__total strong {
+  color: var(--ink);
+  font-size: 20px;
+}
+.pos-summary__fields {
+  display: grid;
+  gap: 14px;
+}
+.pos-summary__fields label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: #607485;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pos-summary__fields input,
+.pos-summary__fields select,
+.pos-summary__fields textarea {
+  width: 100%;
+  min-width: 0;
+  font-weight: 400;
+}
+.pos-summary__fields textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.pos-summary__change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px dashed #dbe4ea;
+  border-radius: 9px;
+  color: #607485;
+  font-size: 13px;
+}
+.pos-summary__change b {
+  color: #31485b;
+  font-size: 15px;
+}
+.pos-summary .primary.wide {
+  min-height: 44px;
+}
+.pos-summary .primary:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.pos-summary__hint {
+  margin: 0;
+  color: #8a99a5;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.pos-receipt {
+  margin-top: 18px;
+  padding: 20px;
+}
+.pos-receipt dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 20px;
+  margin: 14px 0 18px;
+  font-size: 14px;
+}
+.pos-receipt dt {
+  color: #82919e;
+}
+.pos-receipt dd {
+  margin: 0;
+  color: #31485b;
+  font-weight: 600;
+}
+
+/* Detail pesanan siswa & orang tua */
+.order-detail {
+  max-width: 760px;
+  padding: 22px;
+}
+.order-detail .detail-head {
+  padding-bottom: 16px;
+}
+.order-detail .detail-head b {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.order-detail .detail-head small {
+  margin-top: 2px;
+  font-size: 12px;
+}
+.order-detail h2 {
+  margin: 22px 0 10px;
+  color: #31485b;
+  font-size: 15px;
+}
+.order-detail__for {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  color: #607485;
+  background: #f7f9fa;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.order-detail__items {
+  display: grid;
+}
+.order-detail .detail-product {
+  padding: 12px 0;
+  border-top: 1px solid #eef2f5;
+}
+.order-detail .detail-product:first-child {
+  border-top: 0;
+}
+.order-detail .detail-product > div b {
+  color: #31485b;
+  font-size: 14px;
+}
+.order-detail .detail-product > div small {
+  display: block;
+  margin-top: 2px;
+  color: #8a99a5;
+  font-size: 12px;
+}
+.order-detail .detail-product > strong {
+  flex: none;
+  color: #31485b;
+  font-size: 14px;
+}
+.order-detail .detail-total {
+  font-size: 14px;
+}
+.order-detail .detail-total strong {
+  font-size: 16px;
+}
+.order-detail dl {
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px 16px;
+  margin: 0;
+  padding: 14px 16px;
+  background: #f7f9fa;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.order-detail dd {
+  margin: 0;
+  color: #31485b;
+  overflow-wrap: anywhere;
+}
+.order-detail .timeline {
+  margin: 22px 0 22px 6px;
+  font-size: 13px;
+}
+.order-detail .payment-section {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0 18px;
+  padding: 18px;
+  border: 1px solid #e8eef2;
+  border-radius: 12px;
+}
+.order-detail .payment-section h2 {
+  margin: 0;
+}
+.order-detail .payment-section p {
+  margin: 0;
+  color: #687d8e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.order-detail .payment-section label {
+  display: grid;
+  gap: 6px;
+  color: #607485;
+  font-size: 13px;
+  font-weight: 600;
+}
+.order-detail .payment-section input,
+.order-detail .payment-section textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid #dfe7ec;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+.order-detail .payment-section textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.order-detail > .primary.wide {
+  min-height: 44px;
+}
+
+@media (max-width: 1100px) {
+  .pos-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pos-summary {
+    position: static;
+  }
+}
+@media (max-width: 600px) {
+  .pos-products,
+  .pos-summary,
+  .pos-receipt,
+  .order-detail {
+    padding: 15px;
+  }
+  .order-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .order-detail dl dd {
+    margin-bottom: 10px;
+  }
+  .shop-notices button {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+  .shop-notices button > span:last-child:not(.mini-icon) {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

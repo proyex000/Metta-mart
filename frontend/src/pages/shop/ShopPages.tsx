@@ -390,11 +390,13 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
     <>
       <button className="back-button" onClick={() => navigate(-1)}><Icon name="back" /> Kembali</button>
       <PageTitle title="Detail Pesanan" subtitle={`#${order.code} · ${new Date(order.created_at).toLocaleString("id-ID")}`} />
-      <section className="detail-card">
+      <section className="detail-card order-detail">
         <div className="detail-head"><span className="mini-icon"><Icon name="box" /></span><div><b>#{order.code}</b><small>{new Date(order.created_at).toLocaleString("id-ID")}</small></div><Status>{status}</Status></div>
         <h2>Item Pesanan</h2>
-        {order.beneficiary_name && <p className="table-foot">Pesanan untuk siswa: <b>{order.beneficiary_name}</b></p>}
-        {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small><span>{money(item.line_total)}</span></div></div>)}
+        {order.beneficiary_name && <p className="order-detail__for">Pesanan untuk siswa: <b>{order.beneficiary_name}</b></p>}
+        <div className="order-detail__items">
+          {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small></div><strong>{money(item.line_total)}</strong></div>)}
+        </div>
         <div className="detail-total"><span>Total Belanja</span><strong>{money(order.total)}</strong></div>
         <h2>Informasi Pengambilan</h2>
         <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>

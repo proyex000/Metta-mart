@@ -771,6 +771,7 @@ export function Notifications() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sentMessage, setSentMessage] = useState("");
+  const [selectedNotice, setSelectedNotice] = useState<AppNotification | null>(null);
   useEffect(() => {
     fetchNotifications().then(setItems)
       .catch((reason) => setError(reason instanceof Error ? reason.message : "Notifikasi gagal dimuat."))
@@ -784,6 +785,10 @@ export function Notifications() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Notifikasi gagal diperbarui.");
     }
+  };
+  const openNotice = (notice: AppNotification) => {
+    setSelectedNotice({ ...notice, is_read: true });
+    void markRead(notice);
   };
   const send = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -816,14 +821,31 @@ export function Notifications() {
         {!loading && !items.length && <p className="table-foot">Belum ada aktivitas notifikasi.</p>}
         <div className="shop-notices">
           {items.map((notice) => (
-            <button className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => markRead(notice)}>
+            <button type="button" className={notice.is_read ? "read" : ""} key={notice.id} onClick={() => openNotice(notice)} aria-label={`Lihat detail: ${notice.title}`}>
               <span className="mini-icon"><Icon name={notice.kind === "payment" ? "bag" : "bell"} /></span>
               <div><b>{notice.title}</b><p>{notice.message}</p><time>{new Date(notice.created_at).toLocaleString("id-ID")}</time></div>
-              {!notice.is_read && <span>Baru</span>}
+              <span className="notice-detail-chip">Detail</span>
             </button>
           ))}
         </div>
       </section>
+      {selectedNotice && (
+        <Modal title="Detail Notifikasi" close={() => setSelectedNotice(null)}>
+          <div className="notice-detail">
+            <div className="notice-detail__meta">
+              <span className="mini-icon"><Icon name={selectedNotice.kind === "payment" ? "bag" : "bell"} /></span>
+              <div>
+                <span className="notice-detail__kind">{({ order: "Pesanan", payment: "Pembayaran", stock: "Stok", announcement: "Pengumuman" } as Record<string, string>)[selectedNotice.kind] || "Informasi"}</span>
+                <time>{new Date(selectedNotice.created_at).toLocaleString("id-ID")}</time>
+              </div>
+            </div>
+            <h3>{selectedNotice.title}</h3>
+            <p>{selectedNotice.message}</p>
+            {selectedNotice.target_code && <dl><dt>Pesanan terkait</dt><dd>#{selectedNotice.target_code}</dd></dl>}
+            <button type="button" className="secondary" onClick={() => setSelectedNotice(null)}>Tutup</button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }
@@ -949,40 +971,54 @@ export function POS() {
   return (
     <>
       <Header title="POS Koperasi" subtitle="Transaksi langsung oleh admin saat melayani pembelian di koperasi." />
-      <div className="dashboard-grid">
-        <section className="panel table-panel">
+      <div className="pos-layout">
+        <section className="panel table-panel pos-products">
           <div className="panel__title"><h2>Pilih Produk</h2><small>Stok diperbarui dari server</small></div>
           <div className="pos-product-list">
             {products.map((product) => (
-              <article key={product.id}>
+              <article key={product.id} className={counts[product.id] ? "is-selected" : ""}>
                 <div><b>{product.name}</b><small>{money(product.price)} · Stok {product.stock}</small></div>
                 <div className="quantity">
-                  <button type="button" onClick={() => change(product.id, -1)} disabled={!counts[product.id]}>−</button>
+                  <button type="button" onClick={() => change(product.id, -1)} disabled={!counts[product.id]} aria-label={`Kurangi ${product.name}`}>−</button>
                   <b>{counts[product.id] || 0}</b>
-                  <button type="button" onClick={() => change(product.id, 1)} disabled={counts[product.id] >= product.stock || product.stock === 0}>+</button>
+                  <button type="button" onClick={() => change(product.id, 1)} disabled={counts[product.id] >= product.stock || product.stock === 0} aria-label={`Tambah ${product.name}`}>+</button>
                 </div>
               </article>
             ))}
             {!products.length && <p className="table-foot">Belum ada produk aktif.</p>}
           </div>
         </section>
-        <section className="panel table-panel">
-          <div className="panel__title"><h2>Ringkasan Transaksi</h2></div>
-          {selected.map((product) => <div className="latest__row" key={product.id}><div><b>{product.name}</b><small>{counts[product.id]} × {money(product.price)}</small></div><strong>{money(counts[product.id] * product.price)}</strong></div>)}
-          {!selected.length && <p className="table-foot">Pilih produk untuk memulai transaksi.</p>}
-          <div className="detail-total"><span>Total</span><strong>{money(total)}</strong></div>
-          <label>Metode Pembayaran<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>{enabled.cash && <option value="cash">Tunai</option>}{enabled.bank_transfer && <option value="bank_transfer">Transfer Bank (dikonfirmasi admin)</option>}{enabled.qris && <option value="qris">QRIS (dikonfirmasi admin)</option>}</select></label>
-          {paymentMethod === "cash" && <>
-            <label>Uang Diterima (Rp)<input type="number" min={total} step={1} value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={String(total)} /></label>
-            <p className="table-foot">Kembalian: <b>{money(Math.max(0, Number(cashReceived || 0) - total))}</b></p>
-          </>}
-          <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
+        <section className="panel table-panel pos-summary">
+          <div className="panel__title"><h2>Ringkasan Transaksi</h2>{selected.length > 0 && <small>{selected.length} produk</small>}</div>
+          <div className="pos-summary__items">
+            {selected.map((product) => <div className="pos-summary__item" key={product.id}><div><b>{product.name}</b><small>{counts[product.id]} × {money(product.price)}</small></div><strong>{money(counts[product.id] * product.price)}</strong></div>)}
+            {!selected.length && <p className="pos-summary__empty">Pilih produk untuk memulai transaksi.</p>}
+          </div>
+          <div className="pos-summary__total"><span>Total</span><strong>{money(total)}</strong></div>
+          <div className="pos-summary__fields">
+            <label>Metode Pembayaran<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}>{enabled.cash && <option value="cash">Tunai</option>}{enabled.bank_transfer && <option value="bank_transfer">Transfer Bank (dikonfirmasi admin)</option>}{enabled.qris && <option value="qris">QRIS (dikonfirmasi admin)</option>}</select></label>
+            {paymentMethod === "cash" && <>
+              <label>Uang Diterima (Rp)<input type="number" min={total} step={1} value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={String(total)} /></label>
+              <div className="pos-summary__change"><span>Kembalian</span><b>{money(Math.max(0, Number(cashReceived || 0) - total))}</b></div>
+            </>}
+            <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
+          </div>
           <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
-          <p className="table-foot">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
+          <p className="pos-summary__hint">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
         </section>
       </div>
       {error && <p className="auth-error" role="alert">{error}</p>}
-      {receipt && <section className="panel table-panel"><h2>Transaksi Berhasil</h2><p>Kode: <b>{receipt.code}</b></p><p>Total: <b>{money(receipt.total)}</b></p><p>Status: Selesai · Lunas</p>{receipt.cash_received !== null && <p>Uang diterima: {money(receipt.cash_received)} · Kembalian: {money(receipt.change_due || 0)}</p>}<button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button></section>}
+      {receipt && (
+        <section className="panel table-panel pos-receipt">
+          <div className="panel__title"><h2>Transaksi Berhasil</h2><span className="status">Selesai · Lunas</span></div>
+          <dl>
+            <dt>Kode</dt><dd>{receipt.code}</dd>
+            <dt>Total</dt><dd>{money(receipt.total)}</dd>
+            {receipt.cash_received !== null && <><dt>Uang diterima</dt><dd>{money(receipt.cash_received)}</dd><dt>Kembalian</dt><dd>{money(receipt.change_due || 0)}</dd></>}
+          </dl>
+          <button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button>
+        </section>
+      )}
     </>
   );
 }
