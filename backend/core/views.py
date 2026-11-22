@@ -2,6 +2,7 @@ from datetime import datetime
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from accounts.permissions import IsAdminRole
+from commerce.delivery import DEFAULT_DELIVERY_SETTINGS
 from .models import AuditLog, StoreSetting
 from .serializers import AuditLogSerializer, StoreSettingSerializer
 
@@ -43,6 +44,7 @@ DEFAULT_STORE_SETTINGS = {
     "pickup_instructions": {"message": "Pengambilan dilakukan di koperasi sekolah saat jam operasional setelah pesanan berstatus Siap Diambil."},
     "store_profile": {"name": "MettaMart", "description": "Koperasi sekolah", "address": "", "email": "", "phone": ""},
     "notification_preferences": {"order_alerts": True, "low_stock_alerts": True, "announcements_enabled": True},
+    "delivery_settings": DEFAULT_DELIVERY_SETTINGS,
 }
 
 
@@ -92,6 +94,19 @@ class StorefrontSettingsView(APIView):
                     raise ValidationError({key: "Informasi koperasi harus berupa teks."})
                 if not merged["name"].strip() or len(merged["name"]) > 120:
                     raise ValidationError({key: "Nama koperasi wajib diisi dan maksimal 120 karakter."})
+            if key == "delivery_settings":
+                if not isinstance(merged["enabled"], bool):
+                    raise ValidationError({key: "Status pengiriman harus berupa boolean."})
+                if not isinstance(merged["origin_address"], str) or len(merged["origin_address"]) > 300:
+                    raise ValidationError({key: "Alamat asal pengiriman harus berupa teks maksimal 300 karakter."})
+                for field in ("base_fee", "per_km_fee"):
+                    if isinstance(merged[field], bool) or not isinstance(merged[field], int) or not 0 <= merged[field] <= 1_000_000:
+                        raise ValidationError({key: "Tarif pengiriman harus berupa bilangan bulat Rp0–1.000.000."})
+                for field in ("base_distance_km", "max_distance_km"):
+                    if isinstance(merged[field], bool) or not isinstance(merged[field], (int, float)) or not 0 < merged[field] <= 100:
+                        raise ValidationError({key: "Jarak pengiriman harus berupa angka lebih dari 0 dan maksimal 100 km."})
+                if merged["base_distance_km"] > merged["max_distance_km"]:
+                    raise ValidationError({key: "Jarak tarif dasar tidak boleh melebihi jangkauan maksimal."})
             if key == "notification_preferences" and any(not isinstance(merged[field], bool) for field in ("order_alerts", "low_stock_alerts", "announcements_enabled")):
                 raise ValidationError({key: "Preferensi notifikasi harus berupa boolean."})
             StoreSetting.objects.update_or_create(key=key, defaults={"value": merged, "updated_by": request.user})

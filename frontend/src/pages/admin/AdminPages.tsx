@@ -368,14 +368,16 @@ export function Dashboard() {
           </article>
           <article className="panel latest">
             <div className="panel__title"><h2>Pesanan Terbaru</h2><button onClick={() => window.location.assign("/admin/orders")}>Lihat Semua ›</button></div>
+            <div className="latest__list">
             {summary.recent_orders.length ? summary.recent_orders.map((order) => (
               <div className="latest__row" key={order.code}>
                 <span className="mini-icon"><Icon name="bag" size={16} /></span>
                 <div><b>#{order.code}</b><small>{order.beneficiary_name ? `Untuk ${order.beneficiary_name} · ` : ""}{order.customer_name} · {new Date(order.created_at).toLocaleString("id-ID")}</small></div>
-                <Status>{statusLabel[order.status]}</Status>
+                <Status>{order.delivery_method === "gosend" && order.status === "ready_for_pickup" ? "Siap Diantar" : statusLabel[order.status]}</Status>
                 <span>{money(order.total)}</span>
               </div>
             )) : <p className="table-foot">Belum ada pesanan.</p>}
+            </div>
           </article>
         </section>
         <section className="panel table-panel">
@@ -643,8 +645,16 @@ export function Stock() {
   );
 }
 
-function adminOrderStatus(status: CommerceOrder["status"]) {
-  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+function adminOrderStatus(status: CommerceOrder["status"], method: CommerceOrder["delivery_method"] = "pickup") {
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: method === "gosend" ? "Siap Diantar" : "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+}
+function deliveryLabel(method: CommerceOrder["delivery_method"]) {
+  return method === "gosend" ? "GoSend" : "Ambil di koperasi";
+}
+function whatsappLink(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const full = digits.startsWith("62") ? digits : digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+  return `https://wa.me/${full}`;
 }
 function adminPaymentStatus(status: CommerceOrder["payment_status"]) {
   return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Ditolak", refunded: "Dikembalikan" })[status];
@@ -658,6 +668,7 @@ export function Orders() {
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
+  const [deliveryFilter, setDeliveryFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
@@ -676,6 +687,7 @@ export function Orders() {
       && (paymentFilter === "all" || order.payment_status === paymentFilter)
       && (methodFilter === "all" || order.payment_method === methodFilter)
       && (channelFilter === "all" || order.sales_channel === channelFilter)
+      && (deliveryFilter === "all" || order.delivery_method === deliveryFilter)
       && (!dateFrom || date >= dateFrom)
       && (!dateTo || date <= dateTo);
   });
@@ -686,8 +698,8 @@ export function Orders() {
       return '"' + safe.replace(/"/g, '""') + '"';
     };
     const rows = [
-      ["Kode", "Tanggal", "Pelanggan", "Penerima", "Kanal", "Metode", "Status Pesanan", "Status Pembayaran", "Total", "Nama Pengirim", "Bank/E-wallet", "Akhir Rekening"],
-      ...shown.map((order) => [order.code, new Date(order.created_at).toLocaleString("id-ID"), order.customer_name, order.beneficiary_name || "", order.sales_channel, order.payment_method, adminOrderStatus(order.status), adminPaymentStatus(order.payment_status), order.total, order.payment_sender_name, order.payment_source, order.payment_account_last4]),
+      ["Kode", "Tanggal", "Pelanggan", "Penerima", "Kanal", "Metode", "Status Pesanan", "Status Pembayaran", "Total", "Nama Pengirim", "Bank/E-wallet", "Akhir Rekening", "Pengambilan", "Ongkir", "Penerima Antar", "HP Penerima", "Alamat Antar"],
+      ...shown.map((order) => [order.code, new Date(order.created_at).toLocaleString("id-ID"), order.customer_name, order.beneficiary_name || "", order.sales_channel, order.payment_method, adminOrderStatus(order.status, order.delivery_method), adminPaymentStatus(order.payment_status), order.total, order.payment_sender_name, order.payment_source, order.payment_account_last4, deliveryLabel(order.delivery_method), order.delivery_fee, order.delivery_recipient, order.delivery_phone, order.delivery_address]),
     ];
     const csv = "\uFEFF" + rows.map((row) => row.map(escapeCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
@@ -721,14 +733,14 @@ export function Orders() {
   };
   return (
     <>
-      <Header title="Pesanan" subtitle="Terima pesanan, siapkan barang, dan konfirmasi pengambilan di koperasi." />
+      <Header title="Pesanan" subtitle="Terima pesanan, siapkan barang, dan konfirmasi pengambilan atau pengantaran GoSend." />
       {error && <p className="auth-error" role="alert">{error}</p>}
       <div className="panel table-panel">
         <div className="tabs">{tabs.map((t) => <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>{t}{t === "Semua" ? ` (${items.length})` : ""}</button>)}</div>
-        <div className="toolbar"><label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode / pelanggan / penerima..." /></label><select aria-label="Filter status pembayaran" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">Semua Pembayaran</option><option value="unpaid">Belum Dibayar</option><option value="pending_verification">Menunggu Verifikasi</option><option value="paid">Lunas</option><option value="failed">Ditolak</option></select><select aria-label="Filter metode pembayaran" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">Semua Metode</option><option value="cash">Tunai</option><option value="bank_transfer">Transfer</option><option value="qris">QRIS</option></select><select aria-label="Filter kanal transaksi" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}><option value="all">Semua Kanal</option><option value="online">Online</option><option value="pos">POS</option></select><label>Dari<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Sampai<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label><button className="secondary" type="button" onClick={exportCsv} disabled={!shown.length}>Ekspor CSV ({shown.length})</button></div>
+        <div className="toolbar"><label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode / pelanggan / penerima..." /></label><select aria-label="Filter status pembayaran" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">Semua Pembayaran</option><option value="unpaid">Belum Dibayar</option><option value="pending_verification">Menunggu Verifikasi</option><option value="paid">Lunas</option><option value="failed">Ditolak</option></select><select aria-label="Filter metode pembayaran" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">Semua Metode</option><option value="cash">Tunai</option><option value="bank_transfer">Transfer</option><option value="qris">QRIS</option></select><select aria-label="Filter kanal transaksi" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}><option value="all">Semua Kanal</option><option value="online">Online</option><option value="pos">POS</option></select><select aria-label="Filter metode pengambilan" value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)}><option value="all">Semua Pengambilan</option><option value="pickup">Ambil di Koperasi</option><option value="gosend">GoSend</option></select><label>Dari<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Sampai<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label><button className="secondary" type="button" onClick={exportCsv} disabled={!shown.length}>Ekspor CSV ({shown.length})</button></div>
         {loading ? <p>Memuat pesanan...</p> : (
-          <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Status</th><th>Aksi</th></tr></thead>
-            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{money(order.total)}</b></td><td><Status>{adminOrderStatus(order.status)}</Status></td><td><button className="primary small" onClick={() => setSelected(order)}>Detail</button></td></tr>)}</tbody>
+          <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Pengambilan</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{money(order.total)}</b></td><td><span className={`delivery-badge delivery-badge--${order.delivery_method}`}>{deliveryLabel(order.delivery_method)}</span></td><td><Status>{adminOrderStatus(order.status, order.delivery_method)}</Status></td><td><button className="primary small" onClick={() => setSelected(order)}>Detail</button></td></tr>)}</tbody>
           </table></div>
         )}
         {!loading && !shown.length && <p className="table-foot">Tidak ada pesanan pada filter ini.</p>}
@@ -741,18 +753,31 @@ export function Orders() {
             {selected.beneficiary_name && <p><span>Untuk Siswa</span><b>{selected.beneficiary_name}</b></p>}
             <p><span>Tanggal</span><b>{new Date(selected.created_at).toLocaleString("id-ID")}</b></p>
             <p><span>Total</span><b>{money(selected.total)}</b></p>
-            <p><span>Status Pesanan</span><Status>{adminOrderStatus(selected.status)}</Status></p>
+            <p><span>Status Pesanan</span><Status>{adminOrderStatus(selected.status, selected.delivery_method)}</Status></p>
+            <p><span>Pengambilan</span><span className={`delivery-badge delivery-badge--${selected.delivery_method}`}>{deliveryLabel(selected.delivery_method)}</span></p>
+            {selected.delivery_method === "gosend" && (
+              <div className="delivery-info">
+                <h3>Alamat Pengantaran GoSend</h3>
+                <p><span>Penerima</span><b>{selected.delivery_recipient}</b></p>
+                <p><span>No. HP/WA</span><b><a href={whatsappLink(selected.delivery_phone)} target="_blank" rel="noopener noreferrer">{selected.delivery_phone}</a></b></p>
+                <p><span>Alamat</span><b>{selected.delivery_address}</b></p>
+                <p><span>Jarak (estimasi)</span><b>{selected.delivery_distance_km ? `${selected.delivery_distance_km} km` : "-"}</b></p>
+                <p><span>Ongkir</span><b>{money(selected.delivery_fee)}</b></p>
+                <a className="secondary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selected.delivery_address)}`} target="_blank" rel="noopener noreferrer">Buka di Google Maps</a>
+              </div>
+            )}
             <p><span>Metode Pembayaran</span><b>{selected.payment_method === "bank_transfer" ? "Transfer Bank" : selected.payment_method === "qris" ? "QRIS" : "Tunai"}</b></p>
             <p><span>Status Pembayaran</span><b>{adminPaymentStatus(selected.payment_status)}</b></p>
             {selected.payment_method !== "cash" && selected.payment_sender_name && <><p><span>Nama Pengirim</span><b>{selected.payment_sender_name}</b></p><p><span>Bank / E-wallet Asal</span><b>{selected.payment_source}</b></p>{selected.payment_account_last4 && <p><span>4 Digit Akhir Rekening</span><b>•••• {selected.payment_account_last4}</b></p>}</>}
             <h3>Rincian Barang</h3>
             {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
+            {selected.delivery_method === "gosend" && <p><span>Ongkir GoSend</span><b>{money(selected.delivery_fee)}</b></p>}
             {selected.note && <p><span>Catatan</span><b>{selected.note}</b></p>}
             {selected.payment_status === "pending_verification" && <div className="form-row"><button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button><button className="secondary" disabled={working} onClick={() => verify("reject")}>Tolak Pembayaran</button></div>}
             <div className="form-row">
               {selected.status === "pending" && <button className="primary" disabled={working} onClick={() => act("accept")}>Terima Pesanan</button>}
-              {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>Tandai Siap Diambil</button>}
-              {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>Konfirmasi Pengambilan</button>}
+              {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>{selected.delivery_method === "gosend" ? "Tandai Siap Diantar" : "Tandai Siap Diambil"}</button>}
+              {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>{selected.delivery_method === "gosend" ? "Konfirmasi Pengantaran" : "Konfirmasi Pengambilan"}</button>}
               {["pending", "accepted"].includes(selected.status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
             </div>
             <button className="primary wide" onClick={() => setSelected(null)}>Tutup Detail</button>
@@ -1033,13 +1058,14 @@ export function POS() {
 
 export function Settings() {
   const { session, updateProfile } = useAuth();
-  type SettingsTab = "store" | "account" | "payment" | "pickup" | "notifications";
+  type SettingsTab = "store" | "account" | "payment" | "pickup" | "delivery" | "notifications";
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
     cash: boolean; qris: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string; qrisNote: string;
     operatingDays: string; openTime: string; closeTime: string; pickupMessage: string;
     orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean;
+    deliveryEnabled: boolean; deliveryOrigin: string; deliveryBaseFee: string; deliveryBaseKm: string; deliveryPerKmFee: string; deliveryMaxKm: string;
   };
   const defaults: Preferences = {
     storeName: "MettaMart",
@@ -1052,6 +1078,7 @@ export function Settings() {
     cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "", qrisNote: "",
     operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
     orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
+    deliveryEnabled: true, deliveryOrigin: "", deliveryBaseFee: "10000", deliveryBaseKm: "3", deliveryPerKmFee: "2500", deliveryMaxKm: "15",
   };
   const [tab, setTab] = useState<SettingsTab>("store");
   const [settingsLoadError, setSettingsLoadError] = useState("");
@@ -1084,6 +1111,14 @@ export function Settings() {
       orderAlerts: settings.notification_preferences.order_alerts,
       lowStockAlerts: settings.notification_preferences.low_stock_alerts,
       promoAlerts: settings.notification_preferences.announcements_enabled,
+      ...(settings.delivery_settings ? {
+        deliveryEnabled: settings.delivery_settings.enabled,
+        deliveryOrigin: settings.delivery_settings.origin_address,
+        deliveryBaseFee: String(settings.delivery_settings.base_fee),
+        deliveryBaseKm: String(settings.delivery_settings.base_distance_km),
+        deliveryPerKmFee: String(settings.delivery_settings.per_km_fee),
+        deliveryMaxKm: String(settings.delivery_settings.max_distance_km),
+      } : {}),
     }))).catch((reason) => setSettingsLoadError(reason instanceof Error ? reason.message : "Pengaturan server gagal dimuat."));
   }, []);
   const [saved, setSaved] = useState(false);
@@ -1157,6 +1192,13 @@ export function Settings() {
           payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer },
           payment_instructions: { bank_name: values.bankName, account_name: values.bankAccountName, account_number: values.bankAccountNumber, qris_note: values.qrisNote },
         });
+      } else if (tab === "delivery") {
+        const base_fee = Number(values.deliveryBaseFee), per_km_fee = Number(values.deliveryPerKmFee);
+        const base_distance_km = Number(values.deliveryBaseKm), max_distance_km = Number(values.deliveryMaxKm);
+        if (![base_fee, per_km_fee].every((value) => Number.isInteger(value) && value >= 0) || ![base_distance_km, max_distance_km].every((value) => Number.isFinite(value) && value > 0)) {
+          throw new Error("Tarif harus bilangan bulat Rp0 atau lebih, dan jarak harus lebih dari 0 km.");
+        }
+        await updateStorefrontSettings({ delivery_settings: { enabled: values.deliveryEnabled, origin_address: values.deliveryOrigin.trim(), base_fee, base_distance_km, per_km_fee, max_distance_km } });
       } else if (tab === "pickup") {
         const days = values.operatingDays.split(",").map((day) => day.trim()).filter(Boolean);
         await updateStorefrontSettings({
@@ -1176,9 +1218,10 @@ export function Settings() {
     { id: "account", label: "Akun Admin", icon: "users" },
     { id: "payment", label: "Metode Pembayaran", icon: "bag" },
     { id: "pickup", label: "Jam Operasional & Pengambilan", icon: "clock" },
+    { id: "delivery", label: "Pengiriman GoSend", icon: "box" },
     { id: "notifications", label: "Notifikasi Sistem", icon: "bell" },
   ];
-  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" | "time" = "text") => (
+  const field = (label: string, key: keyof Preferences, type: "text" | "email" | "tel" | "time" | "number" = "text") => (
     <label key={key}>
       {label}
       <input type={type} value={String(values[key])} onChange={(event) => update(key, event.target.value as Preferences[typeof key])} />
@@ -1230,7 +1273,7 @@ export function Settings() {
           </>}
           {tab === "pickup" && <>
             <h2>Jam Operasional & Pengambilan</h2>
-            <p>Pemesanan tetap dapat dilakukan kapan saja. Jam ini hanya mengatur kapan pesanan yang sudah siap boleh diambil.</p>
+            <p>Pemesanan ambil di koperasi dapat dilakukan kapan saja. Jam ini mengatur kapan pesanan boleh diambil/diantar, dan pesanan GoSend hanya dapat dibuat pada jam ini.</p>
             <div className="settings-day-picker">
               <span>Hari Operasional</span>
               {[
@@ -1254,6 +1297,21 @@ export function Settings() {
             <div className="form-row">{field("Jam buka", "openTime", "time")}{field("Jam tutup", "closeTime", "time")}</div>
             <label>Instruksi pengambilan<textarea value={values.pickupMessage} onChange={(event) => update("pickupMessage", event.target.value)} /></label>
           </>}
+          {tab === "delivery" && <>
+            <h2>Pengiriman GoSend</h2>
+            <p>Siswa dan orang tua dapat memilih GoSend saat koperasi buka. Ongkir dihitung otomatis: tarif dasar sampai jarak tertentu, lalu tambahan per km. Nilainya estimasi, bukan harga resmi GoSend.</p>
+            {toggle("Aktifkan GoSend", "deliveryEnabled", "Jika dimatikan, pelanggan hanya dapat memilih ambil di koperasi.")}
+            <label>Alamat asal pengiriman<textarea value={values.deliveryOrigin} onChange={(event) => update("deliveryOrigin", event.target.value)} placeholder={values.address || "Kosongkan untuk memakai alamat di Informasi Toko"} /></label>
+            <div className="form-row">
+              {field("Tarif dasar (Rp)", "deliveryBaseFee", "number")}
+              {field("Jarak tarif dasar (km)", "deliveryBaseKm", "number")}
+            </div>
+            <div className="form-row">
+              {field("Tambahan per km (Rp)", "deliveryPerKmFee", "number")}
+              {field("Jangkauan maksimal (km)", "deliveryMaxKm", "number")}
+            </div>
+            <p className="settings-help">Jarak dihitung dari garis lurus alamat koperasi ke alamat tujuan dikali 1,3 (faktor rute jalan). Pastikan alamat koperasi lengkap sampai kota agar dapat ditemukan di peta. Admin tetap memesan kurir GoSend secara manual dari aplikasi GoSend/Gojek.</p>
+          </>}
           {tab === "notifications" && <>
             <h2>Notifikasi Sistem</h2>
             {toggle("Pesanan baru", "orderAlerts", "Beri tahu admin saat ada pesanan masuk.")}
@@ -1264,7 +1322,7 @@ export function Settings() {
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
             {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
-            {saved && <span role="status">{tab === "store" || tab === "payment" || tab === "pickup" || tab === "notifications" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
+            {saved && <span role="status">{tab === "store" || tab === "payment" || tab === "pickup" || tab === "delivery" || tab === "notifications" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
           </div>
         </form>
         <div className="logo-upload">

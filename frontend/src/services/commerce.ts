@@ -24,6 +24,12 @@ export type CommerceOrder = {
   cash_received: number | null;
   change_due: number | null;
   sales_channel: "online" | "pos";
+  delivery_method: "pickup" | "gosend";
+  delivery_fee: number;
+  delivery_distance_km: string | null;
+  delivery_address: string;
+  delivery_recipient: string;
+  delivery_phone: string;
   items: CommerceOrderItem[];
   created_at: string;
   accepted_at: string | null;
@@ -33,7 +39,13 @@ export type CommerceOrder = {
 };
 export type PaymentMethod = CommerceOrder["payment_method"];
 
-export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; student_id?: number }) {
+export type DeliveryInput = { delivery_method: "pickup" | "gosend"; delivery_address?: string; delivery_recipient?: string; delivery_phone?: string };
+export type DeliveryQuote = { distance_km: string; fee: number };
+
+export function quoteDelivery(address: string) {
+  return apiRequest<DeliveryQuote>("/delivery/quote/", { method: "POST", body: JSON.stringify({ address }) });
+}
+export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; student_id?: number } & Partial<DeliveryInput>) {
   return apiRequest<CommerceOrder>("/orders/", { method: "POST", body: JSON.stringify(input) });
 }
 export function fetchOrders() {
@@ -78,6 +90,7 @@ export type AdminDashboardSummary = {
     customer_name: string;
     beneficiary_name: string | null;
     sales_channel: "online" | "pos";
+    delivery_method: CommerceOrder["delivery_method"];
     total: number;
     status: CommerceOrder["status"];
     payment_status: CommerceOrder["payment_status"];

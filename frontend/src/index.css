@@ -4314,3 +4314,175 @@ a.primary {
     margin-bottom: 8px;
   }
 }
+
+/* ---------- Pengambilan / pengantaran GoSend ---------- */
+.delivery-section {
+  margin-bottom: 18px;
+}
+.payment-method-card.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.delivery-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #eef2f5;
+}
+.delivery-form label {
+  display: grid;
+  gap: 6px;
+  color: #607485;
+  font-size: 13px;
+  font-weight: 600;
+}
+.delivery-form input,
+.delivery-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid #dfe7ec;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+.delivery-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.delivery-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.delivery-form > .secondary {
+  justify-self: start;
+}
+.delivery-breakdown {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 14px 16px;
+  background: #f7f9fa;
+  border: 1px solid #e8eef2;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.delivery-breakdown dt {
+  color: #82919e;
+}
+.delivery-breakdown dd {
+  margin: 0;
+  color: #31485b;
+  text-align: right;
+}
+.delivery-breakdown dt:last-of-type,
+.delivery-breakdown dd:last-of-type {
+  padding-top: 8px;
+  border-top: 1px dashed #dbe4ea;
+  font-size: 14px;
+}
+.detail-total--sub {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* Lencana metode pengambilan (admin) */
+.delivery-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.delivery-badge--pickup {
+  color: #536a7c;
+  background: #eef3f6;
+}
+.delivery-badge--gosend {
+  color: #0a9b6c;
+  background: #e6f8f1;
+}
+.delivery-info {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 14px;
+  background: #f7f9fa;
+  border: 1px solid #e8eef2;
+  border-radius: 10px;
+}
+.delivery-info h3 {
+  margin: 0 0 2px;
+  color: #31485b;
+  font-size: 14px;
+}
+.delivery-info p {
+  margin: 0;
+}
+.delivery-info b {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.delivery-info a:not(.secondary) {
+  color: inherit;
+}
+.delivery-info .secondary {
+  justify-self: start;
+  margin-top: 4px;
+  text-decoration: none;
+}
+@media (max-width: 600px) {
+  .delivery-form__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Dashboard: Pesanan Terbaru tidak boleh keluar frame */
+.latest {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.latest .panel__title {
+  flex: none;
+}
+.latest__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.latest__row {
+  min-height: 53px;
+  height: auto;
+  padding: 6px 0;
+}
+.latest__row > div {
+  min-width: 0;
+}
+.latest__row b,
+.latest__row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-shell--admin .latest__row b {
+  overflow-wrap: normal;
+}
+.latest__row .status {
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .role-shell--admin .latest {
+    height: auto;
+    max-height: 420px;
+  }
+}
