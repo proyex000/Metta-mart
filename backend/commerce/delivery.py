@@ -115,12 +115,23 @@ def quote_delivery(address):
     if len(address) < 10:
         raise ValidationError({"delivery_address": "Isi alamat lengkap (jalan, nomor, kelurahan/kecamatan, kota)."})
     profile = StoreSetting.objects.filter(key="store_profile").first()
-    origin_address = (config.get("origin_address") or "").strip() or ((profile.value or {}).get("address", "").strip() if profile else "")
-    if not origin_address:
-        raise ValidationError({"delivery_method": "Alamat koperasi belum diatur admin, pengiriman GoSend belum dapat dihitung."})
-    origin = geocode(origin_address)
+    origin_address = (
+        (config.get("origin_address") or "").strip()
+        or ((profile.value or {}).get("address", "").strip() if profile else "")
+    )
+
+    # Koordinat tetap sekolah/koperasi sebagai fallback karena alamat profil
+    # yang panjang kadang tidak ditemukan oleh Nominatim.
+    school_origin = (0.4985725, 101.4245111)
+    origin = None
+    if origin_address:
+        try:
+            origin = geocode(origin_address)
+        except ValidationError:
+            # Estimasi tetap dapat berjalan dengan pin sekolah yang tersimpan.
+            origin = None
     if not origin:
-        raise ValidationError({"delivery_method": "Alamat koperasi tidak ditemukan di peta. Hubungi admin untuk memperbaikinya."})
+        origin = school_origin
     destination = geocode(address)
     if not destination:
         raise ValidationError({"delivery_address": "Alamat tidak ditemukan di peta. Lengkapi dengan kelurahan/kecamatan dan kota."})
