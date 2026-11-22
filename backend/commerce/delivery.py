@@ -6,8 +6,10 @@ Ini bukan harga resmi GoSend; admin tetap memesan kurir secara manual.
 import hashlib
 import json
 import math
+import urllib.error
 import urllib.parse
 import urllib.request
+import time
 from datetime import datetime
 from decimal import Decimal
 
@@ -68,9 +70,17 @@ def operating_hours_text():
 
 
 def _lookup(query):
+    # Nominatim public service permits at most one request per second.
+    # cache.add provides a shared rate-limit window when the configured cache is shared.
+    while not cache.add("nominatim:request-window", True, timeout=1.1):
+        time.sleep(0.1)
+
     params = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "id"})
-    request = urllib.request.Request(f"{NOMINATIM_URL}?{params}", headers={"User-Agent": USER_AGENT, "Accept-Language": "id"})
-    with urllib.request.urlopen(request, timeout=6) as response:
+    request = urllib.request.Request(
+        f"{NOMINATIM_URL}?{params}",
+        headers={"User-Agent": USER_AGENT, "Accept-Language": "id"},
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
         rows = json.loads(response.read().decode("utf-8"))
     if not rows:
         return None
@@ -78,24 +88,46 @@ def _lookup(query):
 
 
 def geocode(address):
-    """Cari koordinat alamat. Bila alamat lengkap tak ditemukan, coba tanpa bagian depan (nama jalan/nomor)."""
-    key = "geocode:" + hashlib.sha256(address.strip().lower().encode("utf-8")).hexdigest()
+    """Cari koordinat alamat; cache juga hasil alamat yang tidak ditemukan."""
+    normalized = " ".join((address or "").strip().lower().split())
+    if not normalized:
+        return None
+
+    key = "geocode:" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     cached = cache.get(key)
-    if cached:
-        return tuple(cached)
-    parts = [part.strip() for part in address.replace("\n", ",").split(",") if part.strip()]
-    attempts = [", ".join(parts[start:]) for start in range(0, max(1, min(len(parts) - 1, 3)))] or [address]
+    if cached is not None:
+        return None if cached == "__NOT_FOUND__" else tuple(cached)
+
+    parts = [part.strip() for part in address.replace("\\n", ",").split(",") if part.strip()]
+    attempts = list(dict.fromkeys(
+        ", ".join(parts[start:])
+        for start in range(min(len(parts), 3))
+        if ", ".join(parts[start:])
+    )) or [address.strip()]
+
     for query in attempts:
         try:
             point = _lookup(query)
-        except (OSError, ValueError, KeyError):
-            raise ValidationError({"delivery_address": "Layanan peta sedang tidak dapat dihubungi. Coba lagi beberapa saat."})
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                raise ValidationError({
+                    "delivery_address": "Layanan peta sedang membatasi pencarian sementara. Tunggu sebentar lalu coba lagi."
+                })
+            raise ValidationError({
+                "delivery_address": f"Layanan peta merespons HTTP {exc.code}. Coba lagi beberapa saat."
+            })
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError):
+            raise ValidationError({
+                "delivery_address": "Koneksi ke layanan peta gagal atau terlalu lama. Coba lagi beberapa saat."
+            })
+
         if point:
             cache.set(key, list(point), 60 * 60 * 24)
             return point
+
+    # Avoid repeating the same unsuccessful public geocoding requests on every checkout.
+    cache.set(key, "__NOT_FOUND__", 60 * 60 * 6)
     return None
-
-
 def haversine_km(a, b):
     lat1, lon1, lat2, lon2 = map(math.radians, (a[0], a[1], b[0], b[1]))
     h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
