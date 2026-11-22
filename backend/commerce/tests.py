@@ -404,3 +404,15 @@ class DeliveryTests(TestCase):
         good = self.client.patch("/api/storefront/settings/", {"delivery_settings": {"base_fee": 12000, "origin_address": "Jl. Sudirman No. 1, Jakarta"}}, format="json")
         self.assertEqual(good.status_code, 200)
         self.assertEqual(good.data["delivery_settings"]["base_fee"], 12000)
+
+    def test_geocode_falls_back_to_second_provider_and_reports_when_all_fail(self):
+        from unittest import mock
+        from rest_framework.exceptions import ValidationError
+        from commerce import delivery
+        with mock.patch.object(delivery, "PROVIDERS", (("a", mock.Mock(side_effect=OSError("down"))), ("b", mock.Mock(return_value=(-6.2, 106.8))))):
+            self.assertEqual(delivery.geocode("Jl. Cadangan No. 1, Jakarta"), (-6.2, 106.8))
+        with mock.patch.object(delivery, "PROVIDERS", (("a", mock.Mock(side_effect=OSError("down"))), ("b", mock.Mock(side_effect=ValueError("bad"))))):
+            with self.assertRaises(ValidationError):
+                delivery.geocode("Jl. Gagal Semua No. 2, Jakarta")
+        with mock.patch.object(delivery, "PROVIDERS", (("a", mock.Mock(return_value=None)), ("b", mock.Mock(return_value=None)))):
+            self.assertIsNone(delivery.geocode("Jl. Tidak Ada No. 3"))

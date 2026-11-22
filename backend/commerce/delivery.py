@@ -5,6 +5,7 @@ Ini bukan harga resmi GoSend; admin tetap memesan kurir secara manual.
 """
 import hashlib
 import json
+import logging
 import math
 import urllib.parse
 import urllib.request
@@ -18,7 +19,9 @@ from rest_framework.exceptions import ValidationError
 from core.models import StoreSetting
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "MettaMart/1.0 (koperasi sekolah)"
+PHOTON_URL = "https://photon.komoot.io/api/"
+USER_AGENT = "MettaMart/1.0 (aplikasi koperasi sekolah; https://github.com/proyex000/Metta-mart)"
+logger = logging.getLogger(__name__)
 ROAD_FACTOR = 1.3
 EARTH_RADIUS_KM = 6371.0088
 DAY_CODES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -67,14 +70,46 @@ def operating_hours_text():
     return f"{', '.join(days)} pukul {hours['open_time']}–{hours['close_time']}"
 
 
-def _lookup(query):
+def _fetch_json(url):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json", "Accept-Language": "id"})
+    with urllib.request.urlopen(request, timeout=8) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _lookup_nominatim(query):
     params = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "id"})
-    request = urllib.request.Request(f"{NOMINATIM_URL}?{params}", headers={"User-Agent": USER_AGENT, "Accept-Language": "id"})
-    with urllib.request.urlopen(request, timeout=6) as response:
-        rows = json.loads(response.read().decode("utf-8"))
-    if not rows:
+    rows = _fetch_json(f"{NOMINATIM_URL}?{params}")
+    return (float(rows[0]["lat"]), float(rows[0]["lon"])) if rows else None
+
+
+def _lookup_photon(query):
+    params = urllib.parse.urlencode({"q": query, "limit": 1})
+    data = _fetch_json(f"{PHOTON_URL}?{params}")
+    features = data.get("features") or []
+    if not features:
         return None
-    return float(rows[0]["lat"]), float(rows[0]["lon"])
+    lon, lat = features[0]["geometry"]["coordinates"][:2]
+    return float(lat), float(lon)
+
+
+PROVIDERS = (("nominatim", _lookup_nominatim), ("photon", _lookup_photon))
+
+
+def _lookup(query):
+    """Coba tiap layanan peta; None bila tidak ada yang menemukan, error bila semua gagal dihubungi."""
+    failures = 0
+    for name, provider in PROVIDERS:
+        try:
+            point = provider(query)
+        except (OSError, ValueError, KeyError, IndexError, TypeError) as error:
+            failures += 1
+            logger.warning("Geocoding %s gagal untuk %r: %s: %s", name, query, type(error).__name__, error)
+            continue
+        if point:
+            return point
+    if failures == len(PROVIDERS):
+        raise ValidationError({"delivery_address": "Layanan peta sedang tidak dapat dihubungi. Coba lagi beberapa saat."})
+    return None
 
 
 def geocode(address):
@@ -86,10 +121,7 @@ def geocode(address):
     parts = [part.strip() for part in address.replace("\n", ",").split(",") if part.strip()]
     attempts = [", ".join(parts[start:]) for start in range(0, max(1, min(len(parts) - 1, 3)))] or [address]
     for query in attempts:
-        try:
-            point = _lookup(query)
-        except (OSError, ValueError, KeyError):
-            raise ValidationError({"delivery_address": "Layanan peta sedang tidak dapat dihubungi. Coba lagi beberapa saat."})
+        point = _lookup(query)
         if point:
             cache.set(key, list(point), 60 * 60 * 24)
             return point
