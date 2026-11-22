@@ -69,6 +69,10 @@ class Order(models.Model):
         FAILED = "failed", "Ditolak"
         REFUNDED = "refunded", "Dikembalikan"
 
+    class DeliveryMethod(models.TextChoices):
+        PICKUP = "pickup", "Ambil di koperasi"
+        GOSEND = "gosend", "GoSend"
+
     code = models.CharField(max_length=24, unique=True, editable=False)
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="orders")
     sales_channel = models.CharField(max_length=12, choices=(("online", "Online"), ("pos", "POS")), default="online")
@@ -80,6 +84,12 @@ class Order(models.Model):
     subtotal = models.PositiveIntegerField(default=0)
     total = models.PositiveIntegerField(default=0)
     cash_received = models.PositiveIntegerField(null=True, blank=True)
+    delivery_method = models.CharField(max_length=12, choices=DeliveryMethod.choices, default=DeliveryMethod.PICKUP)
+    delivery_fee = models.PositiveIntegerField(default=0)
+    delivery_distance_km = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    delivery_address = models.CharField(max_length=300, blank=True)
+    delivery_recipient = models.CharField(max_length=120, blank=True)
+    delivery_phone = models.CharField(max_length=20, blank=True)
     payment_sender_name = models.CharField(max_length=120, blank=True)
     payment_source = models.CharField(max_length=80, blank=True)
     payment_account_last4 = models.CharField(max_length=4, blank=True)

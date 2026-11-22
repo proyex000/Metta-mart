@@ -12,7 +12,7 @@ import { money } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
 import { refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
-import { createOrder, fetchOrders, fetchOrder, submitPayment, type CommerceOrder } from "../../services/commerce";
+import { createOrder, fetchOrders, fetchOrder, quoteDelivery, submitPayment, type CommerceOrder, type DeliveryQuote } from "../../services/commerce";
 import { fetchStorefrontSettings, type StorefrontSettings } from "../../services/settings";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 
@@ -32,7 +32,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
     return order.payment_status === "paid" && order.status === "completed" && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).reduce((total, order) => total + order.total, 0);
   const latestOrder = orders[0];
-  const statusText = latestOrder ? ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" }[latestOrder.status]) : "";
+  const statusText = latestOrder ? ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: latestOrder.delivery_method === "gosend" ? "Siap Diantar" : "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" }[latestOrder.status]) : "";
   return (
     <>
       <PageTitle title={`Halo, ${session?.name || "Pengguna"}!`} subtitle={role === "parent" ? "Belanja kebutuhan sekolah dan pantau pesanan akun Anda." : "Temukan kebutuhan sekolah di koperasi."} />
@@ -148,6 +148,25 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
   );
 }
 
+const OPEN_DAY_CODES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const OPEN_DAY_LABELS: Record<string, string> = { mon: "Senin", tue: "Selasa", wed: "Rabu", thu: "Kamis", fri: "Jumat", sat: "Sabtu", sun: "Minggu" };
+
+function hoursText(hours: StorefrontSettings["operating_hours"] | null) {
+  if (!hours || !hours.open_time || !hours.close_time) return "jam operasional belum diatur admin";
+  const days = OPEN_DAY_CODES.filter((day) => hours.days.includes(day)).map((day) => OPEN_DAY_LABELS[day]).join(", ");
+  return `${days || "-"} pukul ${hours.open_time}–${hours.close_time}`;
+}
+
+// Cek jam buka di zona waktu koperasi (WIB). Server tetap menjadi penentu akhir.
+function storeOpenNow(hours: StorefrontSettings["operating_hours"] | null) {
+  if (!hours || !hours.open_time || !hours.close_time) return false;
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Jakarta", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const day = pick("weekday").toLowerCase().slice(0, 3);
+  const time = `${pick("hour")}:${pick("minute")}`;
+  return hours.days.includes(day) && hours.open_time <= time && time <= hours.close_time;
+}
+
 export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const products = useProducts();
   const [params] = useSearchParams();
@@ -172,17 +191,59 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
   const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
   const [paymentInstructions, setPaymentInstructions] = useState({ bank_name: "", account_name: "", account_number: "", qris_note: "" });
+  const { session } = useAuth();
+  const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "gosend">("pickup");
+  const [hours, setHours] = useState<StorefrontSettings["operating_hours"] | null>(null);
+  const [deliveryConfig, setDeliveryConfig] = useState<StorefrontSettings["delivery_settings"] | null>(null);
+  const [recipient, setRecipient] = useState(session?.name ?? "");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [quote, setQuote] = useState<DeliveryQuote | null>(null);
+  const [quoteFor, setQuoteFor] = useState("");
+  const [quoting, setQuoting] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
   useEffect(() => {
-    fetchStorefrontSettings().then((settings) => { setPaymentSettings(settings.payment_methods); setPaymentInstructions(settings.payment_instructions); }).catch(() => undefined);
+    fetchStorefrontSettings().then((settings) => {
+      setPaymentSettings(settings.payment_methods);
+      setPaymentInstructions(settings.payment_instructions);
+      setHours(settings.operating_hours);
+      setDeliveryConfig(settings.delivery_settings);
+    }).catch(() => undefined);
   }, []);
+  const storeOpen = storeOpenNow(hours);
+  const gosendAvailable = !!deliveryConfig?.enabled && storeOpen;
+  const gosendReason = !deliveryConfig?.enabled
+    ? "GoSend sedang tidak tersedia."
+    : !storeOpen ? `GoSend hanya tersedia saat koperasi buka (${hoursText(hours)}).` : "";
+  const isGosend = deliveryMethod === "gosend" && gosendAvailable;
+  const quoteValid = !!quote && quoteFor === address.trim();
+  const deliveryFee = isGosend && quoteValid ? quote.fee : 0;
+  const changeAddress = (value: string) => { setAddress(value); setQuoteError(""); };
+  const calculateFee = async () => {
+    const trimmed = address.trim();
+    setQuoteError("");
+    if (trimmed.length < 10) { setQuoteError("Isi alamat lengkap (jalan, nomor, kelurahan/kecamatan, kota)."); return; }
+    setQuoting(true);
+    try {
+      setQuote(await quoteDelivery(trimmed));
+      setQuoteFor(trimmed);
+    } catch (error) {
+      setQuote(null);
+      setQuoteError(error instanceof Error ? error.message : "Ongkir gagal dihitung. Coba lagi.");
+    } finally {
+      setQuoting(false);
+    }
+  };
   const methods = [
     { id: "cash" as const, title: "Tunai", description: "Bayar tunai saat pengambilan di koperasi.", symbol: "Rp", enabled: paymentSettings.cash },
     { id: "qris" as const, title: "QRIS", description: "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin.", symbol: "QR", enabled: paymentSettings.qris },
     { id: "bankTransfer" as const, title: "Transfer bank", description: "Transfer ke rekening resmi koperasi dan kirim referensi pembayaran.", symbol: "TF", enabled: paymentSettings.bank_transfer },
-  ].filter((method) => method.enabled);
+  ].filter((method) => method.enabled && !(isGosend && method.id === "cash"));
   const selectedPayment = methods.some((method) => method.id === payment) ? payment : methods[0]?.id;
   const selected = products.filter((product) => counts[product.id]);
-  const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
+  const subtotal = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
+  const total = subtotal + deliveryFee;
+  const deliveryReady = !isGosend || (quoteValid && recipient.trim().length > 0 && recipientPhone.replace(/\D/g, "").length >= 9);
   const change = (id: number, amount: number) => {
     const stock = products.find((product) => product.id === id)?.stock ?? 0;
     setCounts((current) => ({
@@ -191,7 +252,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
     }));
   };
   const submit = async () => {
-    if (!total || !selectedPayment || sent || submitting) return;
+    if (!subtotal || !selectedPayment || sent || submitting || !deliveryReady) return;
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -199,6 +260,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         items: selected.map((product) => ({ product_id: product.id, quantity: counts[product.id] })),
         payment_method: selectedPayment === "bankTransfer" ? "bank_transfer" : selectedPayment,
         note,
+        ...(isGosend ? { delivery_method: "gosend" as const, delivery_address: address.trim(), delivery_recipient: recipient.trim(), delivery_phone: recipientPhone.trim() } : {}),
       });
       setCreatedCode(order.code);
       setSent(true);
@@ -215,7 +277,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       <PageTitle title="Pesan Barang" subtitle="Pilih jumlah barang dan metode pembayaran." />
       <section className="order-summary-card">
         <div>
-          <small>Total Belanja</small>
+          <small>{isGosend ? "Total Bayar (termasuk ongkir)" : "Total Belanja"}</small>
           <strong>{money(total)}</strong>
         </div>
         <Icon name="bag" size={30} />
@@ -254,6 +316,49 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           placeholder="Contoh: warna biru, ukuran besar, dll."
         />
       </label>
+      <section className="payment-section delivery-section" aria-labelledby="delivery-heading">
+        <div className="payment-heading">
+          <div>
+            <h2 id="delivery-heading">Metode Pengambilan</h2>
+            <p>Ambil sendiri di koperasi atau diantar ke alamat Anda.</p>
+          </div>
+          <Icon name="box" size={22} />
+        </div>
+        <div className="payment-method-list">
+          <label className={`payment-method-card ${!isGosend ? "selected" : ""}`}>
+            <input type="radio" name="delivery-method" checked={!isGosend} onChange={() => setDeliveryMethod("pickup")} disabled={sent} />
+            <span className="payment-method-symbol" aria-hidden="true">🏫</span>
+            <span className="payment-method-copy"><strong>Ambil di koperasi</strong><small>Gratis. Ambil saat koperasi buka setelah pesanan siap.</small></span>
+            <span className="payment-method-check" aria-hidden="true">{!isGosend ? "✓" : ""}</span>
+          </label>
+          <label className={`payment-method-card ${isGosend ? "selected" : ""} ${!gosendAvailable ? "is-disabled" : ""}`}>
+            <input type="radio" name="delivery-method" checked={isGosend} onChange={() => setDeliveryMethod("gosend")} disabled={sent || !gosendAvailable} />
+            <span className="payment-method-symbol" aria-hidden="true">GO</span>
+            <span className="payment-method-copy"><strong>GoSend</strong><small>{gosendAvailable ? "Diantar ke alamat Anda. Ongkir dihitung otomatis dari jarak." : gosendReason}</small></span>
+            <span className="payment-method-check" aria-hidden="true">{isGosend ? "✓" : ""}</span>
+          </label>
+        </div>
+        {isGosend && (
+          <div className="delivery-form">
+            <div className="delivery-form__row">
+              <label>Nama penerima<input value={recipient} onChange={(event) => setRecipient(event.target.value)} maxLength={120} placeholder="Nama penerima" disabled={sent} /></label>
+              <label>No. HP/WhatsApp penerima<input inputMode="tel" value={recipientPhone} onChange={(event) => setRecipientPhone(event.target.value.replace(/[^\d+\-\s]/g, ""))} maxLength={20} placeholder="08xxxxxxxxxx" disabled={sent} /></label>
+            </div>
+            <label>Alamat lengkap pengantaran<textarea value={address} onChange={(event) => changeAddress(event.target.value)} maxLength={300} placeholder="Jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota" disabled={sent} /></label>
+            <button type="button" className="secondary" onClick={calculateFee} disabled={quoting || sent || address.trim().length < 10}>{quoting ? "Menghitung..." : quoteValid ? "Hitung Ulang Ongkir" : "Hitung Ongkir"}</button>
+            {quoteError && <p className="payment-unavailable" role="alert">{quoteError}</p>}
+            {quoteValid && quote && (
+              <dl className="delivery-breakdown">
+                <dt>Jarak (estimasi)</dt><dd>{quote.distance_km} km</dd>
+                <dt>Subtotal barang</dt><dd>{money(subtotal)}</dd>
+                <dt>Ongkir GoSend</dt><dd>{money(quote.fee)}</dd>
+                <dt>Total bayar</dt><dd><b>{money(subtotal + quote.fee)}</b></dd>
+              </dl>
+            )}
+            <p className="payment-help">Ongkir adalah estimasi berdasarkan jarak dan tarif koperasi. Pesanan GoSend dibayar lewat transfer bank atau QRIS, dan hanya dapat dibuat saat koperasi buka ({hoursText(hours)}).</p>
+          </div>
+        )}
+      </section>
       <section className="payment-section" aria-labelledby="payment-heading">
         <div className="payment-heading">
           <div>
@@ -304,17 +409,18 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         </p>
       )}
       {submitError && <p className="payment-unavailable" role="alert">{submitError}</p>}
-      <button className="primary wide order-submit" disabled={!total || sent || submitting || !methods.length} onClick={submit}>
+      <button className="primary wide order-submit" disabled={!subtotal || sent || submitting || !methods.length || !deliveryReady} onClick={submit}>
         {submitting ? "Mengirim pesanan..." : sent ? "Pesanan berhasil dibuat" : "Kirim Pesanan"}
       </button>
       {sent && <Link className="primary wide" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
-      <p className="payment-disclaimer">Pemesanan dapat dilakukan kapan saja. Pengambilan hanya dapat dilakukan saat koperasi buka dan pesanan sudah berstatus siap diambil.</p>
+      {isGosend && !deliveryReady && !!subtotal && <p className="payment-help" role="status">Lengkapi nama, nomor HP, alamat, lalu tekan “Hitung Ongkir” sebelum mengirim pesanan.</p>}
+      <p className="payment-disclaimer">Pemesanan ambil di koperasi dapat dilakukan kapan saja; pengambilan hanya saat koperasi buka dan pesanan berstatus siap diambil. Pesanan GoSend hanya dapat dibuat saat koperasi buka.</p>
     </>
   );
 }
 
-function orderStatusText(status: CommerceOrder["status"]) {
-  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+function orderStatusText(status: CommerceOrder["status"], method: CommerceOrder["delivery_method"] = "pickup") {
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: method === "gosend" ? "Siap Diantar" : "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
 }
 function paymentStatusText(status: CommerceOrder["payment_status"]) {
   return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Perlu Konfirmasi Ulang", refunded: "Dikembalikan" })[status];
@@ -342,7 +448,7 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
       <section className="shop-orders">
         {shown.map((order) => (
           <article key={order.code}>
-            <div><b>#{order.code}</b><Status>{orderStatusText(order.status)}</Status></div>
+            <div><b>#{order.code}</b><Status>{orderStatusText(order.status, order.delivery_method)}</Status></div>
             <small>{new Date(order.created_at).toLocaleString("id-ID")}{order.beneficiary_name ? ` · Untuk ${order.beneficiary_name}` : ""}</small>
             <p>{order.items.map((item) => `${item.product_name} × ${item.quantity}`).join(", ")}</p>
             <small>Pembayaran: {paymentStatusText(order.payment_status)}</small>
@@ -431,7 +537,8 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
   };
   if (loading) return <p>Memuat detail pesanan...</p>;
   if (error || !order) return <div className="empty-state"><h2>Pesanan tidak ditemukan</h2><p>{error || "Periksa kembali nomor pesanan."}</p><button className="primary" onClick={() => navigate(-1)}>Kembali</button></div>;
-  const status = orderStatusText(order.status);
+  const status = orderStatusText(order.status, order.delivery_method);
+  const isGosend = order.delivery_method === "gosend";
   return (
     <>
       <button className="back-button" onClick={() => navigate(-1)}><Icon name="back" /> Kembali</button>
@@ -443,10 +550,13 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
         <div className="order-detail__items">
           {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small></div><strong>{money(item.line_total)}</strong></div>)}
         </div>
-        <div className="detail-total"><span>Total Belanja</span><strong>{money(order.total)}</strong></div>
-        <h2>Informasi Pengambilan</h2>
-        <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
-        <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? "Siap diambil" : "Belum siap diambil"}</span><span>{order.completed_at ? "Pengambilan selesai" : "Menunggu pengambilan"}</span></div>
+        {isGosend && <div className="detail-total detail-total--sub"><span>Ongkir GoSend{order.delivery_distance_km ? ` (${order.delivery_distance_km} km)` : ""}</span><strong>{money(order.delivery_fee)}</strong></div>}
+        <div className="detail-total"><span>{isGosend ? "Total Bayar" : "Total Belanja"}</span><strong>{money(order.total)}</strong></div>
+        <h2>{isGosend ? "Informasi Pengantaran" : "Informasi Pengambilan"}</h2>
+        {isGosend
+          ? <dl><dt>Metode</dt><dd>GoSend (diantar)</dd><dt>Penerima</dt><dd>{order.delivery_recipient} · {order.delivery_phone}</dd><dt>Alamat</dt><dd>{order.delivery_address}</dd><dt>Ketentuan</dt><dd>Pesanan diantar pada jam operasional setelah pembayaran diverifikasi admin.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
+          : <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>}
+        <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? (isGosend ? "Siap diantar" : "Siap diambil") : (isGosend ? "Belum siap diantar" : "Belum siap diambil")}</span><span>{order.completed_at ? (isGosend ? "Pengantaran selesai" : "Pengambilan selesai") : (isGosend ? "Menunggu pengantaran" : "Menunggu pengambilan")}</span></div>
         {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
           <section className="payment-section"><h2>Identitas Pembayaran</h2><p>Isi identitas rekening atau e-wallet yang digunakan untuk transfer. Admin akan mencocokkannya dengan dana yang masuk. Ini bukan bukti pembayaran otomatis.</p><label>Nama pemilik rekening/e-wallet<input value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={120} placeholder="Nama sesuai akun pengirim" /></label><label>Bank atau e-wallet asal<input value={paymentSource} onChange={(event) => setPaymentSource(event.target.value)} maxLength={80} placeholder="Contoh: BCA, Mandiri, DANA, GoPay" /></label><label>4 digit terakhir rekening (opsional)<input inputMode="numeric" value={accountLast4} onChange={(event) => setAccountLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} maxLength={4} placeholder="1234" /></label><label>Catatan tambahan (opsional)<textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} maxLength={300} placeholder="Contoh: transfer pukul 14.30" /></label><button className="primary wide" disabled={!senderName.trim() || !paymentSource.trim() || (accountLast4.length > 0 && accountLast4.length !== 4) || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Identitas Pembayaran"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
         )}

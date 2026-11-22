@@ -3,6 +3,7 @@ from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from core.models import StoreSetting
+from .delivery import operating_hours_text, quote_delivery, store_is_open
 from .models import InventoryMovement, Order, OrderItem, Product
 
 
@@ -56,13 +57,37 @@ class OrderReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
     items = serializers.ListField(child=serializers.DictField(), allow_empty=False)
     payment_method = serializers.ChoiceField(choices=Order.PaymentMethod.choices)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    delivery_method = serializers.ChoiceField(choices=Order.DeliveryMethod.choices, required=False, default=Order.DeliveryMethod.PICKUP)
+    delivery_address = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    delivery_recipient = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    delivery_phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+
+    def validate(self, attrs):
+        if attrs.get("delivery_method") != Order.DeliveryMethod.GOSEND:
+            for field in ("delivery_address", "delivery_recipient", "delivery_phone"):
+                attrs.pop(field, None)
+            return attrs
+        if not store_is_open():
+            raise ValidationError({"delivery_method": f"Pesanan GoSend hanya dapat dibuat pada jam operasional koperasi ({operating_hours_text()})."})
+        if attrs["payment_method"] == Order.PaymentMethod.CASH:
+            raise ValidationError({"payment_method": "Pesanan GoSend harus dibayar lewat transfer bank atau QRIS agar kurir dapat dipesan."})
+        recipient = attrs.get("delivery_recipient", "").strip()
+        phone = "".join(ch for ch in attrs.get("delivery_phone", "") if ch.isdigit())
+        if not recipient:
+            raise ValidationError({"delivery_recipient": "Nama penerima wajib diisi."})
+        if not 9 <= len(phone) <= 15:
+            raise ValidationError({"delivery_phone": "Isi nomor HP/WhatsApp penerima yang valid (9–15 digit)."})
+        quote = quote_delivery(attrs.get("delivery_address", ""))
+        attrs.update(delivery_recipient=recipient, delivery_phone=phone, delivery_address=attrs["delivery_address"].strip(), _quote=quote)
+        return attrs
+
     def validate_payment_method(self, value):
         setting = StoreSetting.objects.filter(key="payment_methods").first()
         enabled = setting.value if setting and isinstance(setting.value, dict) else {"cash": True, "bank_transfer": True, "qris": True}
@@ -97,12 +122,24 @@ class OrderCreateSerializer(serializers.Serializer):
             if product.stock < row["quantity"]:
                 raise ValidationError({"items": f"Stok {product.name} tidak mencukupi."})
             subtotal += product.price * row["quantity"]
+        quote = validated_data.get("_quote")
+        delivery = {}
+        if quote:
+            delivery = {
+                "delivery_method": Order.DeliveryMethod.GOSEND,
+                "delivery_fee": quote["fee"],
+                "delivery_distance_km": quote["distance_km"],
+                "delivery_address": validated_data["delivery_address"],
+                "delivery_recipient": validated_data["delivery_recipient"],
+                "delivery_phone": validated_data["delivery_phone"],
+            }
         order = Order.objects.create(
             customer=self.context["request"].user,
             payment_method=validated_data["payment_method"],
             note=validated_data.get("note", "").strip(),
             subtotal=subtotal,
-            total=subtotal,
+            total=subtotal + delivery.get("delivery_fee", 0),
+            **delivery,
         )
         for row in rows:
             product = products[row["product_id"]]

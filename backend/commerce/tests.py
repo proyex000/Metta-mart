@@ -271,3 +271,136 @@ class CommerceApiTests(TestCase):
         response = self.client.delete(f"/api/products/{clean.id}/")
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Product.objects.filter(pk=clean.id).exists())
+
+
+class DeliveryTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(identifier="admin-delivery", password="TestPassword!2026", full_name="Admin", role=User.Role.ADMIN, is_staff=True)
+        self.student = User.objects.create_user(identifier="1234567800", password="TestPassword!2026", full_name="Student", role=User.Role.STUDENT)
+        self.product = Product.objects.create(name="Buku Tulis", category="buku", price=5000, stock=10)
+        StoreSetting.objects.create(key="operating_hours", value={"days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "open_time": "00:00", "close_time": "23:59"})
+        StoreSetting.objects.create(key="store_profile", value={"name": "MettaMart", "description": "", "address": "Jl. Sudirman No. 1, Jakarta", "email": "", "phone": ""})
+        from django.core.cache import cache
+        cache.clear()
+
+    def payload(self, **overrides):
+        data = {
+            "payment_method": "qris",
+            "delivery_method": "gosend",
+            "delivery_address": "Jl. Melati No. 5, Menteng, Jakarta Pusat",
+            "delivery_recipient": "Budi",
+            "delivery_phone": "0812-3456-7890",
+            "items": [{"product_id": self.product.id, "quantity": 2}],
+        }
+        data.update(overrides)
+        return data
+
+    def fake_points(self, destination=(-6.20, 106.90)):
+        # koperasi di (-6.20, 106.80); tujuan ~11,1 km garis lurus -> ~14,4 km jalan
+        origin = (-6.20, 106.80)
+        return lambda address: origin if "Sudirman" in address else destination
+
+    def post_order(self, **overrides):
+        from unittest import mock
+        self.client.force_authenticate(user=self.student)
+        with mock.patch("commerce.delivery.geocode", side_effect=self.fake_points(overrides.pop("destination", (-6.20, 106.82)))):
+            return self.client.post("/api/orders/", self.payload(**overrides), format="json")
+
+    def test_gosend_order_stores_address_and_adds_server_calculated_fee(self):
+        response = self.post_order()
+        self.assertEqual(response.status_code, 201, response.data)
+        order = Order.objects.get(code=response.data["code"])
+        self.assertEqual(order.delivery_method, "gosend")
+        self.assertEqual(order.delivery_address, "Jl. Melati No. 5, Menteng, Jakarta Pusat")
+        self.assertEqual(order.delivery_phone, "081234567890")
+        # ~2,2 km x 1,3 = 2,9 km -> dalam tarif dasar 3 km
+        self.assertEqual(order.delivery_fee, 10000)
+        self.assertEqual(order.subtotal, 10000)
+        self.assertEqual(order.total, 20000)
+
+    def test_fee_grows_per_extra_km_and_ignores_client_supplied_fee(self):
+        response = self.post_order(destination=(-6.20, 106.86), delivery_fee=1)
+        self.assertEqual(response.status_code, 201, response.data)
+        order = Order.objects.get(code=response.data["code"])
+        # 6,6 km x 1,3 = 8,6 km -> 6 km tambahan x 2500 + 10000
+        self.assertEqual(float(order.delivery_distance_km), 8.6)
+        self.assertEqual(order.delivery_fee, 10000 + 6 * 2500)
+
+    def test_gosend_is_rejected_outside_operating_hours(self):
+        StoreSetting.objects.filter(key="operating_hours").update(value={"days": [], "open_time": "08:00", "close_time": "15:00"})
+        response = self.post_order()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("delivery_method", response.data)
+        self.assertEqual(Order.objects.count(), 0)
+
+    def test_pickup_order_is_still_allowed_outside_operating_hours(self):
+        StoreSetting.objects.filter(key="operating_hours").update(value={"days": [], "open_time": "", "close_time": ""})
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["delivery_method"], "pickup")
+        self.assertEqual(response.data["delivery_fee"], 0)
+
+    def test_gosend_rejects_cash_missing_recipient_and_out_of_range_address(self):
+        self.assertEqual(self.post_order(payment_method="cash").status_code, 400)
+        self.assertEqual(self.post_order(delivery_recipient="").status_code, 400)
+        self.assertEqual(self.post_order(delivery_phone="123").status_code, 400)
+        far = self.post_order(destination=(-6.20, 107.30))
+        self.assertEqual(far.status_code, 400)
+        self.assertIn("delivery_address", far.data)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_unknown_address_is_rejected(self):
+        from unittest import mock
+        self.client.force_authenticate(user=self.student)
+        with mock.patch("commerce.delivery.geocode", side_effect=lambda address: (-6.20, 106.80) if "Sudirman" in address else None):
+            response = self.client.post("/api/orders/", self.payload(), format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("delivery_address", response.data)
+
+    def test_quote_endpoint_returns_estimate_for_customers_only(self):
+        from unittest import mock
+        self.client.force_authenticate(user=self.student)
+        with mock.patch("commerce.delivery.geocode", side_effect=self.fake_points((-6.20, 106.86))):
+            response = self.client.post("/api/delivery/quote/", {"address": "Jl. Melati No. 5, Menteng, Jakarta"}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["fee"], 25000)
+        self.assertEqual(response.data["distance_km"], "8.6")
+        self.client.force_authenticate(user=self.admin)
+        self.assertEqual(self.client.post("/api/delivery/quote/", {"address": "x" * 20}, format="json").status_code, 403)
+
+    def test_disabled_delivery_is_rejected(self):
+        StoreSetting.objects.create(key="delivery_settings", value={"enabled": False})
+        self.assertEqual(self.post_order().status_code, 400)
+
+    def test_admin_sees_address_and_revenue_excludes_delivery_fee(self):
+        response = self.post_order()
+        code = response.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        listing = self.client.get("/api/admin/orders/")
+        row = next(item for item in listing.data if item["code"] == code)
+        self.assertEqual(row["delivery_address"], "Jl. Melati No. 5, Menteng, Jakarta Pusat")
+        self.assertEqual(row["delivery_recipient"], "Budi")
+        for action in ("accept", "ready"):
+            self.assertEqual(self.client.post(f"/api/admin/orders/{code}/{action}/").status_code, 200)
+        self.client.post(f"/api/admin/orders/{code}/payment/verify/")
+        order = Order.objects.get(code=code)
+        order.payment_status = "paid"
+        order.save()
+        self.assertEqual(self.client.post(f"/api/admin/orders/{code}/complete-pickup/").status_code, 200)
+        report = self.client.get("/api/admin/reports/summary/")
+        self.assertEqual(report.data["today"]["revenue"], 10000)
+        notice = self.student.notifications.filter(kind="order", title="Pesanan sudah diantar").exists()
+        self.assertTrue(notice)
+
+    def test_delivery_settings_validation_and_default_exposed(self):
+        self.client.force_authenticate(user=self.admin)
+        current = self.client.get("/api/storefront/settings/")
+        self.assertEqual(current.data["delivery_settings"]["base_fee"], 10000)
+        bad = self.client.patch("/api/storefront/settings/", {"delivery_settings": {"base_fee": -1}}, format="json")
+        self.assertEqual(bad.status_code, 400)
+        good = self.client.patch("/api/storefront/settings/", {"delivery_settings": {"base_fee": 12000, "origin_address": "Jl. Sudirman No. 1, Jakarta"}}, format="json")
+        self.assertEqual(good.status_code, 200)
+        self.assertEqual(good.data["delivery_settings"]["base_fee"], 12000)

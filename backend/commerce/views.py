@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from core.models import AuditLog, Notification, StoreSetting
+from .delivery import quote_delivery, store_is_open
 from .models import InventoryMovement, Order, OrderItem, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
 from .serializers import InventoryMovementSerializer, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
@@ -30,21 +31,10 @@ def notify_admins(title, message, kind="order", target_code=""):
 
 
 def pickup_is_open(now):
-    setting = StoreSetting.objects.filter(key="operating_hours").first()
-    hours = setting.value if setting and isinstance(setting.value, dict) else {}
-    days = hours.get("days", [])
-    open_time, close_time = hours.get("open_time", ""), hours.get("close_time", "")
-    if not open_time or not close_time:
-        return False
-    local_now = timezone.localtime(now)
-    day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-    if day_codes[local_now.weekday()] not in days:
-        return False
-    opening = datetime.strptime(open_time, "%H:%M").time()
-    closing = datetime.strptime(close_time, "%H:%M").time()
-    return opening <= local_now.time().replace(tzinfo=None) <= closing
+    return store_is_open(now)
 
 
+NET_REVENUE = F("total") - F("delivery_fee")  # ongkir diteruskan ke kurir, bukan pendapatan koperasi
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
@@ -115,8 +105,19 @@ class OrderListCreateView(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
         AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
-        notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}.", target_code=order.code)
+        via = " (diantar via GoSend)" if order.delivery_method == Order.DeliveryMethod.GOSEND else ""
+        notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}{via}.", target_code=order.code)
         return Response(OrderReadSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+class DeliveryQuoteView(APIView):
+    """Estimasi ongkir GoSend untuk alamat tujuan (siswa/orang tua)."""
+
+    def post(self, request):
+        if request.user.role not in ("student", "parent"):
+            return Response({"detail": "Estimasi ongkir hanya tersedia untuk siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
+        quote = quote_delivery(str(request.data.get("address", "")))
+        return Response({"distance_km": str(quote["distance_km"]), "fee": quote["fee"]})
 
 
 class OrderDetailView(generics.RetrieveAPIView):
@@ -149,7 +150,7 @@ class AdminOrderActionView(APIView):
             order.status, order.ready_at = Order.Status.READY, now
         elif action == "complete-pickup" and order.status == Order.Status.READY:
             if not pickup_is_open(now):
-                raise ValidationError({"pickup": "Pengambilan hanya dapat dikonfirmasi pada hari dan jam operasional koperasi. Atur jam operasional terlebih dahulu."})
+                raise ValidationError({"pickup": "Pengambilan/pengantaran hanya dapat dikonfirmasi pada hari dan jam operasional koperasi. Atur jam operasional terlebih dahulu."})
             if order.payment_method != Order.PaymentMethod.CASH and order.payment_status != Order.PaymentStatus.PAID:
                 raise ValidationError({"payment_status": "Pembayaran transfer/QRIS harus diverifikasi sebelum barang diserahkan."})
             order.status, order.completed_at = Order.Status.COMPLETED, now
@@ -173,6 +174,9 @@ class AdminOrderActionView(APIView):
             "complete-pickup": ("Pengambilan selesai", f"Pesanan {order.code} telah diserahkan."),
             "cancel": ("Pesanan dibatalkan", f"Pesanan {order.code} dibatalkan dan stok dikembalikan."),
         }
+        if order.delivery_method == Order.DeliveryMethod.GOSEND:
+            messages["ready"] = ("Pesanan siap diantar", f"Pesanan {order.code} sudah siap dan akan segera diantar via GoSend ke alamat Anda.")
+            messages["complete-pickup"] = ("Pesanan sudah diantar", f"Pesanan {order.code} telah diserahkan ke kurir GoSend / diterima penerima.")
         title, message = messages[action]
         notify_user(order.customer, title, message, kind="order", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
@@ -257,12 +261,12 @@ class AdminSalesReportView(APIView):
         )
         today_orders = paid_orders.filter(completed_at__date=today)
         month_orders = paid_orders.filter(completed_at__date__gte=month_start, completed_at__date__lte=today)
-        today_summary = today_orders.aggregate(total=Sum("total"), count=Count("id"))
-        month_summary = month_orders.aggregate(total=Sum("total"), count=Count("id"))
+        today_summary = today_orders.aggregate(total=Sum(NET_REVENUE), count=Count("id"))
+        month_summary = month_orders.aggregate(total=Sum(NET_REVENUE), count=Count("id"))
         daily_rows = paid_orders.filter(
             completed_at__date__gte=today - timedelta(days=6),
             completed_at__date__lte=today,
-        ).values("completed_at__date").annotate(total=Sum("total"), count=Count("id")).order_by("completed_at__date")
+        ).values("completed_at__date").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("completed_at__date")
         daily_by_date = {row["completed_at__date"].isoformat(): row for row in daily_rows}
         daily = []
         for offset in range(6, -1, -1):
@@ -315,7 +319,7 @@ class AdminDashboardView(APIView):
             completed_at__date__gte=seven_days_ago,
             completed_at__date__lte=today,
         ).values("completed_at__date").annotate(
-            revenue=Sum("total"), orders=Count("id")
+            revenue=Sum(NET_REVENUE), orders=Count("id")
         ).order_by("completed_at__date")
         by_day = {row["completed_at__date"].isoformat(): row for row in daily_rows}
         daily = []
@@ -335,13 +339,14 @@ class AdminDashboardView(APIView):
             "orders_ready": orders.filter(status=Order.Status.READY).count(),
             "customers": User.objects.filter(role__in=(User.Role.STUDENT, User.Role.PARENT), is_active=True).count(),
             "low_stock": list(products.filter(stock__lt=10).order_by("stock", "name").values("id", "name", "stock")[:8]),
-            "today_revenue": completed_paid.filter(completed_at__date=today).aggregate(total=Sum("total"))["total"] or 0,
+            "today_revenue": completed_paid.filter(completed_at__date=today).aggregate(total=Sum(NET_REVENUE))["total"] or 0,
             "daily": daily,
             "recent_orders": [{
                 "code": order.code,
                 "customer_name": "Penjualan POS" if order.sales_channel == "pos" else order.customer.full_name,
                 "beneficiary_name": order.beneficiary.full_name if order.beneficiary_id else None,
                 "total": order.total,
+                "delivery_method": order.delivery_method,
                 "sales_channel": order.sales_channel,
                 "status": order.status,
                 "payment_status": order.payment_status,
