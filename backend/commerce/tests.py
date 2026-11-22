@@ -414,5 +414,32 @@ class DeliveryTests(TestCase):
         with mock.patch.object(delivery, "PROVIDERS", (("a", mock.Mock(side_effect=OSError("down"))), ("b", mock.Mock(side_effect=ValueError("bad"))))):
             with self.assertRaises(ValidationError):
                 delivery.geocode("Jl. Gagal Semua No. 2, Jakarta")
+            # selama jeda singkat, layanan peta tidak dihubungi lagi
+            probe = mock.Mock(return_value=(1.0, 1.0))
+            with mock.patch.object(delivery, "PROVIDERS", (("c", probe),)):
+                with self.assertRaises(ValidationError):
+                    delivery.geocode("Jl. Lain No. 9, Jakarta")
+            probe.assert_not_called()
+        from django.core.cache import cache
+        cache.clear()
         with mock.patch.object(delivery, "PROVIDERS", (("a", mock.Mock(return_value=None)), ("b", mock.Mock(return_value=None)))):
             self.assertIsNone(delivery.geocode("Jl. Tidak Ada No. 3"))
+
+    def test_address_is_cleaned_into_progressively_broader_queries(self):
+        from commerce.delivery import address_variants
+        self.assertEqual(
+            address_variants("Jl. Angkasa No.28E, Air Hitam, Kec. Payung Sekaki, Kota Pekanbaru, Riau 28292"),
+            ["Jalan Angkasa, Air Hitam, Payung Sekaki, Kota Pekanbaru, Riau", "Air Hitam, Payung Sekaki, Kota Pekanbaru, Riau", "Payung Sekaki, Kota Pekanbaru, Riau"],
+        )
+        self.assertEqual(address_variants("Jl. Melati 5, Menteng, Jakarta"), ["Jalan Melati 5, Menteng, Jakarta"])
+        self.assertEqual(address_variants(" , "), [])
+
+    def test_not_found_result_is_cached_so_repeated_clicks_do_not_hit_the_map_service(self):
+        from unittest import mock
+        from commerce import delivery
+        provider = mock.Mock(return_value=None)
+        with mock.patch.object(delivery, "PROVIDERS", (("a", provider),)):
+            self.assertIsNone(delivery.geocode("Jl. Hantu No. 1, Kota Antah"))
+            calls = provider.call_count
+            self.assertIsNone(delivery.geocode("Jl. Hantu No. 1, Kota Antah"))
+        self.assertEqual(provider.call_count, calls)

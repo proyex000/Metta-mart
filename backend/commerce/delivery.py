@@ -7,6 +7,9 @@ import hashlib
 import json
 import logging
 import math
+import re
+import threading
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -76,7 +79,22 @@ def _fetch_json(url):
         return json.loads(response.read().decode("utf-8"))
 
 
+_throttle_lock = threading.Lock()
+_last_nominatim_call = 0.0
+
+
+def _throttle_nominatim():
+    """Nominatim hanya mengizinkan 1 permintaan per detik; beri jeda agar tidak diblokir."""
+    global _last_nominatim_call
+    with _throttle_lock:
+        wait = 1.1 - (time.monotonic() - _last_nominatim_call)
+        if wait > 0:
+            time.sleep(wait)
+        _last_nominatim_call = time.monotonic()
+
+
 def _lookup_nominatim(query):
+    _throttle_nominatim()
     params = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "id"})
     rows = _fetch_json(f"{NOMINATIM_URL}?{params}")
     return (float(rows[0]["lat"]), float(rows[0]["lon"])) if rows else None
@@ -95,6 +113,9 @@ def _lookup_photon(query):
 PROVIDERS = (("nominatim", _lookup_nominatim), ("photon", _lookup_photon))
 
 
+CONNECTION_ERROR = "Layanan peta sedang tidak dapat dihubungi. Coba lagi beberapa saat."
+
+
 def _lookup(query):
     """Coba tiap layanan peta; None bila tidak ada yang menemukan, error bila semua gagal dihubungi."""
     failures = 0
@@ -108,23 +129,54 @@ def _lookup(query):
         if point:
             return point
     if failures == len(PROVIDERS):
-        raise ValidationError({"delivery_address": "Layanan peta sedang tidak dapat dihubungi. Coba lagi beberapa saat."})
+        cache.set("geocode:cooldown", True, 20)  # hindari membanjiri layanan peta saat sedang bermasalah
+        raise ValidationError({"delivery_address": CONNECTION_ERROR})
     return None
 
 
+_HOUSE_NUMBER = re.compile(r"\b(?:no|nomor)\.?\s*\d+[a-z]?(?:[/-]\d+[a-z]?)?\b", re.IGNORECASE)
+_ADMIN_PREFIX = re.compile(r"^(?:kecamatan|kec|kelurahan|kel|desa)\.?\s+", re.IGNORECASE)
+_STREET_PREFIX = re.compile(r"^(?:jalan|jln|jl)\.?\s*", re.IGNORECASE)
+_POSTAL_CODE = re.compile(r"\b\d{5}\b")
+
+
+def address_variants(address):
+    """Ubah alamat bebas menjadi beberapa kueri pencarian, dari paling rinci ke tingkat kecamatan.
+
+    Contoh: "Jl. Angkasa No.28E, Air Hitam, Kec. Payung Sekaki, Kota Pekanbaru, Riau 28292" ->
+    ["Jalan Angkasa, Air Hitam, Payung Sekaki, Kota Pekanbaru, Riau", "Air Hitam, Payung Sekaki, ...", "Payung Sekaki, ..."].
+    """
+    parts = []
+    for raw in address.replace("\n", ",").split(","):
+        part = _POSTAL_CODE.sub("", _HOUSE_NUMBER.sub("", raw))
+        part = _ADMIN_PREFIX.sub("", part.strip())
+        street = _STREET_PREFIX.match(part)
+        if street and street.end() < len(part):
+            part = "Jalan " + part[street.end():]
+        part = re.sub(r"\s+", " ", part).strip(" .-")
+        if part:
+            parts.append(part)
+    if not parts:
+        return []
+    return [", ".join(parts[start:]) for start in range(0, max(1, min(len(parts) - 2, 3)))]
+
+
 def geocode(address):
-    """Cari koordinat alamat. Bila alamat lengkap tak ditemukan, coba tanpa bagian depan (nama jalan/nomor)."""
+    """Cari koordinat alamat; None bila tidak ditemukan, ValidationError bila layanan peta tidak terjangkau."""
     key = "geocode:" + hashlib.sha256(address.strip().lower().encode("utf-8")).hexdigest()
     cached = cache.get(key)
+    if cached == "missing":
+        return None
     if cached:
         return tuple(cached)
-    parts = [part.strip() for part in address.replace("\n", ",").split(",") if part.strip()]
-    attempts = [", ".join(parts[start:]) for start in range(0, max(1, min(len(parts) - 1, 3)))] or [address]
-    for query in attempts:
+    if cache.get("geocode:cooldown"):
+        raise ValidationError({"delivery_address": CONNECTION_ERROR})
+    for query in address_variants(address) or [address]:
         point = _lookup(query)
         if point:
             cache.set(key, list(point), 60 * 60 * 24)
             return point
+    cache.set(key, "missing", 60 * 10)
     return None
 
 
@@ -155,7 +207,7 @@ def quote_delivery(address):
         raise ValidationError({"delivery_method": "Alamat koperasi tidak ditemukan di peta. Hubungi admin untuk memperbaikinya."})
     destination = geocode(address)
     if not destination:
-        raise ValidationError({"delivery_address": "Alamat tidak ditemukan di peta. Lengkapi dengan kelurahan/kecamatan dan kota."})
+        raise ValidationError({"delivery_address": "Alamat tidak ditemukan di peta. Tulis dengan format: Jalan, Kelurahan, Kecamatan, Kota (contoh: Jl. Melati, Air Hitam, Payung Sekaki, Pekanbaru)."})
     distance = Decimal(str(round(haversine_km(origin, destination) * ROAD_FACTOR, 1)))
     if distance > Decimal(str(config["max_distance_km"])):
         raise ValidationError({"delivery_address": f"Alamat di luar jangkauan pengantaran (maksimal {config['max_distance_km']} km dari koperasi)."})
