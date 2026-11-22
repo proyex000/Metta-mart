@@ -4442,3 +4442,47 @@ a.primary {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Dashboard: Pesanan Terbaru tidak boleh keluar frame */
+.latest {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.latest .panel__title {
+  flex: none;
+}
+.latest__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.latest__row {
+  min-height: 53px;
+  height: auto;
+  padding: 6px 0;
+}
+.latest__row > div {
+  min-width: 0;
+}
+.latest__row b,
+.latest__row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-shell--admin .latest__row b {
+  overflow-wrap: normal;
+}
+.latest__row .status {
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .role-shell--admin .latest {
+    height: auto;
+    max-height: 420px;
+  }
+}

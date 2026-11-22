@@ -368,6 +368,7 @@ export function Dashboard() {
           </article>
           <article className="panel latest">
             <div className="panel__title"><h2>Pesanan Terbaru</h2><button onClick={() => window.location.assign("/admin/orders")}>Lihat Semua ›</button></div>
+            <div className="latest__list">
             {summary.recent_orders.length ? summary.recent_orders.map((order) => (
               <div className="latest__row" key={order.code}>
                 <span className="mini-icon"><Icon name="bag" size={16} /></span>
@@ -376,6 +377,7 @@ export function Dashboard() {
                 <span>{money(order.total)}</span>
               </div>
             )) : <p className="table-foot">Belum ada pesanan.</p>}
+            </div>
           </article>
         </section>
         <section className="panel table-panel">
