@@ -144,7 +144,9 @@ class OrderCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context.get("request")
         key = request.headers.get("Idempotency-Key", "").strip() if request else ""
-        if key and (len(key) < 8 or len(key) > 64):
+        if not key:
+            raise ValidationError({"idempotency_key": "Kunci transaksi wajib dikirim. Muat ulang halaman checkout lalu coba lagi."})
+        if len(key) < 8 or len(key) > 64:
             raise ValidationError({"idempotency_key": "Kunci transaksi tidak valid."})
         if key:
             attrs["_idempotency_key"] = key
