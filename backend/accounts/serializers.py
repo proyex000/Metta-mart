@@ -58,6 +58,21 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(list(exc.messages))
         return value
 
+    def validate(self, attrs):
+        role = attrs.get("role")
+        identifier = attrs.get("identifier", "").strip()
+        if role == User.Role.STUDENT and not (identifier.isdigit() and len(identifier) == 10):
+            raise serializers.ValidationError({"identifier": "NISN siswa harus terdiri dari 10 digit angka."})
+        if role == User.Role.PARENT:
+            from django.core.validators import validate_email
+            try:
+                validate_email(identifier)
+            except DjangoValidationError:
+                raise serializers.ValidationError({"identifier": "Akun orang tua harus menggunakan email yang valid."})
+            attrs["identifier"] = identifier.lower()
+            attrs["email"] = identifier.lower()
+        return attrs
+
     def create(self, validated_data):
         password = validated_data.pop("password")
         return User.objects.create_user(password=password, **validated_data)
