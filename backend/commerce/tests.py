@@ -235,6 +235,19 @@ class CommerceApiTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
 
+    def test_pos_checkout_retry_with_same_idempotency_key_does_not_duplicate_sale(self):
+        self.client.force_authenticate(user=self.admin)
+        payload = {"payment_method": "cash", "cash_received": 20000, "items": [{"product_id": self.product.id, "quantity": 3}]}
+        first = self.client.post("/api/admin/pos/checkout/", payload, format="json", HTTP_IDEMPOTENCY_KEY="pos-checkout-retry-0001")
+        replay = self.client.post("/api/admin/pos/checkout/", payload, format="json", HTTP_IDEMPOTENCY_KEY="pos-checkout-retry-0001")
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(first.data["code"], replay.data["code"])
+        self.assertEqual(Order.objects.filter(sales_channel="pos").count(), 1)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 7)
+        self.assertEqual(InventoryMovement.objects.filter(reason="pos_sale", reference=first.data["code"]).count(), 1)
+
     def test_delete_product_with_inventory_history_archives_instead_of_raising_500(self):
         self.client.force_authenticate(user=self.admin)
         InventoryMovement.objects.create(product=self.product, actor=self.admin, quantity_delta=10, reason="initial_stock", reference="initial")
