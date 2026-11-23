@@ -65,7 +65,8 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("full_name", "is_active")
+        fields = ("id", "identifier", "full_name", "email", "role", "is_active", "date_joined")
+        read_only_fields = ("id", "identifier", "email", "role", "date_joined")
 
     def validate_full_name(self, value):
         if not value.strip():
