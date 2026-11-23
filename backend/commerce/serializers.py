@@ -1,4 +1,5 @@
 from django.db import transaction
+from PIL import Image, UnidentifiedImageError
 from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
@@ -9,11 +10,34 @@ from .models import InventoryMovement, Order, OrderItem, Product
 
 class ProductSerializer(serializers.ModelSerializer):
     stock_note = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=80)
+    remove_image = serializers.BooleanField(write_only=True, required=False, default=False)
+    image_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Product
-        fields = ("id", "name", "sku", "category", "price", "stock", "is_active", "stock_note", "created_at", "updated_at")
-        read_only_fields = ("id", "created_at", "updated_at")
+        fields = ("id", "name", "sku", "category", "price", "stock", "is_active", "image", "image_url", "remove_image", "stock_note", "created_at", "updated_at")
+        read_only_fields = ("id", "image_url", "created_at", "updated_at")
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return None
+        request = self.context.get("request")
+        url = obj.image.url
+        return request.build_absolute_uri(url) if request else url
+
+    def validate_image(self, value):
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("Ukuran gambar maksimal 5 MB.")
+        try:
+            with Image.open(value) as image:
+                if image.format not in ("JPEG", "PNG", "WEBP"):
+                    raise serializers.ValidationError("Format gambar harus JPG, PNG, atau WEBP.")
+                image.verify()
+        except (UnidentifiedImageError, OSError, ValueError):
+            raise serializers.ValidationError("File yang diunggah bukan gambar yang valid.")
+        finally:
+            value.seek(0)
+        return value
 
     def validate(self, attrs):
         if self.instance and "stock" in attrs and attrs["stock"] != self.instance.stock and not attrs.get("stock_note", "").strip():
@@ -22,11 +46,22 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("stock_note", None)
+        validated_data.pop("remove_image", None)
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         validated_data.pop("stock_note", None)
-        return super().update(instance, validated_data)
+        remove_image = validated_data.pop("remove_image", False)
+        old_image = instance.image
+        old_name = old_image.name if old_image else ""
+        updated = super().update(instance, validated_data)
+        new_name = updated.image.name if updated.image else ""
+        if old_name and (remove_image or old_name != new_name):
+            old_image.storage.delete(old_name)
+        if remove_image and not validated_data.get("image"):
+            updated.image = None
+            updated.save(update_fields=["image"])
+        return updated
 
     def validate_price(self, value):
         if value < 0:
