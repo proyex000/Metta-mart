@@ -272,3 +272,84 @@
   .admin-users-toolbar input,
   .admin-users-list td input { transition: none; }
 }
+
+
+/* Account status actions: clear hierarchy without oversized danger buttons. */
+.admin-users-actions {
+  gap: 8px;
+  min-width: 158px;
+}
+.admin-users-actions .admin-users-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .005em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.admin-users-toggle__mark {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+.admin-users-toggle.is-deactivating {
+  color: #a83b43;
+  background: #fff7f7;
+  border-color: #f0d1d3;
+}
+.admin-users-toggle.is-deactivating .admin-users-toggle__mark {
+  color: #a83b43;
+  background: #fbe5e7;
+}
+.admin-users-toggle.is-activating {
+  color: #18734d;
+  background: #f1faf5;
+  border-color: #ccebd9;
+}
+.admin-users-toggle.is-activating .admin-users-toggle__mark {
+  color: #18734d;
+  background: #dff4e8;
+}
+.admin-users-toggle.is-deactivating:hover:not(:disabled) {
+  background: #ffeded;
+  border-color: #e8b8bc;
+}
+.admin-users-toggle.is-activating:hover:not(:disabled) {
+  background: #e5f7ec;
+  border-color: #a9ddbd;
+}
+.admin-users-actions .admin-users-toggle:focus-visible {
+  outline: 3px solid rgb(57 118 198 / 22%);
+  outline-offset: 2px;
+}
+.admin-users-actions .admin-users-toggle:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.admin-users-actions .admin-users-toggle:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+@media (max-width: 700px) {
+  .admin-users-actions { min-width: 150px; }
+  .admin-users-actions .admin-users-toggle {
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-users-actions .admin-users-toggle { transition: none; }
+}
