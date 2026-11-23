@@ -1,6 +1,7 @@
 import io
 import os
 import tempfile
+from unittest import mock
 from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -24,6 +25,34 @@ class CommerceApiTests(TestCase):
             "payment_method": payment_method,
             "items": [{"product_id": self.product.id, "quantity": 2}],
         }, format="json")
+
+    def test_product_creation_rolls_back_if_initial_stock_movement_fails(self):
+        self.client.force_authenticate(user=self.admin)
+        self.client.raise_request_exception = False
+        with mock.patch("commerce.views.InventoryMovement.objects.create", side_effect=RuntimeError("ledger unavailable")):
+            response = self.client.post("/api/products/", {
+                "name": "Produk gagal",
+                "category": "buku",
+                "price": 1000,
+                "stock": 3,
+            }, format="json")
+        self.assertEqual(response.status_code, 500)
+        self.assertFalse(Product.objects.filter(name="Produk gagal").exists())
+        self.assertFalse(InventoryMovement.objects.filter(reason="initial_stock").exists())
+
+    def test_online_checkout_rolls_back_if_order_notification_fails(self):
+        self.client.force_authenticate(user=self.student)
+        self.client.raise_request_exception = False
+        with mock.patch("commerce.views.notify_admins", side_effect=RuntimeError("notification unavailable")):
+            response = self.client.post("/api/orders/", {
+                "payment_method": "cash",
+                "items": [{"product_id": self.product.id, "quantity": 2}],
+            }, format="json")
+        self.assertEqual(response.status_code, 500)
+        self.assertFalse(Order.objects.filter(customer=self.student).exists())
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+        self.assertFalse(InventoryMovement.objects.filter(reason="order_reserved").exists())
 
     def test_order_uses_server_price_and_reduces_stock(self):
         response = self.create_order()
