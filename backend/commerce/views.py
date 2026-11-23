@@ -407,7 +407,9 @@ class AdminPOSCheckoutView(APIView):
         rows = request.data.get("items")
         method = request.data.get("payment_method", "cash")
         idempotency_key = request.headers.get("Idempotency-Key", "").strip()
-        if idempotency_key and (len(idempotency_key) < 8 or len(idempotency_key) > 64):
+        if not idempotency_key:
+            raise ValidationError({"idempotency_key": "Kunci transaksi wajib dikirim. Muat ulang halaman POS lalu coba lagi."})
+        if len(idempotency_key) < 8 or len(idempotency_key) > 64:
             raise ValidationError({"idempotency_key": "Kunci transaksi tidak valid."})
         if method not in Order.PaymentMethod.values:
             raise ValidationError({"payment_method": "Metode pembayaran POS tidak valid."})
