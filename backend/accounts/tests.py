@@ -70,6 +70,38 @@ class AuthApiTests(TestCase):
         self.assertEqual(self.student.full_name, "Nama Siswa Baru")
         self.assertFalse(self.student.is_active)
 
+    def test_admin_can_change_student_identifier(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.patch(f"/api/admin/users/{self.student.pk}/", {"identifier": "9" * 10}, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.identifier, "9" * 10)
+        self.assertTrue(self.student.check_password("TestPassword!2026"))
+
+    def test_admin_rejects_invalid_or_duplicate_student_identifier(self):
+        other_student = User.objects.create_user(
+            identifier="8" * 10, password="TestPassword!2026",
+            full_name="Siswa Lain", role=User.Role.STUDENT,
+        )
+        self.client.force_authenticate(user=self.admin)
+        invalid = self.client.patch(f"/api/admin/users/{self.student.pk}/", {"identifier": "12345"}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+        duplicate = self.client.patch(f"/api/admin/users/{self.student.pk}/", {"identifier": other_student.identifier}, format="json")
+        self.assertEqual(duplicate.status_code, 400)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.identifier, "1234567890")
+
+    def test_admin_cannot_change_parent_login_identifier(self):
+        parent = User.objects.create_user(
+            identifier="parent@example.test", password="TestPassword!2026",
+            full_name="Parent Test", email="parent@example.test", role=User.Role.PARENT,
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.patch(f"/api/admin/users/{parent.pk}/", {"identifier": "new@example.test"}, format="json")
+        self.assertEqual(response.status_code, 400)
+        parent.refresh_from_db()
+        self.assertEqual(parent.identifier, "parent@example.test")
+
     def test_student_cannot_update_accounts(self):
         self.client.force_authenticate(user=self.student)
         response = self.client.patch(f"/api/admin/users/{self.student.pk}/", {"is_active": False}, format="json")

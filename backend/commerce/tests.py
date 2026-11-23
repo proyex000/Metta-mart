@@ -134,7 +134,7 @@ class CommerceApiTests(TestCase):
         self.assertEqual(verified.status_code, 200)
         self.assertEqual(verified.data["payment_status"], Order.PaymentStatus.PAID)
         completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
-        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.status_code, 200, completed.data)
 
     def test_transfer_identity_validates_required_fields_and_last_four(self):
         created = self.create_order("bank_transfer")

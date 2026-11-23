@@ -81,7 +81,17 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("id", "identifier", "full_name", "email", "role", "is_active", "date_joined")
-        read_only_fields = ("id", "identifier", "email", "role", "date_joined")
+        read_only_fields = ("id", "email", "role", "date_joined")
+
+    def validate_identifier(self, value):
+        if self.instance.role != User.Role.STUDENT:
+            raise serializers.ValidationError("Identitas login hanya dapat diubah untuk akun siswa.")
+        value = value.strip()
+        if not (value.isdigit() and len(value) == 10):
+            raise serializers.ValidationError("NISN harus terdiri dari 10 digit angka.")
+        if User.objects.exclude(pk=self.instance.pk).filter(identifier__iexact=value).exists():
+            raise serializers.ValidationError("NISN tersebut sudah digunakan akun lain.")
+        return value
 
     def validate_full_name(self, value):
         if not value.strip():

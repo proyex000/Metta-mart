@@ -27,7 +27,7 @@ export function createManagedUser(input: {
   });
 }
 
-export function updateManagedUser(id: number, input: { full_name?: string; is_active?: boolean }) {
+export function updateManagedUser(id: number, input: { identifier?: string; full_name?: string; is_active?: boolean }) {
   return apiRequest<ManagedUser>(`/admin/users/${id}/`, {
     method: "PATCH",
     body: JSON.stringify(input),
