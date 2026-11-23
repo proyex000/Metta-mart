@@ -47,7 +47,7 @@ export const productService = {
   },
   async update(id: number, input: ProductInput): Promise<Product> {
     validate(input);
-    const updated = await apiRequest<ApiProduct>(`/products/${id}/`, { method: "PATCH", body: JSON.stringify({ name: input.name.trim(), category: input.category, price: input.price, stock: input.stock, stock_note: input.stock_note || "" }) });
+    const updated = await apiRequest<ApiProduct>(`/products/${id}/`, { method: "PATCH", body: productPayload(input) });
     const product = toProduct(updated); items = items.map((item) => item.id === id ? product : item); emit(); return product;
   },
   async remove(id: number) {
