@@ -190,7 +190,7 @@ class AdminOrderActionView(APIView):
                 PaymentEvent.objects.create(order=order, actor=request.user, event="cash_collected", note="Tunai diterima saat pengambilan.")
         elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED, Order.Status.READY):
             if order.payment_status == Order.PaymentStatus.PAID:
-                raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan tanpa proses pengembalian dana."})
+                raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan. Kebijakan sistem tidak menyediakan pengembalian dana."})
             if order.payment_status == Order.PaymentStatus.PENDING:
                 raise ValidationError({"payment_status": "Pembayaran sedang menunggu verifikasi. Rekonsiliasi pembayaran terlebih dahulu sebelum membatalkan pesanan."})
             cancel_order(order, request.user, now)
