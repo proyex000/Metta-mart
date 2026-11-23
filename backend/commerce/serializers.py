@@ -1,3 +1,5 @@
+import hashlib
+import json
 from django.db import transaction
 from PIL import Image, UnidentifiedImageError
 from django.db.models import F
@@ -140,6 +142,12 @@ class OrderCreateSerializer(serializers.Serializer):
     delivery_phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     def validate(self, attrs):
+        request = self.context.get("request")
+        key = request.headers.get("Idempotency-Key", "").strip() if request else ""
+        if key and (len(key) < 8 or len(key) > 64):
+            raise ValidationError({"idempotency_key": "Kunci transaksi tidak valid."})
+        if key:
+            attrs["_idempotency_key"] = key
         if attrs.get("delivery_method") != Order.DeliveryMethod.GOSEND:
             for field in ("delivery_address", "delivery_recipient", "delivery_phone"):
                 attrs.pop(field, None)
@@ -183,6 +191,18 @@ class OrderCreateSerializer(serializers.Serializer):
     @transaction.atomic
     def create(self, validated_data):
         rows = validated_data["items"]
+        key = validated_data.pop("_idempotency_key", "")
+        self.idempotent_replay = False
+        request = self.context["request"]
+        fingerprint = hashlib.sha256(json.dumps(validated_data, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+        if key:
+            type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            existing = Order.objects.filter(idempotency_key=key).first()
+            if existing:
+                if existing.customer_id != request.user.pk or existing.request_fingerprint != fingerprint or existing.sales_channel != "online":
+                    raise ValidationError({"idempotency_key": "Kunci ini sudah digunakan untuk pesanan lain."})
+                self.idempotent_replay = True
+                return existing
         products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=[r["product_id"] for r in rows], is_active=True).order_by("id")}
         if len(products) != len(rows):
             raise ValidationError({"items": "Satu atau lebih produk tidak tersedia."})
@@ -204,7 +224,9 @@ class OrderCreateSerializer(serializers.Serializer):
                 "delivery_phone": validated_data["delivery_phone"],
             }
         order = Order.objects.create(
-            customer=self.context["request"].user,
+            customer=request.user,
+            idempotency_key=key or None,
+            request_fingerprint=fingerprint if key else "",
             payment_method=validated_data["payment_method"],
             note=validated_data.get("note", "").strip(),
             subtotal=subtotal,
