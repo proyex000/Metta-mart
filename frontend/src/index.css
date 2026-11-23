@@ -4725,3 +4725,42 @@ a.order-submit {
   text-decoration: none;
   text-align: center;
 }
+
+
+/* Orders page: keep filters grouped and aligned without changing their behavior. */
+.role-shell--admin .orders-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.25fr) minmax(0, 2fr) minmax(250px, 1.15fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.role-shell--admin .orders-toolbar > .order-search { grid-column: auto; width: 100%; }
+.role-shell--admin .orders-toolbar__selects {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.role-shell--admin .orders-toolbar__selects select { width: 100%; min-width: 0; }
+.role-shell--admin .orders-toolbar__dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.role-shell--admin .orders-toolbar__dates label { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted, #64748b); }
+.role-shell--admin .orders-toolbar__dates input { width: 100%; min-width: 0; }
+.role-shell--admin .orders-toolbar__export { align-self: end; white-space: nowrap; min-height: 40px; }
+@media (max-width: 1250px) {
+  .role-shell--admin .orders-toolbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .role-shell--admin .orders-toolbar > .order-search { grid-column: 1 / -1; }
+  .role-shell--admin .orders-toolbar__export { justify-self: end; }
+}
+@media (max-width: 767px) {
+  .role-shell--admin .orders-toolbar { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .role-shell--admin .orders-toolbar > .order-search { grid-column: auto; }
+  .role-shell--admin .orders-toolbar__selects { grid-template-columns: minmax(0, 1fr); }
+  .role-shell--admin .orders-toolbar__dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .role-shell--admin .orders-toolbar__export { justify-self: stretch; width: 100%; }
+}
