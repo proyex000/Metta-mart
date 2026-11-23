@@ -4764,3 +4764,96 @@ a.order-submit {
   .role-shell--admin .orders-toolbar__dates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .role-shell--admin .orders-toolbar__export { justify-self: stretch; width: 100%; }
 }
+
+
+/* ---------- Struk transaksi: thermal 58/80 mm dan simpan PDF ---------- */
+.receipt-screen {
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+  background: #f3f5f7;
+  color: #17212b;
+}
+.receipt-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 auto 18px;
+}
+.receipt-toolbar label {
+  display: grid;
+  gap: 5px;
+  color: #526273;
+  font-size: 12px;
+  font-weight: 600;
+}
+.receipt-toolbar select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d5dde4;
+  border-radius: 8px;
+  background: #fff;
+  color: #17212b;
+}
+.receipt-paper {
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 4mm 3mm;
+  background: #fff;
+  color: #111;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.receipt-paper--58 { width: 52mm; }
+.receipt-paper--80 { width: 72mm; font-size: 11px; padding: 5mm 4mm; }
+.receipt-header { text-align: center; padding-bottom: 8px; }
+.receipt-header h1 { margin: 0; font-size: 18px; letter-spacing: .08em; }
+.receipt-header p { margin: 2px 0 0; }
+.receipt-muted { color: #666; font-size: 9px; }
+.receipt-meta { display: grid; gap: 3px; }
+.receipt-meta > div,
+.receipt-totals > div,
+.receipt-item > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.receipt-meta span,
+.receipt-totals span,
+.receipt-item span { color: #444; }
+.receipt-meta b { text-align: right; }
+.receipt-rule { border-top: 1px dashed #555; margin: 8px 0; }
+.receipt-items { display: grid; gap: 7px; }
+.receipt-item > b { display: block; font-weight: 600; }
+.receipt-item > div { margin-top: 1px; }
+.receipt-item strong { font-weight: 600; }
+.receipt-totals { display: grid; gap: 4px; }
+.receipt-grand-total { padding-top: 5px; border-top: 1px solid #222; font-size: 1.15em; }
+.receipt-grand-total strong { font-size: 1.15em; }
+.receipt-cancelled {
+  margin: 7px 0;
+  padding: 5px;
+  border: 2px solid #111;
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.receipt-delivery { margin-top: 9px; padding-top: 7px; border-top: 1px dashed #555; }
+.receipt-delivery p { margin: 2px 0; }
+.receipt-note { margin: 8px 0 0; padding-top: 6px; border-top: 1px dashed #555; }
+.receipt-footer { margin-top: 12px; text-align: center; }
+.receipt-footer p { margin: 0 0 3px; font-weight: 600; }
+.receipt-footer small { color: #555; font-size: 9px; }
+.receipt-print-hint { max-width: 560px; margin: 16px auto 0; color: #637384; font-size: 12px; line-height: 1.6; text-align: center; }
+.receipt-loading { max-width: 560px; margin: 80px auto; padding: 24px; text-align: center; color: #526273; }
+.receipt-loading button { margin-top: 12px; }
+@media print {
+  html, body, #root { min-height: 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .receipt-screen { min-height: 0; padding: 0; background: #fff; }
+  .receipt-paper { margin: 0; box-shadow: none; }
+}
