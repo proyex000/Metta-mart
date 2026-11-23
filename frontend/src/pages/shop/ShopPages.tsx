@@ -188,6 +188,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [submitting, setSubmitting] = useState(false);
   const [createdCode, setCreatedCode] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
   const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
   const { session } = useAuth();
@@ -259,8 +260,9 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         payment_method: selectedPayment === "bankTransfer" ? "bank_transfer" : selectedPayment,
         note,
         ...(isGosend ? { delivery_method: "gosend" as const, delivery_address: address.trim(), delivery_recipient: recipient.trim(), delivery_phone: recipientPhone.trim() } : {}),
-      });
+      }, requestId);
       setCreatedCode(order.code);
+      setRequestId(crypto.randomUUID());
       setSent(true);
       // Keep the catalogue stock in sync without turning a successful order into a false error.
       refreshProducts().catch(() => undefined);

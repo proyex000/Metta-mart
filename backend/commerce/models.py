@@ -94,6 +94,8 @@ class Order(models.Model):
     payment_sender_name = models.CharField(max_length=120, blank=True)
     payment_source = models.CharField(max_length=80, blank=True)
     payment_account_last4 = models.CharField(max_length=4, blank=True)
+    idempotency_key = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    request_fingerprint = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     accepted_at = models.DateTimeField(null=True, blank=True)

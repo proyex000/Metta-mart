@@ -235,6 +235,19 @@ class CommerceApiTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
 
+    def test_pos_checkout_retry_with_same_idempotency_key_does_not_duplicate_sale(self):
+        self.client.force_authenticate(user=self.admin)
+        payload = {"payment_method": "cash", "cash_received": 20000, "items": [{"product_id": self.product.id, "quantity": 3}]}
+        first = self.client.post("/api/admin/pos/checkout/", payload, format="json", HTTP_IDEMPOTENCY_KEY="pos-checkout-retry-0001")
+        replay = self.client.post("/api/admin/pos/checkout/", payload, format="json", HTTP_IDEMPOTENCY_KEY="pos-checkout-retry-0001")
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(first.data["code"], replay.data["code"])
+        self.assertEqual(Order.objects.filter(sales_channel="pos").count(), 1)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 7)
+        self.assertEqual(InventoryMovement.objects.filter(reason="pos_sale", reference=first.data["code"]).count(), 1)
+
     def test_delete_product_with_inventory_history_archives_instead_of_raising_500(self):
         self.client.force_authenticate(user=self.admin)
         InventoryMovement.objects.create(product=self.product, actor=self.admin, quantity_delta=10, reason="initial_stock", reference="initial")
@@ -483,6 +496,29 @@ class CustomerCancelAndPaymentInfoTests(TestCase):
         response = self.client.post(f"/api/admin/orders/{code}/{path}/", {}, format="json")
         self.client.force_authenticate(user=self.student)
         return response
+
+    def test_checkout_idempotency_replays_the_same_order_without_reserving_stock_twice(self):
+        self.client.force_authenticate(user=self.student)
+        payload = {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 2}]}
+        first = self.client.post("/api/orders/", payload, format="json", HTTP_IDEMPOTENCY_KEY="online-order-retry-0001")
+        replay = self.client.post("/api/orders/", payload, format="json", HTTP_IDEMPOTENCY_KEY="online-order-retry-0001")
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(first.data["code"], replay.data["code"])
+        self.assertEqual(Order.objects.filter(customer=self.student).count(), 1)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 8)
+        self.assertEqual(InventoryMovement.objects.filter(reason="order_reserved", reference=first.data["code"]).count(), 1)
+
+    def test_idempotency_key_cannot_be_reused_for_a_different_cart(self):
+        self.client.force_authenticate(user=self.student)
+        key = "online-order-retry-0002"
+        first = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        changed = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 3}]}, format="json", HTTP_IDEMPOTENCY_KEY=key)
+        self.assertEqual(first.status_code, 201, first.data)
+        self.assertEqual(changed.status_code, 400)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 9)
 
     def test_payment_info_hidden_until_admin_confirms_and_hidden_again_when_paid(self):
         code = self.order("bank_transfer")
