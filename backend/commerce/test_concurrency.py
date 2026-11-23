@@ -6,7 +6,7 @@ from django.test import TransactionTestCase, skipUnlessDBFeature
 from rest_framework.test import APIClient
 
 from accounts.models import User
-from commerce.models import InventoryMovement, Order, Product
+from .models import InventoryMovement, Order, Product
 
 
 @skipUnlessDBFeature("has_select_for_update")
@@ -14,13 +14,6 @@ class ConcurrentCheckoutTests(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
-        self.admin = User.objects.create_user(
-            identifier="admin-concurrency",
-            password="TestPassword!2026",
-            full_name="Admin",
-            role=User.Role.ADMIN,
-            is_staff=True,
-        )
         self.customers = [
             User.objects.create_user(
                 identifier=f"student-concurrency-{index}",
@@ -67,8 +60,4 @@ class ConcurrentCheckoutTests(TransactionTestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 0)
         self.assertEqual(Order.objects.filter(sales_channel="online").count(), 1)
-        self.assertEqual(
-            InventoryMovement.objects.filter(reason="order_reserved").aggregate_total
-            if False else InventoryMovement.objects.filter(reason="order_reserved").count(),
-            1,
-        )
+        self.assertEqual(InventoryMovement.objects.filter(reason="order_reserved").count(), 1)
