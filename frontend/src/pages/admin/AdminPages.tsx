@@ -1064,6 +1064,7 @@ export function POS() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<CommerceOrder | null>(null);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [search, setSearch] = useState("");
   useEffect(() => {
     fetchStorefrontSettings().then((settings) => {
@@ -1093,8 +1094,8 @@ export function POS() {
         payment_method: paymentMethod,
         note,
         ...(paymentMethod === "cash" ? { cash_received: Number(cashReceived) } : {}),
-      });
-      setReceipt(order); setCounts({}); setNote(""); setCashReceived("");
+      }, requestId);
+      setReceipt(order); setCounts({}); setNote(""); setCashReceived(""); setRequestId(crypto.randomUUID());
       await refreshProducts();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Transaksi POS gagal disimpan.");
