@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createManagedUser, fetchManagedUsers, updateManagedUser, type ManagedUser } from "../../services/accounts";
-import "./ManagedUsersPage.css";
+import "./AdminUsersPage.css";
 
 const roleLabel: Record<ManagedUser["role"], string> = {
   admin: "Admin",
@@ -8,7 +8,7 @@ const roleLabel: Record<ManagedUser["role"], string> = {
   parent: "Orang tua",
 };
 
-export function ManagedUsersPage() {
+export function AdminUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [draftNames, setDraftNames] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
