@@ -631,7 +631,7 @@ export function Stock() {
                   setError("");
                 }}
               />
-              {editing !== "new" && editing.image_url && (
+              {editing !== "new" && editing.image_url && !imageFile && (
                 <label className="product-image-field__remove">
                   <input type="checkbox" checked={removeImage} onChange={(event) => setRemoveImage(event.target.checked)} />
                   Hapus foto produk
