@@ -137,7 +137,8 @@ Suggested endpoint groups (names are illustrative; align with existing API):
 - `GET /api/products/` — active catalogue with filtering/pagination.
 - `POST /api/orders/` — authenticated Student/Parent checkout; accepts product IDs/quantities, beneficiary where authorized, payment method, and note; never accepts trusted prices/totals.
 - `GET /api/orders/` and `GET /api/orders/{id}/` — ownership-scoped buyer views.
-- `GET /api/admin/orders/` — Admin order queue.\n- `GET/PATCH /api/admin/users/<id>/` — Admin views and updates account name/active status; roles and login identifiers remain protected.
+- `GET /api/admin/orders/` — Admin order queue. 
+- `GET/PATCH /api/admin/users/<id>/` — Admin views and updates account name/active status; roles and login identifiers remain protected.
 - `POST /api/admin/orders/{id}/accept/`
 - `POST /api/admin/orders/{id}/ready/`
 - `POST /api/admin/orders/{id}/complete-pickup/`
