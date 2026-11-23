@@ -737,19 +737,46 @@ export function Orders() {
       {error && <p className="auth-error" role="alert">{error}</p>}
       <div className="panel table-panel">
         <div className="tabs">{tabs.map((t) => <button className={tab === t ? "active" : ""} onClick={() => setTab(t)} key={t}>{t}{t === "Semua" ? ` (${items.length})` : ""}</button>)}</div>
-        <div className="toolbar orders-toolbar">
-          <label className="search order-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode / pelanggan / penerima..." /></label>
-          <div className="orders-toolbar__selects">
-            <select aria-label="Filter status pembayaran" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">Semua Pembayaran</option><option value="unpaid">Belum Dibayar</option><option value="pending_verification">Menunggu Verifikasi</option><option value="paid">Lunas</option><option value="failed">Ditolak</option></select>
-            <select aria-label="Filter metode pembayaran" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">Semua Metode</option><option value="cash">Tunai</option><option value="bank_transfer">Transfer</option><option value="qris">QRIS</option></select>
-            <select aria-label="Filter kanal transaksi" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}><option value="all">Semua Kanal</option><option value="online">Online</option><option value="pos">POS</option></select>
-            <select aria-label="Filter metode pengambilan" value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)}><option value="all">Semua Pengambilan</option><option value="pickup">Ambil di Koperasi</option><option value="gosend">GoSend</option></select>
+        <div className="orders-toolbar">
+          <label className="search order-search">
+            <Icon name="search" size={17} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kode pesanan, pelanggan, atau penerima..." />
+          </label>
+          <section className="orders-toolbar__filter-group" aria-label="Filter pesanan">
+            <div className="orders-toolbar__section-heading">
+              <b>Filter transaksi</b>
+              <span>Persempit daftar pesanan berdasarkan kategori</span>
+            </div>
+            <div className="orders-toolbar__selects">
+              <label className="orders-toolbar__field"><span>Status pembayaran</span>
+                <select aria-label="Filter status pembayaran" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}><option value="all">Semua Pembayaran</option><option value="unpaid">Belum Dibayar</option><option value="pending_verification">Menunggu Verifikasi</option><option value="paid">Lunas</option><option value="failed">Ditolak</option></select>
+              </label>
+              <label className="orders-toolbar__field"><span>Metode pembayaran</span>
+                <select aria-label="Filter metode pembayaran" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value)}><option value="all">Semua Metode</option><option value="cash">Tunai</option><option value="bank_transfer">Transfer</option><option value="qris">QRIS</option></select>
+              </label>
+              <label className="orders-toolbar__field"><span>Kanal transaksi</span>
+                <select aria-label="Filter kanal transaksi" value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}><option value="all">Semua Kanal</option><option value="online">Online</option><option value="pos">POS</option></select>
+              </label>
+              <label className="orders-toolbar__field"><span>Pengambilan</span>
+                <select aria-label="Filter metode pengambilan" value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)}><option value="all">Semua Pengambilan</option><option value="pickup">Ambil di Koperasi</option><option value="gosend">GoSend</option></select>
+              </label>
+            </div>
+          </section>
+          <div className="orders-toolbar__bottom">
+            <div className="orders-toolbar__date-group">
+              <div className="orders-toolbar__section-heading">
+                <b>Periode transaksi</b>
+                <span>Atur tanggal awal dan akhir</span>
+              </div>
+              <div className="orders-toolbar__dates">
+                <label className="orders-toolbar__field"><span>Dari tanggal</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+                <label className="orders-toolbar__field"><span>Sampai tanggal</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
+              </div>
+            </div>
+            <button className="secondary orders-toolbar__export" type="button" onClick={exportCsv} disabled={!shown.length}>
+              <Icon name="chart" size={16} /> Ekspor CSV <span>({shown.length})</span>
+            </button>
           </div>
-          <div className="orders-toolbar__dates">
-            <label>Dari<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
-            <label>Sampai<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
-          </div>
-          <button className="secondary orders-toolbar__export" type="button" onClick={exportCsv} disabled={!shown.length}>Ekspor CSV ({shown.length})</button>
         </div>
         {loading ? <p>Memuat pesanan...</p> : (
           <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Pengambilan</th><th>Status</th><th>Aksi</th></tr></thead>
