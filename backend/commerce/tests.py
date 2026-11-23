@@ -1,4 +1,8 @@
-from django.test import TestCase
+import io
+import tempfile
+from PIL import Image
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
@@ -248,6 +252,52 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
+
+    def test_admin_can_upload_optional_product_image_and_remove_it(self):
+        self.client.force_authenticate(user=self.admin)
+        image_buffer = io.BytesIO()
+        Image.new("RGB", (4, 4), color="red").save(image_buffer, format="PNG")
+        image_bytes = image_buffer.getvalue()
+
+        with tempfile.TemporaryDirectory() as media_dir:
+            with override_settings(MEDIA_ROOT=media_dir):
+                uploaded = SimpleUploadedFile("buku.png", image_bytes, content_type="image/png")
+                created = self.client.post("/api/products/", {
+                    "name": "Buku Bergambar",
+                    "category": "buku",
+                    "price": "7000",
+                    "stock": "3",
+                    "image": uploaded,
+                }, format="multipart")
+                self.assertEqual(created.status_code, 201, created.data)
+                self.assertTrue(created.data["image_url"].endswith(".png"))
+                product = Product.objects.get(pk=created.data["id"])
+                image_path = product.image.path
+                self.assertTrue(product.image.storage.exists(product.image.name))
+
+                removed = self.client.patch(
+                    f"/api/products/{product.id}/",
+                    {"remove_image": "true"},
+                    format="multipart",
+                )
+                self.assertEqual(removed.status_code, 200, removed.data)
+                product.refresh_from_db()
+                self.assertFalse(product.image)
+                self.assertFalse(__import__("os").path.exists(image_path))
+                self.assertIsNone(removed.data["image_url"])
+
+    def test_product_image_rejects_files_over_five_megabytes(self):
+        self.client.force_authenticate(user=self.admin)
+        oversized = SimpleUploadedFile("large.png", b"x" * (5 * 1024 * 1024 + 1), content_type="image/png")
+        response = self.client.post("/api/products/", {
+            "name": "Gambar Besar",
+            "category": "buku",
+            "price": "1000",
+            "stock": "1",
+            "image": oversized,
+        }, format="multipart")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("image", response.data)
 
     def test_manual_stock_adjustment_requires_and_records_reason(self):
         self.client.force_authenticate(user=self.admin)
