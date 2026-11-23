@@ -53,6 +53,7 @@ def cancel_order(order, actor, now):
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
 
+    @transaction.atomic
     def perform_create(self, serializer):
         note = serializer.validated_data.get("stock_note", "").strip()
         product = serializer.save()
@@ -117,6 +118,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def get_serializer_class(self):
         return OrderCreateSerializer if self.request.method == "POST" else OrderReadSerializer
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         if request.user.role not in ("student", "parent"):
             return Response({"detail": "Pembuatan pesanan mandiri hanya tersedia untuk siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
