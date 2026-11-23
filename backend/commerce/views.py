@@ -11,7 +11,7 @@ from core.models import AuditLog, Notification, StoreSetting
 from .delivery import quote_delivery, store_is_open
 from .models import InventoryMovement, Order, OrderItem, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
-from .serializers import InventoryMovementSerializer, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
+from .serializers import InventoryMovementSerializer, cancel_block_reason, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
 
 
 def notify_user(user, title, message, kind="info", target_code=""):
@@ -35,6 +35,14 @@ def pickup_is_open(now):
 
 
 NET_REVENUE = F("total") - F("delivery_fee")  # ongkir diteruskan ke kurir, bukan pendapatan koperasi
+
+
+def cancel_order(order, actor, now):
+    """Batalkan pesanan dan kembalikan stok (dipakai admin dan pelanggan)."""
+    for item in order.items.all():
+        Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
+        InventoryMovement.objects.create(product_id=item.product_id, actor=actor, quantity_delta=item.quantity, reason="order_cancelled", reference=order.code)
+    order.status, order.cancelled_at = Order.Status.CANCELLED, now
 
 
 class ProductListCreateView(generics.ListCreateAPIView):
@@ -120,6 +128,25 @@ class DeliveryQuoteView(APIView):
         return Response({"distance_km": str(quote["distance_km"]), "fee": quote["fee"]})
 
 
+class OrderCancelView(APIView):
+    """Pelanggan membatalkan pesanannya sendiri, hanya selama belum dibayar."""
+
+    @transaction.atomic
+    def post(self, request, code):
+        order = Order.objects.select_for_update().filter(code=code, customer=request.user).first()
+        if not order:
+            return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
+        reason = cancel_block_reason(order)
+        if reason:
+            raise ValidationError({"status": reason})
+        cancel_order(order, request.user, timezone.now())
+        order.save()
+        AuditLog.objects.create(actor=request.user, event="order.cancel_by_customer", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        notify_user(request.user, "Pesanan dibatalkan", f"Pesanan {order.code} telah Anda batalkan dan stok dikembalikan.", kind="order", target_code=order.code)
+        notify_admins("Pesanan dibatalkan pelanggan", f"{request.user.full_name} membatalkan pesanan {order.code}.", target_code=order.code)
+        return Response(OrderReadSerializer(order).data)
+
+
 class OrderDetailView(generics.RetrieveAPIView):
     serializer_class = OrderReadSerializer
     lookup_field = "code"
@@ -160,10 +187,7 @@ class AdminOrderActionView(APIView):
         elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED):
             if order.payment_status == Order.PaymentStatus.PAID:
                 raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan melalui alur biasa."})
-            for item in order.items.all():
-                Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
-                InventoryMovement.objects.create(product_id=item.product_id, actor=request.user, quantity_delta=item.quantity, reason="order_cancelled", reference=order.code)
-            order.status, order.cancelled_at = Order.Status.CANCELLED, now
+            cancel_order(order, request.user, now)
         else:
             raise ValidationError({"status": "Perubahan status pesanan tidak valid."})
         order.save()
@@ -216,6 +240,8 @@ class PaymentSubmissionView(APIView):
             raise ValidationError({"payment": "Pesanan yang dibatalkan tidak dapat menerima konfirmasi pembayaran."})
         if order.payment_method == Order.PaymentMethod.CASH:
             raise ValidationError({"payment": "Pembayaran tunai dikonfirmasi admin saat penyerahan."})
+        if order.status not in (Order.Status.ACCEPTED, Order.Status.READY):
+            raise ValidationError({"payment": "Pembayaran baru dapat dilakukan setelah pesanan dikonfirmasi admin."})
         if order.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED):
             raise ValidationError({"payment": "Status pembayaran tidak dapat diubah."})
         sender_name = str(request.data.get("sender_name", "")).strip()[:120]

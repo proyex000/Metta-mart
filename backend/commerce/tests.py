@@ -81,6 +81,11 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         code = response.data["code"]
         self.client.force_authenticate(user=self.student)
+        early = self.client.post(f"/api/orders/{code}/payment-submission/", {"sender_name": "Nama Pengirim", "payment_source": "BCA"}, format="json")
+        self.assertEqual(early.status_code, 400)  # belum dikonfirmasi admin
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.force_authenticate(user=self.student)
         submitted = self.client.post(f"/api/orders/{code}/payment-submission/", {"sender_name": "Nama Pengirim", "payment_source": "BCA", "account_last4": "1234", "note": "Transfer pukul 10.00"}, format="json")
         self.assertEqual(submitted.status_code, 200)
         self.assertEqual(submitted.data["payment_status"], Order.PaymentStatus.PENDING)
@@ -88,7 +93,6 @@ class CommerceApiTests(TestCase):
         self.assertEqual(submitted.data["payment_source"], "BCA")
         self.assertEqual(submitted.data["payment_account_last4"], "1234")
         self.client.force_authenticate(user=self.admin)
-        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
         self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
         blocked = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
         self.assertEqual(blocked.status_code, 400)
@@ -101,6 +105,8 @@ class CommerceApiTests(TestCase):
     def test_transfer_identity_validates_required_fields_and_last_four(self):
         created = self.create_order("bank_transfer")
         code = created.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
         self.client.force_authenticate(user=self.student)
         missing = self.client.post(f"/api/orders/{code}/payment-submission/", {"sender_name": "A"}, format="json")
         self.assertEqual(missing.status_code, 400)
@@ -404,3 +410,117 @@ class DeliveryTests(TestCase):
         good = self.client.patch("/api/storefront/settings/", {"delivery_settings": {"base_fee": 12000, "origin_address": "Jl. Sudirman No. 1, Jakarta"}}, format="json")
         self.assertEqual(good.status_code, 200)
         self.assertEqual(good.data["delivery_settings"]["base_fee"], 12000)
+
+
+class CustomerCancelAndPaymentInfoTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = User.objects.create_user(identifier="admin-cancel", password="TestPassword!2026", full_name="Admin", role=User.Role.ADMIN, is_staff=True)
+        self.student = User.objects.create_user(identifier="1234567811", password="TestPassword!2026", full_name="Student", role=User.Role.STUDENT)
+        self.other = User.objects.create_user(identifier="1234567822", password="TestPassword!2026", full_name="Other", role=User.Role.STUDENT)
+        self.product = Product.objects.create(name="Pensil", category="alat", price=3000, stock=10)
+        StoreSetting.objects.create(key="payment_instructions", value={"bank_name": "BCA", "account_name": "Koperasi Metta", "account_number": "1234567890", "qris_image": "data:image/png;base64,iVBORw0KGgo="})
+
+    def order(self, method="bank_transfer"):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/orders/", {"payment_method": method, "items": [{"product_id": self.product.id, "quantity": 2}]}, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        return response.data["code"]
+
+    def admin_do(self, code, path):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(f"/api/admin/orders/{code}/{path}/", {}, format="json")
+        self.client.force_authenticate(user=self.student)
+        return response
+
+    def test_payment_info_hidden_until_admin_confirms_and_hidden_again_when_paid(self):
+        code = self.order("bank_transfer")
+        pending = self.client.get(f"/api/orders/{code}/")
+        self.assertIsNone(pending.data["payment_info"])
+        self.assertEqual(self.admin_do(code, "accept").status_code, 200)
+        confirmed = self.client.get(f"/api/orders/{code}/")
+        self.assertEqual(confirmed.data["payment_info"]["account_number"], "1234567890")
+        self.assertEqual(confirmed.data["payment_info"]["bank_name"], "BCA")
+        Order.objects.filter(code=code).update(payment_status="paid")
+        self.assertIsNone(self.client.get(f"/api/orders/{code}/").data["payment_info"])
+
+    def test_qris_shows_image_and_cash_never_shows_payment_info(self):
+        qris = self.order("qris")
+        self.admin_do(qris, "accept")
+        info = self.client.get(f"/api/orders/{qris}/").data["payment_info"]
+        self.assertEqual(info["qris_image"], "data:image/png;base64,iVBORw0KGgo=")
+        self.assertEqual(info["account_number"], "")
+        cash = self.order("cash")
+        self.admin_do(cash, "accept")
+        self.assertIsNone(self.client.get(f"/api/orders/{cash}/").data["payment_info"])
+
+    def test_storefront_settings_do_not_leak_payment_instructions_to_customers(self):
+        self.client.force_authenticate(user=self.student)
+        self.assertNotIn("payment_instructions", self.client.get("/api/storefront/settings/").data)
+        self.client.force_authenticate(user=self.admin)
+        self.assertEqual(self.client.get("/api/storefront/settings/").data["payment_instructions"]["bank_name"], "BCA")
+
+    def test_customer_can_cancel_before_paying_and_stock_is_restored(self):
+        code = self.order("bank_transfer")
+        self.assertTrue(self.client.get(f"/api/orders/{code}/").data["can_cancel"])
+        response = self.client.post(f"/api/orders/{code}/cancel/")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], "cancelled")
+        self.assertFalse(response.data["can_cancel"])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+        self.assertEqual(InventoryMovement.objects.filter(reason="order_cancelled", reference=code).count(), 1)
+        self.assertEqual(self.client.post(f"/api/orders/{code}/cancel/").status_code, 400)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 10)
+
+    def test_customer_can_cancel_after_confirmation_if_not_paid(self):
+        code = self.order("qris")
+        self.admin_do(code, "accept")
+        self.assertEqual(self.client.post(f"/api/orders/{code}/cancel/").status_code, 200)
+
+    def test_customer_cannot_cancel_once_payment_submitted_or_paid(self):
+        code = self.order("bank_transfer")
+        self.admin_do(code, "accept")
+        self.client.post(f"/api/orders/{code}/payment-submission/", {"sender_name": "A", "payment_source": "BCA"}, format="json")
+        blocked = self.client.post(f"/api/orders/{code}/cancel/")
+        self.assertEqual(blocked.status_code, 400)
+        self.assertFalse(self.client.get(f"/api/orders/{code}/").data["can_cancel"])
+        Order.objects.filter(code=code).update(payment_status="paid")
+        self.assertEqual(self.client.post(f"/api/orders/{code}/cancel/").status_code, 400)
+        self.assertEqual(Order.objects.get(code=code).status, "accepted")
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 8)
+
+    def test_customer_cannot_cancel_completed_or_someone_elses_order(self):
+        code = self.order("cash")
+        self.client.force_authenticate(user=self.other)
+        self.assertEqual(self.client.post(f"/api/orders/{code}/cancel/").status_code, 404)
+        Order.objects.filter(code=code).update(status="completed")
+        self.client.force_authenticate(user=self.student)
+        self.assertEqual(self.client.post(f"/api/orders/{code}/cancel/").status_code, 400)
+
+    def test_cancel_notifies_admin(self):
+        code = self.order("cash")
+        self.client.post(f"/api/orders/{code}/cancel/")
+        self.assertTrue(self.admin.notifications.filter(title="Pesanan dibatalkan pelanggan", target_code=code).exists())
+
+    def test_qris_image_setting_is_validated_and_hidden_from_customers_until_order_confirmed(self):
+        self.client.force_authenticate(user=self.admin)
+        ok = self.client.patch("/api/storefront/settings/", {"payment_instructions": {"qris_image": "data:image/png;base64,AAAA"}}, format="json")
+        self.assertEqual(ok.status_code, 200, ok.data)
+        self.assertEqual(ok.data["payment_instructions"]["qris_image"], "data:image/png;base64,AAAA")
+        for bad in ("http://evil.example/qr.png", "data:image/svg+xml;base64,AAAA", "data:text/html;base64,AAAA", "javascript:alert(1)", "data:image/png;base64," + "A" * 1_000_000):
+            response = self.client.patch("/api/storefront/settings/", {"payment_instructions": {"qris_image": bad}}, format="json")
+            self.assertEqual(response.status_code, 400, bad[:30])
+        cleared = self.client.patch("/api/storefront/settings/", {"payment_instructions": {"qris_image": ""}}, format="json")
+        self.assertEqual(cleared.status_code, 200)
+        self.client.force_authenticate(user=self.student)
+        self.assertNotIn("payment_instructions", self.client.get("/api/storefront/settings/").data)
+
+    def test_legacy_qris_note_is_dropped_from_settings_response(self):
+        StoreSetting.objects.filter(key="payment_instructions").update(value={"bank_name": "BCA", "account_name": "K", "account_number": "1", "qris_note": "lama"})
+        self.client.force_authenticate(user=self.admin)
+        data = self.client.get("/api/storefront/settings/").data["payment_instructions"]
+        self.assertNotIn("qris_note", data)
+        self.assertEqual(data["qris_image"], "")

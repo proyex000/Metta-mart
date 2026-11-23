@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -37,10 +38,13 @@ from .models import Notification
 from rest_framework.views import APIView
 
 
+QRIS_IMAGE_PATTERN = re.compile(r"^data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$")
+QRIS_IMAGE_MAX_CHARS = 950_000  # ~700 KB gambar setelah di-encode base64
+
 DEFAULT_STORE_SETTINGS = {
     "operating_hours": {"days": ["mon", "tue", "wed", "thu", "fri"], "open_time": "", "close_time": ""},
     "payment_methods": {"cash": True, "bank_transfer": True, "qris": True},
-    "payment_instructions": {"bank_name": "", "account_name": "", "account_number": "", "qris_note": ""},
+    "payment_instructions": {"bank_name": "", "account_name": "", "account_number": "", "qris_image": ""},
     "pickup_instructions": {"message": "Pengambilan dilakukan di koperasi sekolah saat jam operasional setelah pesanan berstatus Siap Diambil."},
     "store_profile": {"name": "MettaMart", "description": "Koperasi sekolah", "address": "", "email": "", "phone": ""},
     "notification_preferences": {"order_alerts": True, "low_stock_alerts": True, "announcements_enabled": True},
@@ -53,7 +57,11 @@ class StorefrontSettingsView(APIView):
 
     def get(self, request):
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
-        return Response({key: saved.get(key, value) for key, value in DEFAULT_STORE_SETTINGS.items()})
+        # Gabungkan dengan nilai bawaan dan buang kolom usang (mis. qris_note) dari data lama.
+        data = {key: {**value, **{k: v for k, v in (saved.get(key) or {}).items() if k in value}} for key, value in DEFAULT_STORE_SETTINGS.items()}
+        if request.user.role != "admin":
+            data.pop("payment_instructions", None)  # rekening/QRIS hanya tampil di detail pesanan setelah dikonfirmasi
+        return Response(data)
 
     def patch(self, request):
         if request.user.role != "admin":
@@ -85,8 +93,11 @@ class StorefrontSettingsView(APIView):
             if key == "payment_methods" and any(not isinstance(merged[field], bool) for field in ("cash", "bank_transfer", "qris")):
                 raise ValidationError({key: "Status metode pembayaran harus berupa boolean."})
             if key == "payment_instructions":
-                if any(not isinstance(merged[field], str) for field in ("bank_name", "account_name", "account_number", "qris_note")):
+                if any(not isinstance(merged[field], str) for field in ("bank_name", "account_name", "account_number", "qris_image")):
                     raise ValidationError({key: "Instruksi pembayaran harus berupa teks."})
+                image = merged["qris_image"]
+                if image and (not QRIS_IMAGE_PATTERN.match(image) or len(image) > QRIS_IMAGE_MAX_CHARS):
+                    raise ValidationError({key: "Gambar QRIS harus berformat PNG, JPG, atau WebP dengan ukuran maksimal sekitar 700 KB."})
             if key == "pickup_instructions" and not isinstance(merged["message"], str):
                 raise ValidationError({key: "Instruksi pengambilan harus berupa teks."})
             if key == "store_profile":
