@@ -4,6 +4,7 @@ import {
   logoutApi,
   registerApi,
   updateProfileApi,
+  changePasswordApi,
   type AuthSession,
 } from "./api";
 
@@ -36,4 +37,8 @@ export async function clearSession(): Promise<void> {
 
 export async function updateProfile(input: { name: string; email: string }): Promise<AuthSession> {
   return updateProfileApi(input);
+}
+
+export async function changePassword(input: { currentPassword: string; newPassword: string }): Promise<void> {
+  await changePasswordApi(input);
 }
