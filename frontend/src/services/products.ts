@@ -3,11 +3,29 @@ import { isCategoryId } from "../data/categories";
 import { apiRequest } from "./api";
 import type { Product, ProductInput } from "../types";
 
-type ApiProduct = { id: number; name: string; category: Product["category"]; price: number; stock: number; is_active: boolean };
+type ApiProduct = { id: number; name: string; category: Product["category"]; price: number; stock: number; is_active: boolean; image_url: string | null };
 let items: Product[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
-const toProduct = (p: ApiProduct): Product => ({ id: p.id, name: p.name, category: p.category, price: p.price, stock: p.stock, art: p.category === "seragam-sekolah" ? "shirt" : p.category === "minuman" ? "bottle" : "book" });
+const toProduct = (p: ApiProduct): Product => ({ id: p.id, name: p.name, category: p.category, price: p.price, stock: p.stock, image_url: p.image_url, art: p.category === "seragam-sekolah" ? "shirt" : p.category === "minuman" ? "bottle" : "book" });
+
+function productPayload(input: ProductInput): BodyInit {
+  const fields = {
+    name: input.name.trim(),
+    category: input.category,
+    price: String(input.price),
+    stock: String(input.stock),
+    stock_note: input.stock_note || "",
+  };
+  if (input.image_file || input.remove_image) {
+    const data = new FormData();
+    Object.entries(fields).forEach(([key, value]) => data.append(key, value));
+    if (input.image_file) data.append("image", input.image_file);
+    if (input.remove_image) data.append("remove_image", "true");
+    return data;
+  }
+  return JSON.stringify(fields);
+}
 function validate(input: ProductInput) {
   if (!input.name.trim()) throw new Error("Nama produk wajib diisi.");
   if (!isCategoryId(input.category)) throw new Error("Kategori tidak valid.");
@@ -24,7 +42,7 @@ export const productService = {
   subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
   async create(input: ProductInput): Promise<Product> {
     validate(input);
-    const created = await apiRequest<ApiProduct>("/products/", { method: "POST", body: JSON.stringify({ name: input.name.trim(), category: input.category, price: input.price, stock: input.stock, stock_note: input.stock_note || "" }) });
+    const created = await apiRequest<ApiProduct>("/products/", { method: "POST", body: productPayload(input) });
     const product = toProduct(created); items = [...items, product].sort((a,b) => a.name.localeCompare(b.name)); emit(); return product;
   },
   async update(id: number, input: ProductInput): Promise<Product> {
