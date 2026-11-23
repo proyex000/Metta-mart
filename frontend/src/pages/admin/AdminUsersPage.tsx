@@ -11,6 +11,7 @@ const roleLabel: Record<ManagedUser["role"], string> = {
 export function AdminUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [draftNames, setDraftNames] = useState<Record<number, string>>({});
+  const [draftIdentifiers, setDraftIdentifiers] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -28,6 +29,7 @@ export function AdminUsersPage() {
     const rows = await fetchManagedUsers();
     setUsers(rows);
     setDraftNames(Object.fromEntries(rows.map((user) => [user.id, user.full_name])));
+    setDraftIdentifiers(Object.fromEntries(rows.map((user) => [user.id, user.identifier])));
   };
 
   useEffect(() => {
@@ -89,6 +91,24 @@ export function AdminUsersPage() {
     }
   };
 
+  const saveIdentifier = async (user: ManagedUser) => {
+    const nextIdentifier = (draftIdentifiers[user.id] || "").trim();
+    if (user.role !== "student" || !/^\\d{10}$/.test(nextIdentifier) || nextIdentifier === user.identifier || working) return;
+    setWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await updateManagedUser(user.id, { identifier: nextIdentifier });
+      setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
+      setDraftIdentifiers((current) => ({ ...current, [updated.id]: updated.identifier }));
+      setNotice(`NISN akun ${updated.full_name} berhasil diperbarui.`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "NISN gagal diperbarui.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const toggleActive = (user: ManagedUser) => {
     if (working) return;
     setConfirmUser(user);
@@ -117,7 +137,7 @@ export function AdminUsersPage() {
       <header className="role-page-title">
         <div>
           <h1>Pengelolaan Akun</h1>
-          <p>Buat, perbarui nama, dan nonaktifkan akun pengguna koperasi.</p>
+          <p>Buat akun, perbarui nama atau NISN siswa, dan atur status akun.</p>
         </div>
       </header>
 
@@ -150,7 +170,7 @@ export function AdminUsersPage() {
             {working ? "Menyimpan..." : "Buat Akun"}
           </button>
         </form>
-        <p className="table-foot">Perubahan peran dan identitas login tidak tersedia dari layar ini. Siswa harus memakai NISN 10 digit; orang tua memakai email.</p>
+        <p className="table-foot">Admin dapat memperbaiki NISN akun siswa (10 digit). NISN yang sudah dipakai akun lain akan ditolak; identitas akun orang tua dan admin tidak dapat diubah.</p>
       </section>
 
       <section className="panel admin-users-list">
@@ -180,7 +200,22 @@ export function AdminUsersPage() {
                       <input aria-label={`Nama ${user.identifier}`} value={draftNames[user.id] ?? user.full_name} onChange={(event) => setDraftNames((current) => ({ ...current, [user.id]: event.target.value }))} />
                       {draftNames[user.id] !== user.full_name && <button className="secondary small" disabled={working || !(draftNames[user.id] || "").trim()} onClick={() => saveName(user)}>Simpan nama</button>}
                     </td>
-                    <td>{user.identifier}</td>
+                    <td>
+                      {user.role === "student" ? (
+                        <>
+                          <input
+                            aria-label={`NISN ${user.full_name}`}
+                            inputMode="numeric"
+                            maxLength={10}
+                            value={draftIdentifiers[user.id] ?? user.identifier}
+                            onChange={(event) => setDraftIdentifiers((current) => ({ ...current, [user.id]: event.target.value.replace(/\\D/g, "").slice(0, 10) }))}
+                          />
+                          {draftIdentifiers[user.id] !== user.identifier && (
+                            <button className="secondary small" disabled={working || !/^\\d{10}$/.test(draftIdentifiers[user.id] || "")} onClick={() => saveIdentifier(user)}>Simpan NISN</button>
+                          )}
+                        </>
+                      ) : user.identifier}
+                    </td>
                     <td>{roleLabel[user.role]}</td>
                     <td><span className={`status ${user.is_active ? "status--green" : "status--red"}`}>{user.is_active ? "Aktif" : "Nonaktif"}</span></td>
                     <td><button className={user.is_active ? "secondary small" : "primary small"} disabled={working} onClick={() => toggleActive(user)}>{user.is_active ? "Nonaktifkan" : "Aktifkan"}</button></td>
