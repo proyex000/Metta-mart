@@ -504,6 +504,16 @@ class CustomerCancelAndPaymentInfoTests(TestCase):
         self.assertEqual(self.product.stock, 8)
         self.assertFalse(InventoryMovement.objects.filter(reason="order_cancelled", reference=code).exists())
 
+    def test_admin_cannot_cancel_paid_order(self):
+        code = self.order("bank_transfer")
+        Order.objects.filter(code=code).update(payment_status="paid")
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(f"/api/admin/orders/{code}/cancel/", {}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Order.objects.get(code=code).status, "pending")
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 8)
+
     def test_admin_can_cancel_ready_order_when_payment_is_not_submitted(self):
         code = self.order("bank_transfer")
         self.admin_do(code, "accept")
