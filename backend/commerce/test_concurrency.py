@@ -46,6 +46,7 @@ class ConcurrentCheckoutTests(TransactionTestCase):
                         "items": [{"product_id": self.product.pk, "quantity": 1}],
                     },
                     format="json",
+                    HTTP_IDEMPOTENCY_KEY=f"concurrent-checkout-{customer.pk:08d}",
                 )
                 return response.status_code, response.data
             finally:

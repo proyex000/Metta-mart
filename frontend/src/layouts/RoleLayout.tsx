@@ -15,6 +15,7 @@ const navigation: Record<Role, { to: string; label: string; icon: IconName }[]> 
     { to: "/admin/notifications", label: "Notifikasi", icon: "bell" },
     { to: "/admin/reports", label: "Laporan", icon: "chart" },
     { to: "/admin/settings", label: "Pengaturan", icon: "settings" },
+    { to: "/admin/users", label: "Pengguna", icon: "users" },
   ],
   parent: [
     { to: "/parent", label: "Beranda", icon: "home" },

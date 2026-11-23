@@ -108,7 +108,7 @@ export function fetchAdminDashboard() {
   return apiRequest<AdminDashboardSummary>("/admin/dashboard/");
 }
 
-export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; cash_received?: number }, requestId?: string) {
+export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; cash_received?: number }, requestId: string) {
   return apiRequest<CommerceOrder>("/admin/pos/checkout/", { method: "POST", headers: requestId ? { "Idempotency-Key": requestId } : undefined, body: JSON.stringify(input) });
 }
 

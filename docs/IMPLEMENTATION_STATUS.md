@@ -72,6 +72,10 @@ This document describes the school-cooperative scope implemented on the developm
 
 ## Still requires operational verification
 
+- Confirm the school policy for student identity verification: admin approval or matching against an official student roster. NISN format validation alone does not prove identity.
+
+- Confirm the school policy for student identity verification: admin approval or matching against an official student roster. NISN format validation alone does not prove identity.
+
 - Confirm production environment variables, database connectivity, and apply pending migrations on the deployment database.
 - Configure actual cooperative opening days/hours and official bank/QRIS payment instructions.
 - Create admin, student, and parent accounts according to school policy.

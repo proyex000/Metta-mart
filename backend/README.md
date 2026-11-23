@@ -24,11 +24,17 @@ Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOn
 - `GET /api/auth/me/` — sesi pengguna aktif.
 - `POST /api/auth/register/` — registrasi mandiri hanya untuk role student dan parent.
 - `GET/POST /api/admin/users/` — daftar/buat akun, khusus admin.
+- `GET/PATCH /api/admin/users/<id>/` — lihat/perbarui nama dan status aktif akun, khusus admin.
+- `GET/PATCH /api/admin/users/<id>/` — lihat/perbarui nama dan status aktif akun, khusus admin.
 - `GET /api/admin/audit-logs/` — audit log, khusus admin.
 - `GET/POST /api/admin/settings/` — baca/buat pengaturan global, khusus admin.
 - `GET/PATCH /api/admin/settings/<key>/` — baca/perbarui satu pengaturan, khusus admin.
 
-Siswa menggunakan NISN 10 digit sebagai identifier. Orang tua menggunakan email. Admin dan kasir dibuat oleh admin, bukan melalui registrasi publik. Akun orang tua dan siswa independen; tidak ada model atau endpoint relasi keduanya.
+Siswa menggunakan NISN 10 digit sebagai identifier. Orang tua menggunakan email. Admin dan kasir dibuat oleh admin, bukan melalui registrasi publik. Relasi akun orang tua dan siswa dikelola admin melalui `ParentStudentLink` dan endpoint `/api/admin/parent-student-links/`. Registrasi mandiri memeriksa format NISN 10 digit, tetapi belum membuktikan kepemilikan NISN; kebijakan persetujuan/verifikasi sekolah masih perlu ditetapkan.
+
+## Checkout safety
+
+`POST /api/orders/` dan `POST /api/admin/pos/checkout/` wajib menerima header `Idempotency-Key` sepanjang 8–64 karakter. Frontend membuat satu kunci untuk satu percobaan checkout dan menggunakan kembali kunci tersebut saat permintaan yang sama dicoba ulang.
 
 ## Frontend
 

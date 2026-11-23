@@ -24,7 +24,7 @@ class CommerceApiTests(TestCase):
         return self.client.post("/api/orders/", {
             "payment_method": payment_method,
             "items": [{"product_id": self.product.id, "quantity": 2}],
-        }, format="json")
+        }, format="json", HTTP_IDEMPOTENCY_KEY=f"test-order-{Order.objects.count() + 1:08d}")
 
     def test_product_creation_rolls_back_if_initial_stock_movement_fails(self):
         self.client.force_authenticate(user=self.admin)
@@ -47,7 +47,7 @@ class CommerceApiTests(TestCase):
             response = self.client.post("/api/orders/", {
                 "payment_method": "cash",
                 "items": [{"product_id": self.product.id, "quantity": 2}],
-            }, format="json")
+            }, format="json", HTTP_IDEMPOTENCY_KEY="rollback-order-0001")
         self.assertEqual(response.status_code, 500)
         self.assertFalse(Order.objects.filter(customer=self.student).exists())
         self.product.refresh_from_db()
@@ -234,7 +234,7 @@ class CommerceApiTests(TestCase):
     def test_parent_can_order_independently_without_student_link(self):
         parent = User.objects.create_user(identifier="parent@example.com", password="TestPassword!2026", full_name="Parent", role=User.Role.PARENT, email="parent@example.com")
         self.client.force_authenticate(user=parent)
-        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json", HTTP_IDEMPOTENCY_KEY="parent-order-0001")
         self.assertEqual(response.status_code, 201)
         self.assertIsNone(response.data["beneficiary_name"])
     def test_parent_children_endpoint_returns_only_verified_links(self):
@@ -252,7 +252,7 @@ class CommerceApiTests(TestCase):
             "payment_method": "cash",
             "cash_received": 20000,
             "items": [{"product_id": self.product.id, "quantity": 3}],
-        }, format="json")
+        }, format="json", HTTP_IDEMPOTENCY_KEY="pos-sale-test-0001")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], Order.Status.COMPLETED)
         self.assertEqual(response.data["payment_status"], Order.PaymentStatus.PAID)
@@ -263,6 +263,16 @@ class CommerceApiTests(TestCase):
         self.assertEqual(InventoryMovement.objects.get(reason="pos_sale").quantity_delta, -3)
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
+
+    def test_pos_checkout_rejects_missing_idempotency_key(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post("/api/admin/pos/checkout/", {
+            "payment_method": "cash", "cash_received": 20000,
+            "items": [{"product_id": self.product.id, "quantity": 1}],
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("idempotency_key", response.data)
+        self.assertEqual(Order.objects.count(), 0)
 
     def test_pos_checkout_retry_with_same_idempotency_key_does_not_duplicate_sale(self):
         self.client.force_authenticate(user=self.admin)
@@ -404,7 +414,20 @@ class DeliveryTests(TestCase):
         from unittest import mock
         self.client.force_authenticate(user=self.student)
         with mock.patch("commerce.delivery.geocode", side_effect=self.fake_points(overrides.pop("destination", (-6.20, 106.82)))):
-            return self.client.post("/api/orders/", self.payload(**overrides), format="json")
+            return self.client.post("/api/orders/", self.payload(**overrides), format="json", HTTP_IDEMPOTENCY_KEY=f"delivery-order-{Order.objects.count() + 1:08d}")
+
+    def test_quote_uses_confirmed_school_pin_when_origin_geocoding_fails(self):
+        from unittest import mock
+        self.client.force_authenticate(user=self.student)
+        with mock.patch("commerce.delivery.geocode", side_effect=[None, (0.5085725, 101.4245111)]):
+            response = self.client.post(
+                "/api/delivery/quote/",
+                {"address": "Jl. Tujuan No. 1, Pekanbaru"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["distance_km"], "1.4")
+        self.assertEqual(response.data["fee"], 10000)
 
     def test_gosend_order_stores_address_and_adds_server_calculated_fee(self):
         response = self.post_order()
@@ -436,7 +459,7 @@ class DeliveryTests(TestCase):
     def test_pickup_order_is_still_allowed_outside_operating_hours(self):
         StoreSetting.objects.filter(key="operating_hours").update(value={"days": [], "open_time": "", "close_time": ""})
         self.client.force_authenticate(user=self.student)
-        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json", HTTP_IDEMPOTENCY_KEY="pickup-outside-hours-0001")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["delivery_method"], "pickup")
         self.assertEqual(response.data["delivery_fee"], 0)
@@ -455,7 +478,7 @@ class DeliveryTests(TestCase):
         from unittest import mock
         self.client.force_authenticate(user=self.student)
         with mock.patch("commerce.delivery.geocode", side_effect=lambda address: (-6.20, 106.80) if "Sudirman" in address else None):
-            response = self.client.post("/api/orders/", self.payload(), format="json")
+            response = self.client.post("/api/orders/", self.payload(), format="json", HTTP_IDEMPOTENCY_KEY="unknown-address-0001")
         self.assertEqual(response.status_code, 400)
         self.assertIn("delivery_address", response.data)
 
@@ -516,7 +539,7 @@ class CustomerCancelAndPaymentInfoTests(TestCase):
 
     def order(self, method="bank_transfer"):
         self.client.force_authenticate(user=self.student)
-        response = self.client.post("/api/orders/", {"payment_method": method, "items": [{"product_id": self.product.id, "quantity": 2}]}, format="json")
+        response = self.client.post("/api/orders/", {"payment_method": method, "items": [{"product_id": self.product.id, "quantity": 2}]}, format="json", HTTP_IDEMPOTENCY_KEY=f"cancel-order-{Order.objects.count() + 1:08d}")
         self.assertEqual(response.status_code, 201, response.data)
         return response.data["code"]
 
@@ -525,6 +548,13 @@ class CustomerCancelAndPaymentInfoTests(TestCase):
         response = self.client.post(f"/api/admin/orders/{code}/{path}/", {}, format="json")
         self.client.force_authenticate(user=self.student)
         return response
+
+    def test_checkout_rejects_missing_idempotency_key(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/orders/", {"payment_method": "cash", "items": [{"product_id": self.product.id, "quantity": 1}]}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("idempotency_key", response.data)
+        self.assertEqual(Order.objects.count(), 0)
 
     def test_checkout_idempotency_replays_the_same_order_without_reserving_stock_twice(self):
         self.client.force_authenticate(user=self.student)

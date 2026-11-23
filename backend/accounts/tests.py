@@ -34,6 +34,70 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
 
+    def test_admin_created_student_and_parent_identifiers_are_validated(self):
+        self.client.force_authenticate(user=self.admin)
+        invalid_student = self.client.post("/api/admin/users/", {
+            "identifier": "12345", "full_name": "Invalid Student",
+            "role": "student", "password": "TestPassword!2026",
+        }, format="json")
+        self.assertEqual(invalid_student.status_code, 400)
+        self.assertIn("identifier", invalid_student.data)
+
+        invalid_parent = self.client.post("/api/admin/users/", {
+            "identifier": "not-an-email", "full_name": "Invalid Parent",
+            "role": "parent", "password": "TestPassword!2026",
+        }, format="json")
+        self.assertEqual(invalid_parent.status_code, 400)
+        self.assertIn("identifier", invalid_parent.data)
+
+        valid_parent = self.client.post("/api/admin/users/", {
+            "identifier": "Parent@Example.Test", "full_name": "Valid Parent",
+            "role": "parent", "password": "TestPassword!2026",
+        }, format="json")
+        self.assertEqual(valid_parent.status_code, 201, valid_parent.data)
+        parent = User.objects.get(pk=valid_parent.data["id"])
+        self.assertEqual(parent.identifier, "parent@example.test")
+        self.assertEqual(parent.email, "parent@example.test")
+
+    def test_admin_can_rename_and_deactivate_student(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.patch(f"/api/admin/users/{self.student.pk}/", {
+            "full_name": "Nama Siswa Baru",
+            "is_active": False,
+        }, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.full_name, "Nama Siswa Baru")
+        self.assertFalse(self.student.is_active)
+
+    def test_student_cannot_update_accounts(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.patch(f"/api/admin/users/{self.student.pk}/", {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.is_active)
+
+    def test_admin_cannot_deactivate_own_account_or_last_admin(self):
+        self.client.force_authenticate(user=self.admin)
+        self_deactivation = self.client.patch(f"/api/admin/users/{self.admin.pk}/", {"is_active": False}, format="json")
+        self.assertEqual(self_deactivation.status_code, 400)
+        self.assertTrue(self.admin.is_active)
+
+        last_admin = User.objects.create_user(
+            identifier="second-admin@mettamart.test",
+            password="TestPassword!2026",
+            full_name="Second Admin",
+            role=User.Role.ADMIN,
+            is_staff=True,
+        )
+        self.admin.refresh_from_db()
+        # First deactivate the second admin, then verify the final active admin is protected.
+        self.client.patch(f"/api/admin/users/{last_admin.pk}/", {"is_active": False}, format="json")
+        blocked = self.client.patch(f"/api/admin/users/{self.admin.pk}/", {"is_active": False}, format="json")
+        self.assertEqual(blocked.status_code, 400)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
     def test_login_requires_csrf_token(self):
         client = APIClient(enforce_csrf_checks=True)
         response = client.post("/api/auth/login/", {

@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
@@ -12,7 +13,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.throttling import ScopedRateThrottle
 from .models import ParentStudentLink, User
 from .permissions import IsAdminRole
-from .serializers import AdminCreateUserSerializer, RegistrationSerializer, UserSerializer
+from .serializers import AdminCreateUserSerializer, AdminUserUpdateSerializer, RegistrationSerializer, UserSerializer
 from core.models import AuditLog
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -116,6 +117,53 @@ class AdminUserListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         user = serializer.save()
         AuditLog.objects.create(actor=self.request.user, event="user.created", target_type="user", target_id=str(user.pk), metadata={"role": user.role})
+
+
+class AdminUserDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAdminRole]
+    queryset = User.objects.all()
+    serializer_class = AdminUserUpdateSerializer
+    http_method_names = ["get", "patch", "put", "head", "options"]
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        # Serialize admin deactivation attempts by locking every active admin
+        # in a stable order before the target row is loaded/updated.
+        target_role = User.objects.filter(pk=self.kwargs["pk"]).values_list("role", flat=True).first()
+        if target_role == User.Role.ADMIN:
+            list(
+                User.objects.select_for_update()
+                .filter(role=User.Role.ADMIN, is_active=True)
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+        self.queryset = User.objects.select_for_update()
+        return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        target = serializer.instance
+        was_active = target.is_active
+        will_be_active = serializer.validated_data.get("is_active", was_active)
+        if target.pk == self.request.user.pk and was_active and not will_be_active:
+            raise ValidationError({"is_active": "Admin tidak dapat menonaktifkan akunnya sendiri."})
+        if target.role == User.Role.ADMIN and was_active and not will_be_active:
+            active_admin_ids = list(
+                User.objects.select_for_update()
+                .filter(role=User.Role.ADMIN, is_active=True)
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+            if len(active_admin_ids) <= 1:
+                raise ValidationError({"is_active": "Minimal harus ada satu akun admin aktif."})
+        user = serializer.save()
+        event = "user.deactivated" if was_active and not user.is_active else "user.updated"
+        AuditLog.objects.create(
+            actor=self.request.user,
+            event=event,
+            target_type="user",
+            target_id=str(user.pk),
+            metadata={"role": user.role, "is_active": user.is_active},
+        )
 
 class ParentChildrenView(APIView):
     permission_classes = [permissions.IsAuthenticated]
