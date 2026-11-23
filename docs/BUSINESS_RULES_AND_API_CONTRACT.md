@@ -68,8 +68,10 @@ Validation:
 - Show payment state and order state separately.
 - Show pickup instructions and cooperative operating hours.
 - Show pickup availability only when order state is `ready_for_pickup` and current time is within configured opening hours; otherwise explain whether the order is not ready or the cooperative is closed.
-- No delivery address, delivery fee, courier selection, tracking, or shipping status.
-- Parent may order for a linked child only where the account relationship is verified and authorized by the backend.
+- For GoSend, collect recipient, phone, and address; show the server-calculated fee as an estimate, not an official GoSend quote.
+- Explain that staff books GoSend manually and that there is no live tracking.
+- Show pickup availability only when the order is ready and the cooperative is open.
+- Parents currently place independent orders for their own account; do not assume a parent can check out on behalf of a student.
 
 ### Admin
 - Provide order queue filters for pending, processing, ready for pickup, completed, and cancelled.
@@ -126,7 +128,7 @@ Required backend enforcement:
 5. Enforce role and record ownership for every endpoint.
 6. Validate each order/payment state transition server-side.
 7. Require Admin authorization for payment verification, order readiness, and pickup handover.
-8. Prevent duplicate order creation on retries (idempotency or equivalent).
+8. Require an `Idempotency-Key` header (8–64 characters) for online and POS checkout; reuse the same key when retrying the same checkout attempt.
 9. Write audit/inventory movement records for sensitive actions.
 10. Use database transactions for checkout, stock reservation/deduction, and payment record creation.
 
