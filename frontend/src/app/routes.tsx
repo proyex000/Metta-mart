@@ -21,6 +21,7 @@ import {
   ShopStock,
 } from "../pages/shop/ShopPages";
 import { ShopSettings } from "../pages/shop/ShopSettings";
+import { ReceiptPage } from "../pages/shared/ReceiptPage";
 import type { Role } from "../types";
 
 function ProtectedRole({ role }: { role: Role }) {
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
       { path: "stock", Component: Stock },
       { path: "pos", Component: POS },
       { path: "orders", Component: Orders },
+      { path: "orders/:code/receipt", Component: ReceiptPage },
       { path: "notifications", Component: Notifications },
       { path: "reports", Component: Reports },
       { path: "settings", Component: Settings },
@@ -96,6 +98,7 @@ export const router = createBrowserRouter([
       { path: "order", element: <CreateOrder role="parent" /> },
       { path: "orders", element: <ShopOrders role="parent" /> },
       { path: "orders/:code", element: <OrderDetail role="parent" /> },
+      { path: "orders/:code/receipt", Component: ReceiptPage },
       { path: "notifications", Component: ShopNotifications },
       { path: "settings", element: <ShopSettings role="parent" /> },
       { path: "*", Component: RoleNotFound },
@@ -110,6 +113,7 @@ export const router = createBrowserRouter([
       { path: "order", element: <CreateOrder role="student" /> },
       { path: "orders", element: <ShopOrders role="student" /> },
       { path: "orders/:code", element: <OrderDetail role="student" /> },
+      { path: "orders/:code/receipt", Component: ReceiptPage },
       { path: "notifications", Component: ShopNotifications },
       { path: "settings", element: <ShopSettings role="student" /> },
       { path: "*", Component: RoleNotFound },
