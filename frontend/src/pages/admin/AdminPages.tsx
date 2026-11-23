@@ -228,7 +228,10 @@ const notifications = [
 
 const money = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
-function ProductArt({ type }: { type: string }) {
+function ProductArt({ type, imageUrl }: { type: string; imageUrl?: string | null }) {
+  if (imageUrl) {
+    return <span className="product-art product-art--photo"><img src={imageUrl} alt="Foto produk" loading="lazy" /></span>;
+  }
   return (
     <span className={`product-art product-art--${type}`} aria-hidden="true">
       <i />
@@ -413,6 +416,10 @@ export function Stock() {
   const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyProductForm);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const imagePreview = useMemo(() => imageFile ? URL.createObjectURL(imageFile) : null, [imageFile]);
+  useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
   const [error, setError] = useState("");
   const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
   const [movementError, setMovementError] = useState("");
@@ -430,10 +437,14 @@ export function Stock() {
   });
   const openNew = () => {
     setForm(emptyProductForm);
+    setImageFile(null);
+    setRemoveImage(false);
     setError("");
     setEditing("new");
   };
   const openEdit = (product: Product) => {
+    setImageFile(null);
+    setRemoveImage(false);
     setForm({
       name: product.name,
       category: product.category,
@@ -461,6 +472,8 @@ export function Stock() {
       price: Number(form.price),
       stock: Number(form.stock),
       stock_note: form.stockNote,
+      image_file: imageFile,
+      remove_image: removeImage,
     };
     try {
       if (editing === "new") await productService.create(input);
@@ -531,7 +544,7 @@ export function Stock() {
                 <tr key={p.id}>
                   <td>{i + 1}</td>
                   <td>
-                    <ProductArt type={p.art} />
+                    <ProductArt type={p.art} imageUrl={p.image_url} />
                   </td>
                   <td>
                     <b>{p.name}</b>
@@ -596,6 +609,35 @@ export function Stock() {
                 placeholder="Contoh: Kemeja Seragam"
               />
             </label>
+            <div className="product-image-field">
+              <span className="product-image-field__title">Foto produk <small>Opsional · JPG, PNG, atau WEBP · Maks. 5 MB</small></span>
+              <div className="product-image-field__preview">
+                {imagePreview || (editing !== "new" && !removeImage ? editing.image_url : null)
+                  ? <img src={imagePreview || (editing !== "new" && !removeImage ? editing.image_url || "" : "")} alt="Pratinjau produk" />
+                  : <ProductArt type={editing === "new" ? "book" : editing.art} />}
+              </div>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  if (file && file.size > 5 * 1024 * 1024) {
+                    setError("Ukuran gambar maksimal 5 MB.");
+                    event.target.value = "";
+                    return;
+                  }
+                  setImageFile(file);
+                  setRemoveImage(false);
+                  setError("");
+                }}
+              />
+              {editing !== "new" && editing.image_url && (
+                <label className="product-image-field__remove">
+                  <input type="checkbox" checked={removeImage} onChange={(event) => setRemoveImage(event.target.checked)} />
+                  Hapus foto produk
+                </label>
+              )}
+            </div>
             <div className="form-row">
               <label>
                 Kategori
