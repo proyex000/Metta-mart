@@ -6,6 +6,7 @@ This document describes the school-cooperative scope implemented on the developm
 
 - Admin is the cooperative staff member and the only in-person POS operator; there is no separate cashier role.
 - Student and parent accounts can browse the catalogue, place orders, view their own orders, and receive notifications.
+- Authenticated users can change their own password after confirming the current password; password-change attempts are rate-limited and recorded in the audit log.
 - Online ordering is available at any time.
 - Physical pickup and POS transactions are restricted to configured cooperative operating hours.
 - Pickup can be confirmed only after an order is marked ready.
