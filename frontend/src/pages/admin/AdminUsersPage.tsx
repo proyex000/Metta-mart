@@ -231,7 +231,15 @@ export function AdminUsersPage() {
                         ) : (
                           <>
                             <button type="button" className="secondary small" disabled={working || editingUserId !== null} onClick={() => startEditing(user)}>Edit</button>
-                            <button type="button" className={user.is_active ? "danger small" : "primary small"} disabled={working || editingUserId !== null} onClick={() => toggleActive(user)}>{user.is_active ? "Nonaktifkan" : "Aktifkan"}</button>
+                            <button
+                              type="button"
+                              className={`admin-users-toggle ${user.is_active ? "is-deactivating" : "is-activating"}`}
+                              disabled={working || editingUserId !== null}
+                              onClick={() => toggleActive(user)}
+                            >
+                              <span className="admin-users-toggle__mark" aria-hidden="true">{user.is_active ? "−" : "+"}</span>
+                              <span>{user.is_active ? "Nonaktifkan" : "Aktifkan"}</span>
+                            </button>
                           </>
                         )}
                       </div>
