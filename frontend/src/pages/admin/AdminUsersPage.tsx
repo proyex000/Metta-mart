@@ -62,6 +62,7 @@ export function AdminUsersPage() {
       });
       setUsers((current) => [...current, created].sort((a, b) => a.full_name.localeCompare(b.full_name)));
       setDraftNames((current) => ({ ...current, [created.id]: created.full_name }));
+      setDraftIdentifiers((current) => ({ ...current, [created.id]: created.identifier }));
       setIdentifier("");
       setFullName("");
       setEmail("");
@@ -93,7 +94,7 @@ export function AdminUsersPage() {
 
   const saveIdentifier = async (user: ManagedUser) => {
     const nextIdentifier = (draftIdentifiers[user.id] || "").trim();
-    if (user.role !== "student" || !/^\\d{10}$/.test(nextIdentifier) || nextIdentifier === user.identifier || working) return;
+    if (user.role !== "student" || !/^\d{10}$/.test(nextIdentifier) || nextIdentifier === user.identifier || working) return;
     setWorking(true);
     setError("");
     setNotice("");
@@ -208,10 +209,10 @@ export function AdminUsersPage() {
                             inputMode="numeric"
                             maxLength={10}
                             value={draftIdentifiers[user.id] ?? user.identifier}
-                            onChange={(event) => setDraftIdentifiers((current) => ({ ...current, [user.id]: event.target.value.replace(/\\D/g, "").slice(0, 10) }))}
+                            onChange={(event) => setDraftIdentifiers((current) => ({ ...current, [user.id]: event.target.value.replace(/\D/g, "").slice(0, 10) }))}
                           />
                           {draftIdentifiers[user.id] !== user.identifier && (
-                            <button className="secondary small" disabled={working || !/^\\d{10}$/.test(draftIdentifiers[user.id] || "")} onClick={() => saveIdentifier(user)}>Simpan NISN</button>
+                            <button className="secondary small" disabled={working || !/^\d{10}$/.test(draftIdentifiers[user.id] || "")} onClick={() => saveIdentifier(user)}>Simpan NISN</button>
                           )}
                         </>
                       ) : user.identifier}
