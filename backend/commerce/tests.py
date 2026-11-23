@@ -133,8 +133,10 @@ class CommerceApiTests(TestCase):
         verified = self.client.post(f"/api/admin/orders/{code}/payment/verify/", {"note": "Cocok dengan mutasi rekening"}, format="json")
         self.assertEqual(verified.status_code, 200)
         self.assertEqual(verified.data["payment_status"], Order.PaymentStatus.PAID)
-        completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
-        self.assertEqual(completed.status_code, 200)
+        # Jam operasional diuji terpisah; isolasi tes ini pada verifikasi transfer bank.
+        with mock.patch("commerce.views.pickup_is_open", return_value=True):
+            completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
+        self.assertEqual(completed.status_code, 200, completed.data)
 
     def test_transfer_identity_validates_required_fields_and_last_four(self):
         created = self.create_order("bank_transfer")
