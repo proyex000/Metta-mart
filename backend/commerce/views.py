@@ -404,6 +404,9 @@ class AdminPOSCheckoutView(APIView):
     def post(self, request):
         rows = request.data.get("items")
         method = request.data.get("payment_method", "cash")
+        idempotency_key = request.headers.get("Idempotency-Key", "").strip()
+        if idempotency_key and (len(idempotency_key) < 8 or len(idempotency_key) > 64):
+            raise ValidationError({"idempotency_key": "Kunci transaksi tidak valid."})
         if method not in Order.PaymentMethod.values:
             raise ValidationError({"payment_method": "Metode pembayaran POS tidak valid."})
         if not isinstance(rows, list) or not rows:
@@ -424,6 +427,20 @@ class AdminPOSCheckoutView(APIView):
                 raise ValidationError({"items": "Produk tidak boleh duplikat dan jumlah minimal 1."})
             seen.add(product_id)
             cleaned.append({"product_id": product_id, "quantity": quantity})
+        fingerprint_payload = {
+            "items": cleaned,
+            "payment_method": method,
+            "note": str(request.data.get("note", "")).strip()[:500],
+            "cash_received": request.data.get("cash_received") if method == Order.PaymentMethod.CASH else None,
+        }
+        fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+        if idempotency_key:
+            type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            existing = Order.objects.filter(idempotency_key=idempotency_key).first()
+            if existing:
+                if existing.customer_id != request.user.pk or existing.request_fingerprint != fingerprint or existing.sales_channel != "pos":
+                    raise ValidationError({"idempotency_key": "Kunci ini sudah digunakan untuk transaksi lain."})
+                return Response(OrderReadSerializer(existing).data, status=status.HTTP_200_OK)
         products = {
             product.id: product
             for product in Product.objects.select_for_update().filter(id__in=[row["product_id"] for row in cleaned], is_active=True).order_by("id")
@@ -447,6 +464,8 @@ class AdminPOSCheckoutView(APIView):
         note = str(request.data.get("note", "")).strip()[:500]
         order = Order.objects.create(
             customer=request.user,
+            idempotency_key=idempotency_key or None,
+            request_fingerprint=fingerprint if idempotency_key else "",
             sales_channel="pos",
             cash_received=cash_received,
             status=Order.Status.COMPLETED,
@@ -461,7 +480,9 @@ class AdminPOSCheckoutView(APIView):
         )
         for row in cleaned:
             product = products[row["product_id"]]
-            Product.objects.filter(pk=product.pk, stock__gte=row["quantity"]).update(stock=F("stock") - row["quantity"])
+            updated = Product.objects.filter(pk=product.pk, stock__gte=row["quantity"]).update(stock=F("stock") - row["quantity"])
+            if not updated:
+                raise ValidationError({"items": f"Stok {product.name} baru saja berubah. Muat ulang POS."})
             InventoryMovement.objects.create(product=product, actor=request.user, quantity_delta=-row["quantity"], reason="pos_sale", reference=order.code)
             OrderItem.objects.create(order=order, product=product, product_name=product.name, unit_price=product.price, quantity=row["quantity"], line_total=product.price * row["quantity"])
         PaymentEvent.objects.create(order=order, actor=request.user, event="pos_sale", note=(f"Uang diterima Rp{cash_received}; kembalian Rp{cash_received - total}." if cash_received is not None else "Pembayaran non-tunai diterima dan dikonfirmasi admin pada POS."))
