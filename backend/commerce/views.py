@@ -75,7 +75,11 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     @transaction.atomic
     def perform_update(self, serializer):
-        previous_stock = serializer.instance.stock
+        # Lock and refresh the row before comparing stock so concurrent admin edits
+        # cannot produce a stale stock delta in the inventory ledger.
+        locked_product = Product.objects.select_for_update().get(pk=serializer.instance.pk)
+        serializer.instance = locked_product
+        previous_stock = locked_product.stock
         note = serializer.validated_data.get("stock_note", "").strip()
         product = serializer.save()
         delta = product.stock - previous_stock
@@ -184,9 +188,11 @@ class AdminOrderActionView(APIView):
             if order.payment_method == Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.UNPAID:
                 order.payment_status = Order.PaymentStatus.PAID
                 PaymentEvent.objects.create(order=order, actor=request.user, event="cash_collected", note="Tunai diterima saat pengambilan.")
-        elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED):
+        elif action == "cancel" and order.status in (Order.Status.PENDING, Order.Status.ACCEPTED, Order.Status.READY):
             if order.payment_status == Order.PaymentStatus.PAID:
-                raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan melalui alur biasa."})
+                raise ValidationError({"payment_status": "Pesanan yang sudah dibayar tidak dapat dibatalkan tanpa proses pengembalian dana."})
+            if order.payment_status == Order.PaymentStatus.PENDING:
+                raise ValidationError({"payment_status": "Pembayaran sedang menunggu verifikasi. Rekonsiliasi pembayaran terlebih dahulu sebelum membatalkan pesanan."})
             cancel_order(order, request.user, now)
         else:
             raise ValidationError({"status": "Perubahan status pesanan tidak valid."})
@@ -232,8 +238,10 @@ class AdminPaymentActionView(APIView):
 
 
 class PaymentSubmissionView(APIView):
+    @transaction.atomic
     def post(self, request, code):
-        order = Order.objects.filter(code=code, customer=request.user).first()
+        # Serialize payment submissions against admin verification and cancellation.
+        order = Order.objects.select_for_update().filter(code=code, customer=request.user).first()
         if not order:
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
         if order.status == Order.Status.CANCELLED:
