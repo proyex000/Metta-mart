@@ -23,6 +23,19 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: mettamart
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,12 +54,26 @@ jobs:
         env:
           DJANGO_SECRET_KEY: ci-only-not-a-production-secret
           DJANGO_DEBUG: "true"
+          DB_ENGINE: mysql
+          DB_NAME: mettamart
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_SSL: "false"
         run: |
           python manage.py check
           python manage.py makemigrations --check --dry-run
-      - name: Backend tests
+      - name: Backend tests (MySQL)
         working-directory: backend
         env:
           DJANGO_SECRET_KEY: ci-only-not-a-production-secret
           DJANGO_DEBUG: "true"
+          DB_ENGINE: mysql
+          DB_NAME: mettamart
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_SSL: "false"
         run: python manage.py test
