@@ -10,6 +10,7 @@ from .models import InventoryMovement, Order, OrderItem, Product
 
 class ProductSerializer(serializers.ModelSerializer):
     stock_note = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=80)
+    image = serializers.ImageField(required=False, allow_null=True, write_only=True)
     remove_image = serializers.BooleanField(write_only=True, required=False, default=False)
     image_url = serializers.SerializerMethodField(read_only=True)
 
@@ -32,6 +33,8 @@ class ProductSerializer(serializers.ModelSerializer):
             with Image.open(value) as image:
                 if image.format not in ("JPEG", "PNG", "WEBP"):
                     raise serializers.ValidationError("Format gambar harus JPG, PNG, atau WEBP.")
+                if image.width > 4000 or image.height > 4000:
+                    raise serializers.ValidationError("Resolusi gambar maksimal 4000 × 4000 piksel.")
                 image.verify()
         except (UnidentifiedImageError, OSError, ValueError):
             raise serializers.ValidationError("File yang diunggah bukan gambar yang valid.")
