@@ -142,6 +142,7 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
 
     def perform_update(self, serializer):
         target = serializer.instance
+        old_identifier = target.identifier
         was_active = target.is_active
         will_be_active = serializer.validated_data.get("is_active", was_active)
         if target.pk == self.request.user.pk and was_active and not will_be_active:
@@ -156,13 +157,18 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
             if len(active_admin_ids) <= 1:
                 raise ValidationError({"is_active": "Minimal harus ada satu akun admin aktif."})
         user = serializer.save()
-        event = "user.deactivated" if was_active and not user.is_active else "user.updated"
+        if old_identifier != user.identifier:
+            event = "user.identifier_changed"
+            metadata = {"role": user.role, "old_identifier": old_identifier, "new_identifier": user.identifier}
+        else:
+            event = "user.deactivated" if was_active and not user.is_active else "user.updated"
+            metadata = {"role": user.role, "is_active": user.is_active}
         AuditLog.objects.create(
             actor=self.request.user,
             event=event,
             target_type="user",
             target_id=str(user.pk),
-            metadata={"role": user.role, "is_active": user.is_active},
+            metadata=metadata,
         )
 
 class ParentChildrenView(APIView):
