@@ -15,9 +15,10 @@ export type Product = {
   price: number;
   stock: number;
   art: string;
+  image_url: string | null;
 };
 
-export type ProductInput = Omit<Product, "id" | "art"> & { art?: string; stock_note?: string };
+export type ProductInput = Omit<Product, "id" | "art" | "image_url"> & { art?: string; stock_note?: string; image_file?: File | null; remove_image?: boolean };
 
 export type Order = {
   code: string;

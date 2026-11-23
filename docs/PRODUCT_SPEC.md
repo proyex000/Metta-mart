@@ -180,6 +180,7 @@ Notifications must be scoped to the buyer and authorized linked parents. In-app 
 
 ### Catalogue and stock
 - [ ] Admin can create, edit, deactivate, and categorize products.
+- [ ] Product photos are optional; admin can upload, replace, and remove them, while products without a photo retain the default category illustration.
 - [ ] Inactive/out-of-stock products cannot be purchased.
 - [ ] Concurrent checkout cannot create negative stock.
 - [ ] Every stock adjustment has an attributable movement record.

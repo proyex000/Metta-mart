@@ -14,7 +14,7 @@ export const products: Product[] = [
     category: "seragam-sekolah",
     price: 85000,
     stock: 20,
-    art: "shirt",
+    art: "shirt", image_url: null,
   },
   {
     id: 7,
@@ -22,7 +22,7 @@ export const products: Product[] = [
     category: "seragam-sekolah",
     price: 90000,
     stock: 15,
-    art: "shirt",
+    art: "shirt", image_url: null,
   },
 ];
 

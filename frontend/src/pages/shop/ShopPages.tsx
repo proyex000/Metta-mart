@@ -64,7 +64,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
       {role === "parent" ? (
         latestOrder ? <section className="recent-order"><span className="mini-icon"><Icon name="bag" /></span><div><b>#{latestOrder.code}</b><small>{latestOrder.beneficiary_name ? `Untuk ${latestOrder.beneficiary_name} · ` : ""}{new Date(latestOrder.created_at).toLocaleString("id-ID")}</small></div><Status>{statusText}</Status><strong>{money(latestOrder.total)}</strong><Link to={`${base}/orders/${latestOrder.code}`}>Detail</Link></section> : <div className="empty-state"><p>Belum ada pesanan dari akun ini.</p></div>
       ) : (
-        <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={`${base}/order?product=${product.id}`}>Pesan</Link></article>)}</section>
+        <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} imageUrl={product.image_url} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={`${base}/order?product=${product.id}`}>Pesan</Link></article>)}</section>
       )}
       <section className="shop-promo"><Icon name="bag" size={28} /><div><b>Dukung kebutuhan belajar</b><p>Pesan perlengkapan sekolah dengan mudah dan aman.</p></div></section>
     </>
@@ -119,7 +119,7 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
       <section className="shop-product-grid">
         {list.map((product) => (
           <article key={product.id}>
-            <ProductArt type={product.art} />
+            <ProductArt type={product.art} imageUrl={product.image_url} />
             <div>
               <b>{product.name}</b>
               <span>{money(product.price)}</span>
@@ -284,7 +284,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       <section className="order-builder">
         {products.map((product) => (
           <article key={product.id}>
-            <ProductArt type={product.art} />
+            <ProductArt type={product.art} imageUrl={product.image_url} />
             <div>
               <b>{product.name}</b>
               <span>

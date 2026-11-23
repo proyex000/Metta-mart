@@ -112,7 +112,14 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function ProductArt({ type }: { type: string }) {
+export function ProductArt({ type, imageUrl }: { type: string; imageUrl?: string | null }) {
+  if (imageUrl) {
+    return (
+      <span className="product-art product-art--photo">
+        <img src={imageUrl} alt="Foto produk" loading="lazy" />
+      </span>
+    );
+  }
   return (
     <span className={`product-art product-art--${type}`} aria-hidden="true">
       <i />

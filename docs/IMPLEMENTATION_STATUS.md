@@ -19,6 +19,8 @@ This document describes the school-cooperative scope implemented on the developm
 - Student and parent catalogue access to active products.
 - Stock is reserved atomically when an online order is created and restored on eligible cancellation.
 - Product stock changes require an admin reason and are written to the inventory movement ledger.
+- Product photos are optional; admins can upload, replace, or remove a JPG/PNG/WEBP image (maximum 5 MB). Products without photos keep the existing category illustration.
+- Uploaded product files are stored under `MEDIA_ROOT`; production hosting must persist this directory and serve the `/media/` URL path.
 - Inventory ledger distinguishes initial stock, manual adjustment, online reservation, cancellation, and POS sale.
 - Admin inventory screen displays recent movement history and low-stock products.
 
