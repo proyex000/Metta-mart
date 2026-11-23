@@ -1062,7 +1062,7 @@ export function Settings() {
   type Preferences = {
     storeName: string; description: string; address: string; email: string; phone: string;
     adminName: string; adminEmail: string;
-    cash: boolean; qris: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string; qrisNote: string;
+    cash: boolean; qris: boolean; bankTransfer: boolean; bankName: string; bankAccountName: string; bankAccountNumber: string;
     operatingDays: string; openTime: string; closeTime: string; pickupMessage: string;
     orderAlerts: boolean; lowStockAlerts: boolean; promoAlerts: boolean;
     deliveryEnabled: boolean; deliveryOrigin: string; deliveryBaseFee: string; deliveryBaseKm: string; deliveryPerKmFee: string; deliveryMaxKm: string;
@@ -1075,7 +1075,7 @@ export function Settings() {
     phone: "",
     adminName: session?.name || "Admin",
     adminEmail: session?.email || "admin@mettamart.id",
-    cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "", qrisNote: "",
+    cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "",
     operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
     orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
     deliveryEnabled: true, deliveryOrigin: "", deliveryBaseFee: "10000", deliveryBaseKm: "3", deliveryPerKmFee: "2500", deliveryMaxKm: "15",
@@ -1098,7 +1098,6 @@ export function Settings() {
       bankName: settings.payment_instructions.bank_name,
       bankAccountName: settings.payment_instructions.account_name,
       bankAccountNumber: settings.payment_instructions.account_number,
-      qrisNote: settings.payment_instructions.qris_note,
       operatingDays: settings.operating_hours.days.join(","),
       openTime: settings.operating_hours.open_time,
       closeTime: settings.operating_hours.close_time,
@@ -1121,6 +1120,47 @@ export function Settings() {
       } : {}),
     }))).catch((reason) => setSettingsLoadError(reason instanceof Error ? reason.message : "Pengaturan server gagal dimuat."));
   }, []);
+  const [qrisImage, setQrisImage] = useState("");
+  const [qrisError, setQrisError] = useState("");
+  useEffect(() => {
+    fetchStorefrontSettings().then((settings) => setQrisImage(settings.payment_instructions?.qris_image ?? "")).catch(() => undefined);
+  }, []);
+  // Perkecil gambar QRIS di browser (maks. 900px) agar ringan dan tetap tajam, lalu simpan ke server saat "Simpan".
+  const handleQrisUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setQrisError("");
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setQrisError("Pilih gambar QRIS berformat PNG, JPG, atau WebP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setQrisError("Ukuran gambar maksimal 5 MB.");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, 900 / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      const context = canvas.getContext("2d");
+      if (!context) { setQrisError("Gambar tidak dapat diproses."); return; }
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      let output = canvas.toDataURL("image/png");
+      if (output.length > 900_000) output = canvas.toDataURL("image/jpeg", 0.85);
+      if (output.length > 900_000) { setQrisError("Gambar terlalu besar. Gunakan gambar QRIS yang lebih kecil."); return; }
+      setQrisImage(output);
+      setSaved(false);
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); setQrisError("File gambar tidak dapat dibaca."); };
+    image.src = url;
+  };
   const [saved, setSaved] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
   const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
@@ -1190,7 +1230,7 @@ export function Settings() {
       } else if (tab === "payment") {
         await updateStorefrontSettings({
           payment_methods: { cash: values.cash, qris: values.qris, bank_transfer: values.bankTransfer },
-          payment_instructions: { bank_name: values.bankName, account_name: values.bankAccountName, account_number: values.bankAccountNumber, qris_note: values.qrisNote },
+          payment_instructions: { bank_name: values.bankName, account_name: values.bankAccountName, account_number: values.bankAccountNumber, qris_image: qrisImage },
         });
       } else if (tab === "delivery") {
         const base_fee = Number(values.deliveryBaseFee), per_km_fee = Number(values.deliveryPerKmFee);
@@ -1269,7 +1309,19 @@ export function Settings() {
             {field("Nama Bank", "bankName")}
             {field("Nama Pemilik Rekening", "bankAccountName")}
             {field("Nomor Rekening", "bankAccountNumber")}
-            <label>Instruksi QRIS<textarea value={values.qrisNote} onChange={(event) => update("qrisNote", event.target.value)} /></label>
+            <div className="qris-upload">
+              <span className="qris-upload__title">Gambar QRIS</span>
+              <p>Unggah gambar QRIS resmi koperasi. Gambar ini hanya ditampilkan di halaman detail pesanan siswa/orang tua setelah pesanan dikonfirmasi dan sebelum lunas.</p>
+              <div className="qris-upload__body">
+                <div className="qris-upload__preview">{qrisImage ? <img src={qrisImage} alt="Pratinjau QRIS" /> : <span>Belum ada gambar QRIS</span>}</div>
+                <div className="qris-upload__actions">
+                  <label className="logo-upload__choose">{qrisImage ? "Ganti gambar QRIS" : "Pilih gambar QRIS"}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleQrisUpload} /></label>
+                  {qrisImage && <button type="button" className="logo-upload__reset" onClick={() => { setQrisImage(""); setSaved(false); }}>Hapus gambar</button>}
+                  <small>PNG, JPG, atau WebP. Klik “Simpan” agar perubahan berlaku.</small>
+                  {qrisError && <small className="logo-upload__error" role="alert">{qrisError}</small>}
+                </div>
+              </div>
+            </div>
           </>}
           {tab === "pickup" && <>
             <h2>Jam Operasional & Pengambilan</h2>

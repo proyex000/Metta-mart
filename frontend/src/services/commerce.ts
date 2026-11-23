@@ -18,6 +18,8 @@ export type CommerceOrder = {
   payment_sender_name: string;
   payment_source: string;
   payment_account_last4: string;
+  can_cancel: boolean;
+  payment_info: PaymentInfo | null;
   note: string;
   subtotal: number;
   total: number;
@@ -38,6 +40,7 @@ export type CommerceOrder = {
   cancelled_at: string | null;
 };
 export type PaymentMethod = CommerceOrder["payment_method"];
+export type PaymentInfo = { bank_name: string; account_name: string; account_number: string; qris_image: string };
 
 export type DeliveryInput = { delivery_method: "pickup" | "gosend"; delivery_address?: string; delivery_recipient?: string; delivery_phone?: string };
 export type DeliveryQuote = { distance_km: string; fee: number };
@@ -53,6 +56,9 @@ export function fetchOrders() {
 }
 export function fetchOrder(code: string) {
   return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/`);
+}
+export function cancelOrder(code: string) {
+  return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/cancel/`, { method: "POST", body: JSON.stringify({}) });
 }
 export function submitPayment(code: string, input: { sender_name: string; payment_source: string; account_last4?: string; note?: string }) {
   return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/payment-submission/`, { method: "POST", body: JSON.stringify(input) });

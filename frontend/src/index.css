@@ -4486,3 +4486,233 @@ a.primary {
     max-height: 420px;
   }
 }
+
+/* ---------- Pembayaran, pembatalan, dan gambar QRIS ---------- */
+.secondary.danger {
+  color: var(--red);
+  border-color: #f3c3b8;
+  background: #fff;
+}
+.secondary.danger:hover:not(:disabled) {
+  background: #fff6f3;
+}
+.order-detail__actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.order-detail__actions .wide {
+  width: 100%;
+}
+.order-detail__hint {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: #607485;
+  background: #f7f9fa;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.payment-waiting {
+  background: #f7f9fa;
+}
+.order-detail .payment-section h3 {
+  margin: 6px 0 0;
+  color: #31485b;
+  font-size: 14px;
+}
+.payment-info {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e8eef2;
+  border-radius: 12px;
+}
+.order-detail .payment-info p,
+.payment-info p {
+  margin: 0;
+}
+.payment-info__amount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f7f9fa;
+  border-radius: 10px;
+  color: #607485;
+  font-size: 13px;
+}
+.payment-info__amount strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+.payment-info dl {
+  grid-template-columns: 110px minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.payment-info__number {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.payment-info__number b {
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+.payment-info__number .secondary {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+}
+.payment-info__qris {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.payment-info__qris img {
+  width: min(100%, 300px);
+  height: auto;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e8eef2;
+  border-radius: 12px;
+  object-fit: contain;
+}
+.payment-info__qris figcaption {
+  max-width: 340px;
+  color: #607485;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+.payment-info__qris .secondary {
+  text-decoration: none;
+}
+.cancel-confirm {
+  display: grid;
+  gap: 12px;
+}
+.cancel-confirm p {
+  margin: 0;
+  color: #546a7b;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.cancel-confirm__note {
+  padding: 10px 12px;
+  color: #705c35 !important;
+  background: #fff8e9;
+  border-radius: 8px;
+  font-size: 13px !important;
+}
+.cancel-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* Pengaturan admin: unggah gambar QRIS */
+.qris-upload {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e8eef2;
+  border-radius: 12px;
+}
+.qris-upload__title {
+  color: #31485b;
+  font-size: 14px;
+  font-weight: 600;
+}
+.qris-upload > p {
+  margin: 0;
+  color: #82919e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.qris-upload__body {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.qris-upload__preview {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #f7f9fa;
+  border: 1px dashed #dbe4ea;
+  border-radius: 10px;
+  color: #8a99a5;
+  font-size: 12px;
+  text-align: center;
+}
+.qris-upload__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+.qris-upload__actions {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.qris-upload__actions small {
+  color: #8a99a5;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.qris-upload__actions .logo-upload__choose {
+  position: relative;
+  width: auto;
+  justify-self: start;
+  padding: 8px 16px;
+}
+.qris-upload__actions .logo-upload__reset {
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 14px;
+  color: var(--red);
+  background: #fff;
+  border: 1px solid #f3c3b8;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .qris-upload__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .qris-upload__preview {
+    max-width: 220px;
+  }
+  .payment-info dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .payment-info dd {
+    margin-bottom: 8px;
+  }
+  .cancel-confirm__actions > button {
+    flex: 1 1 140px;
+  }
+}
+
+.order-created-link {
+  width: 100%;
+  margin: 0 0 14px;
+  text-decoration: none;
+}

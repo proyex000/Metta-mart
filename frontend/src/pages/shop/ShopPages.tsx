@@ -12,7 +12,7 @@ import { money } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
 import { refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Role } from "../../types";
-import { createOrder, fetchOrders, fetchOrder, quoteDelivery, submitPayment, type CommerceOrder, type DeliveryQuote } from "../../services/commerce";
+import { cancelOrder, createOrder, fetchOrders, fetchOrder, quoteDelivery, submitPayment, type CommerceOrder, type DeliveryQuote } from "../../services/commerce";
 import { fetchStorefrontSettings, type StorefrontSettings } from "../../services/settings";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 
@@ -190,7 +190,6 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [submitError, setSubmitError] = useState("");
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
   const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
-  const [paymentInstructions, setPaymentInstructions] = useState({ bank_name: "", account_name: "", account_number: "", qris_note: "" });
   const { session } = useAuth();
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "gosend">("pickup");
   const [hours, setHours] = useState<StorefrontSettings["operating_hours"] | null>(null);
@@ -205,7 +204,6 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   useEffect(() => {
     fetchStorefrontSettings().then((settings) => {
       setPaymentSettings(settings.payment_methods);
-      setPaymentInstructions(settings.payment_instructions);
       setHours(settings.operating_hours);
       setDeliveryConfig(settings.delivery_settings);
     }).catch(() => undefined);
@@ -393,11 +391,8 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
             Belum ada metode pembayaran yang diaktifkan. Hubungi admin sekolah.
           </p>
         )}
-        {selectedPayment === "qris" && (
-          <p className="payment-help">{paymentInstructions.qris_note || "Gunakan QRIS resmi koperasi dan tunggu verifikasi admin."} Jangan gunakan kode dari sumber yang tidak resmi.</p>
-        )}
-        {selectedPayment === "bankTransfer" && (
-          <p className="payment-help">{paymentInstructions.bank_name ? `Bank: ${paymentInstructions.bank_name}. ` : ""}{paymentInstructions.account_name ? `Atas nama: ${paymentInstructions.account_name}. ` : ""}{paymentInstructions.account_number ? `Nomor rekening: ${paymentInstructions.account_number}.` : "Detail rekening belum diatur admin."} Setelah transfer, kirim referensi pembayaran pada detail pesanan.</p>
+        {(selectedPayment === "qris" || selectedPayment === "bankTransfer") && (
+          <p className="payment-help">{selectedPayment === "qris" ? "Instruksi QRIS" : "Nomor rekening"} akan ditampilkan di halaman detail pesanan setelah admin mengonfirmasi pesanan. Pembayaran dilakukan dari sana.</p>
         )}
         {selectedPayment === "cash" && (
           <p className="payment-help">Siapkan pembayaran tunai saat mengambil pesanan di koperasi.</p>
@@ -405,9 +400,10 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       </section>
       {sent && (
         <p className="payment-success" role="status">
-          Pesanan {createdCode} berhasil dibuat. Status awal: menunggu konfirmasi admin. Pembayaran belum dianggap lunas.
+          Pesanan {createdCode} berhasil dibuat. Status awal: menunggu konfirmasi admin.{selectedPayment !== "cash" ? " Info pembayaran muncul di detail pesanan setelah pesanan dikonfirmasi." : ""} Pembayaran belum dianggap lunas.
         </p>
       )}
+      {sent && createdCode && <Link className="secondary order-created-link" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
       {submitError && <p className="payment-unavailable" role="alert">{submitError}</p>}
       <button className="primary wide order-submit" disabled={!subtotal || sent || submitting || !methods.length || !deliveryReady} onClick={submit}>
         {submitting ? "Mengirim pesanan..." : sent ? "Pesanan berhasil dibuat" : "Kirim Pesanan"}
@@ -510,8 +506,33 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
   const [paymentMessage, setPaymentMessage] = useState("");
   const [sendingPayment, setSendingPayment] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [copied, setCopied] = useState(false);
   const [store, setStore] = useState<StorefrontSettings | null>(null);
   const [storeError, setStoreError] = useState("");
+  const confirmCancel = async () => {
+    setCancelling(true);
+    setCancelError("");
+    try {
+      setOrder(await cancelOrder(code));
+      setCancelOpen(false);
+    } catch (reason) {
+      setCancelError(reason instanceof Error ? reason.message : "Pesanan gagal dibatalkan.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+  const copyAccount = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
   const openContact = () => {
     setContactOpen(true);
     if (store) return;
@@ -558,10 +579,53 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
           : <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>}
         <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? (isGosend ? "Siap diantar" : "Siap diambil") : (isGosend ? "Belum siap diantar" : "Belum siap diambil")}</span><span>{order.completed_at ? (isGosend ? "Pengantaran selesai" : "Pengambilan selesai") : (isGosend ? "Menunggu pengantaran" : "Menunggu pengambilan")}</span></div>
         {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
-          <section className="payment-section"><h2>Identitas Pembayaran</h2><p>Isi identitas rekening atau e-wallet yang digunakan untuk transfer. Admin akan mencocokkannya dengan dana yang masuk. Ini bukan bukti pembayaran otomatis.</p><label>Nama pemilik rekening/e-wallet<input value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={120} placeholder="Nama sesuai akun pengirim" /></label><label>Bank atau e-wallet asal<input value={paymentSource} onChange={(event) => setPaymentSource(event.target.value)} maxLength={80} placeholder="Contoh: BCA, Mandiri, DANA, GoPay" /></label><label>4 digit terakhir rekening (opsional)<input inputMode="numeric" value={accountLast4} onChange={(event) => setAccountLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} maxLength={4} placeholder="1234" /></label><label>Catatan tambahan (opsional)<textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} maxLength={300} placeholder="Contoh: transfer pukul 14.30" /></label><button className="primary wide" disabled={!senderName.trim() || !paymentSource.trim() || (accountLast4.length > 0 && accountLast4.length !== 4) || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Identitas Pembayaran"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
+          !order.payment_info ? (
+            <section className="payment-section payment-waiting"><h2>Pembayaran</h2><p>Info {order.payment_method === "qris" ? "QRIS" : "rekening"} untuk pembayaran akan muncul di sini setelah admin mengonfirmasi pesanan Anda. Anda masih dapat membatalkan pesanan sebelum membayar.</p></section>
+          ) : <section className="payment-section">
+            <h2>Pembayaran via {order.payment_method === "qris" ? "QRIS" : "Transfer Bank"}</h2>
+            <div className="payment-info">
+              <p className="payment-info__amount"><span>Total yang harus dibayar</span><strong>{money(order.total)}</strong></p>
+              {order.payment_method === "bank_transfer" ? (
+                order.payment_info.account_number ? (
+                  <dl>
+                    {order.payment_info.bank_name && <><dt>Bank</dt><dd>{order.payment_info.bank_name}</dd></>}
+                    {order.payment_info.account_name && <><dt>Atas nama</dt><dd>{order.payment_info.account_name}</dd></>}
+                    <dt>No. rekening</dt>
+                    <dd className="payment-info__number"><b>{order.payment_info.account_number}</b><button type="button" className="secondary" onClick={() => copyAccount(order.payment_info?.account_number ?? "")}>{copied ? "Tersalin ✓" : "Salin"}</button></dd>
+                  </dl>
+                ) : <p className="payment-unavailable">Detail rekening belum diatur admin. Hubungi admin koperasi.</p>
+              ) : order.payment_info.qris_image ? (
+                <figure className="payment-info__qris">
+                  <img src={order.payment_info.qris_image} alt={`QRIS pembayaran pesanan ${order.code}`} />
+                  <figcaption>Scan dengan aplikasi bank atau e-wallet, lalu pastikan nominal sesuai total di atas.</figcaption>
+                  <a className="secondary" href={order.payment_info.qris_image} download={`qris-${order.code}.png`}>Simpan gambar QRIS</a>
+                </figure>
+              ) : <p className="payment-unavailable">Gambar QRIS belum diatur admin. Hubungi admin koperasi.</p>}
+            </div>
+            <h3>Konfirmasi Pembayaran</h3>
+            <p>Setelah membayar, isi identitas rekening atau e-wallet yang digunakan untuk transfer. Admin akan mencocokkannya dengan dana yang masuk. Ini bukan bukti pembayaran otomatis.</p><label>Nama pemilik rekening/e-wallet<input value={senderName} onChange={(event) => setSenderName(event.target.value)} maxLength={120} placeholder="Nama sesuai akun pengirim" /></label><label>Bank atau e-wallet asal<input value={paymentSource} onChange={(event) => setPaymentSource(event.target.value)} maxLength={80} placeholder="Contoh: BCA, Mandiri, DANA, GoPay" /></label><label>4 digit terakhir rekening (opsional)<input inputMode="numeric" value={accountLast4} onChange={(event) => setAccountLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} maxLength={4} placeholder="1234" /></label><label>Catatan tambahan (opsional)<textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} maxLength={300} placeholder="Contoh: transfer pukul 14.30" /></label><button className="primary wide" disabled={!senderName.trim() || !paymentSource.trim() || (accountLast4.length > 0 && accountLast4.length !== 4) || sendingPayment || order.payment_status === "pending_verification"} onClick={sendPayment}>{sendingPayment ? "Mengirim..." : order.payment_status === "pending_verification" ? "Menunggu Verifikasi" : "Kirim Identitas Pembayaran"}</button>{paymentMessage && <p role="status">{paymentMessage}</p>}</section>
         )}
-        <button className="primary wide" onClick={openContact}>Hubungi Admin</button>
+        <div className="order-detail__actions">
+          <button className="primary wide" onClick={openContact}>Hubungi Admin</button>
+          {order.can_cancel && <button type="button" className="secondary danger wide" onClick={() => { setCancelError(""); setCancelOpen(true); }}>Batalkan Pesanan</button>}
+        </div>
+        {!order.can_cancel && order.status !== "cancelled" && order.status !== "completed" && (order.payment_status === "paid" || order.payment_status === "pending_verification") && (
+          <p className="order-detail__hint">{order.payment_status === "paid" ? "Pesanan yang sudah dibayar tidak dapat dibatalkan." : "Pembayaran sedang diverifikasi admin, sehingga pesanan tidak dapat dibatalkan."}</p>
+        )}
       </section>
+      {cancelOpen && (
+        <Modal title="Batalkan Pesanan?" close={() => !cancelling && setCancelOpen(false)}>
+          <div className="cancel-confirm">
+            <p>Pesanan <b>#{order.code}</b> akan dibatalkan dan stok barang dikembalikan. Pesanan yang sudah dibatalkan tidak dapat diaktifkan lagi.</p>
+            <p className="cancel-confirm__note">Pembatalan hanya bisa dilakukan sebelum pembayaran.</p>
+            {cancelError && <p className="payment-unavailable" role="alert">{cancelError}</p>}
+            <div className="cancel-confirm__actions">
+              <button type="button" className="secondary" onClick={() => setCancelOpen(false)} disabled={cancelling}>Kembali</button>
+              <button type="button" className="primary" onClick={confirmCancel} disabled={cancelling}>{cancelling ? "Membatalkan..." : "Ya, Batalkan"}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {contactOpen && (
         <Modal title="Hubungi Admin Koperasi" close={() => setContactOpen(false)}>
           <ContactInfo store={store} error={storeError} orderCode={order.code} />

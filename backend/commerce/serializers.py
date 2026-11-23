@@ -2,8 +2,8 @@ from django.db import transaction
 from django.db.models import F
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from core.models import StoreSetting
 from .delivery import operating_hours_text, quote_delivery, store_is_open
+from core.models import StoreSetting
 from .models import InventoryMovement, Order, OrderItem, Product
 
 
@@ -42,8 +42,40 @@ class OrderItemReadSerializer(serializers.ModelSerializer):
         fields = ("product_id", "product_name", "unit_price", "quantity", "line_total")
 
 
+def cancel_block_reason(order):
+    """Alasan pesanan tidak boleh dibatalkan pelanggan; None bila boleh. Pembatalan hanya sebelum dibayar."""
+    if order.sales_channel != "online":
+        return "Transaksi POS tidak dapat dibatalkan oleh pelanggan."
+    if order.status == Order.Status.CANCELLED:
+        return "Pesanan ini sudah dibatalkan."
+    if order.status not in (Order.Status.PENDING, Order.Status.ACCEPTED, Order.Status.READY):
+        return "Pesanan yang sudah selesai tidak dapat dibatalkan."
+    if order.payment_status == Order.PaymentStatus.PAID:
+        return "Pesanan yang sudah dibayar tidak dapat dibatalkan."
+    if order.payment_status == Order.PaymentStatus.PENDING:
+        return "Pembayaran sedang diverifikasi admin, sehingga pesanan tidak dapat dibatalkan. Hubungi admin bila ada kendala."
+    return None
+
+
 class OrderReadSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+    payment_info = serializers.SerializerMethodField()
+
+    def get_can_cancel(self, obj):
+        return cancel_block_reason(obj) is None
+
+    def get_payment_info(self, obj):
+        """Rekening/QRIS tujuan bayar: hanya tampil di detail pesanan setelah dikonfirmasi admin dan sebelum lunas."""
+        if obj.payment_method == Order.PaymentMethod.CASH or obj.status not in (Order.Status.ACCEPTED, Order.Status.READY):
+            return None
+        if obj.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED, Order.PaymentStatus.PENDING):
+            return None
+        setting = StoreSetting.objects.filter(key="payment_instructions").first()
+        data = setting.value if setting and isinstance(setting.value, dict) else {}
+        if obj.payment_method == Order.PaymentMethod.BANK_TRANSFER:
+            return {"bank_name": data.get("bank_name", ""), "account_name": data.get("account_name", ""), "account_number": data.get("account_number", ""), "qris_image": ""}
+        return {"bank_name": "", "account_name": "", "account_number": "", "qris_image": data.get("qris_image", "")}
 
     def get_customer_name(self, obj):
         return "Penjualan POS" if obj.sales_channel == "pos" else obj.customer.full_name
@@ -57,7 +89,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "can_cancel", "payment_info", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
