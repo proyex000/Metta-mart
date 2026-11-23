@@ -127,8 +127,16 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
-        # Lock the target row and active admin rows so concurrent requests cannot
-        # accidentally deactivate the final active administrator.
+        # Serialize admin deactivation attempts by locking every active admin
+        # in a stable order before the target row is loaded/updated.
+        target_role = User.objects.filter(pk=self.kwargs["pk"]).values_list("role", flat=True).first()
+        if target_role == User.Role.ADMIN:
+            list(
+                User.objects.select_for_update()
+                .filter(role=User.Role.ADMIN, is_active=True)
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
         self.queryset = User.objects.select_for_update()
         return super().update(request, *args, **kwargs)
 
@@ -139,8 +147,13 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
         if target.pk == self.request.user.pk and was_active and not will_be_active:
             raise ValidationError({"is_active": "Admin tidak dapat menonaktifkan akunnya sendiri."})
         if target.role == User.Role.ADMIN and was_active and not will_be_active:
-            active_admins = User.objects.select_for_update().filter(role=User.Role.ADMIN, is_active=True)
-            if active_admins.count() <= 1:
+            active_admin_ids = list(
+                User.objects.select_for_update()
+                .filter(role=User.Role.ADMIN, is_active=True)
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+            if len(active_admin_ids) <= 1:
                 raise ValidationError({"is_active": "Minimal harus ada satu akun admin aktif."})
         user = serializer.save()
         event = "user.deactivated" if was_active and not user.is_active else "user.updated"
