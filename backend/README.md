@@ -32,6 +32,10 @@ Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOn
 
 Siswa menggunakan NISN 10 digit sebagai identifier. Orang tua menggunakan email. Admin dan kasir dibuat oleh admin, bukan melalui registrasi publik. Relasi akun orang tua dan siswa dikelola admin melalui `ParentStudentLink` dan endpoint `/api/admin/parent-student-links/`. Registrasi mandiri memeriksa format NISN 10 digit, tetapi belum membuktikan kepemilikan NISN; kebijakan persetujuan/verifikasi sekolah masih perlu ditetapkan.
 
+## Checkout safety
+
+`POST /api/orders/` dan `POST /api/admin/pos/checkout/` wajib menerima header `Idempotency-Key` sepanjang 8–64 karakter. Frontend membuat satu kunci untuk satu percobaan checkout dan menggunakan kembali kunci tersebut saat permintaan yang sama dicoba ulang.
+
 ## Frontend
 
 Frontend harus memakai `credentials: "include"`, meminta `/api/auth/csrf/` sebelum POST/PATCH/DELETE, dan mengirim token CSRF di header `X-CSRFToken`. Isi `CORS_ALLOWED_ORIGINS` dan `DJANGO_CSRF_TRUSTED_ORIGINS` sesuai origin frontend. Untuk frontend dan API yang benar-benar beda site, set kedua cookie SameSite ke `None` dan Secure ke `true`; konfigurasi reverse proxy satu-site lebih disarankan karena kebijakan third-party cookie browser dapat membatasi cookie lintas-site.
