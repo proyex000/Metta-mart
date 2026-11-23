@@ -10,8 +10,9 @@ const roleLabel: Record<ManagedUser["role"], string> = {
 
 export function AdminUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
-  const [draftNames, setDraftNames] = useState<Record<number, string>>({});
-  const [draftIdentifiers, setDraftIdentifiers] = useState<Record<number, string>>({});
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIdentifier, setEditIdentifier] = useState("");
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -28,8 +29,7 @@ export function AdminUsersPage() {
   const refresh = async () => {
     const rows = await fetchManagedUsers();
     setUsers(rows);
-    setDraftNames(Object.fromEntries(rows.map((user) => [user.id, user.full_name])));
-    setDraftIdentifiers(Object.fromEntries(rows.map((user) => [user.id, user.identifier])));
+
   };
 
   useEffect(() => {
@@ -61,8 +61,7 @@ export function AdminUsersPage() {
         password,
       });
       setUsers((current) => [...current, created].sort((a, b) => a.full_name.localeCompare(b.full_name)));
-      setDraftNames((current) => ({ ...current, [created.id]: created.full_name }));
-      setDraftIdentifiers((current) => ({ ...current, [created.id]: created.identifier }));
+
       setIdentifier("");
       setFullName("");
       setEmail("");
@@ -75,36 +74,42 @@ export function AdminUsersPage() {
     }
   };
 
-  const saveName = async (user: ManagedUser) => {
-    const nextName = (draftNames[user.id] || "").trim();
-    if (!nextName || nextName === user.full_name || working) return;
-    setWorking(true);
+  const startEditing = (user: ManagedUser) => {
+    setEditingUserId(user.id);
+    setEditName(user.full_name);
+    setEditIdentifier(user.role === "student" ? user.identifier : "");
     setError("");
     setNotice("");
-    try {
-      const updated = await updateManagedUser(user.id, { full_name: nextName });
-      setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
-      setNotice(`Nama akun ${updated.identifier} diperbarui.`);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Nama akun gagal diperbarui.");
-    } finally {
-      setWorking(false);
-    }
   };
 
-  const saveIdentifier = async (user: ManagedUser) => {
-    const nextIdentifier = (draftIdentifiers[user.id] || "").trim();
-    if (user.role !== "student" || !/^\d{10}$/.test(nextIdentifier) || nextIdentifier === user.identifier || working) return;
+  const cancelEditing = () => {
+    setEditingUserId(null);
+    setEditName("");
+    setEditIdentifier("");
+  };
+
+  const saveUserChanges = async (user: ManagedUser) => {
+    const nextName = editName.trim();
+    const nextIdentifier = editIdentifier.trim();
+    if (!nextName || working) return;
+    if (user.role === "student" && !/^\\d{10}$/.test(nextIdentifier)) return;
+    const changes: { full_name?: string; identifier?: string } = {};
+    if (nextName !== user.full_name) changes.full_name = nextName;
+    if (user.role === "student" && nextIdentifier !== user.identifier) changes.identifier = nextIdentifier;
+    if (!Object.keys(changes).length) {
+      cancelEditing();
+      return;
+    }
     setWorking(true);
     setError("");
     setNotice("");
     try {
-      const updated = await updateManagedUser(user.id, { identifier: nextIdentifier });
+      const updated = await updateManagedUser(user.id, changes);
       setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
-      setDraftIdentifiers((current) => ({ ...current, [updated.id]: updated.identifier }));
-      setNotice(`NISN akun ${updated.full_name} berhasil diperbarui.`);
+      setNotice(`Perubahan akun ${updated.full_name} berhasil disimpan.`);
+      cancelEditing();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "NISN gagal diperbarui.");
+      setError(reason instanceof Error ? reason.message : "Perubahan akun gagal disimpan.");
     } finally {
       setWorking(false);
     }
@@ -171,13 +176,13 @@ export function AdminUsersPage() {
             {working ? "Menyimpan..." : "Buat Akun"}
           </button>
         </form>
-        <p className="table-foot">Admin dapat memperbaiki NISN akun siswa (10 digit). NISN yang sudah dipakai akun lain akan ditolak; identitas akun orang tua dan admin tidak dapat diubah.</p>
+        <p className="admin-users-help">NISN siswa harus terdiri dari 10 digit dan tidak boleh sama dengan akun lain. Password awal dapat diganti oleh pemilik akun setelah masuk.</p>
       </section>
 
       <section className="panel admin-users-list">
         <div className="panel__title">
           <h2>Daftar Pengguna</h2>
-          <small>{users.length} akun</small>
+          <small className="admin-users-count">{users.length} akun</small>
         </div>
         <div className="admin-users-toolbar">
           <label className="search">
@@ -196,37 +201,48 @@ export function AdminUsersPage() {
               <thead><tr><th>Nama</th><th>Identitas login</th><th>Jenis</th><th>Status</th><th>Aksi</th></tr></thead>
               <tbody>
                 {shown.map((user) => (
-                  <tr key={user.id}>
+                  <tr key={user.id} className={editingUserId === user.id ? "is-editing" : ""}>
                     <td>
-                      <input aria-label={`Nama ${user.identifier}`} value={draftNames[user.id] ?? user.full_name} onChange={(event) => setDraftNames((current) => ({ ...current, [user.id]: event.target.value }))} />
-                      {draftNames[user.id] !== user.full_name && <button className="secondary small" disabled={working || !(draftNames[user.id] || "").trim()} onClick={() => saveName(user)}>Simpan nama</button>}
+                      {editingUserId === user.id ? (
+                        <input aria-label={`Nama ${user.identifier}`} value={editName} maxLength={150} onChange={(event) => setEditName(event.target.value)} />
+                      ) : <span className="admin-users-name">{user.full_name}</span>}
                     </td>
                     <td>
-                      {user.role === "student" ? (
-                        <>
-                          <input
-                            aria-label={`NISN ${user.full_name}`}
-                            inputMode="numeric"
-                            maxLength={10}
-                            value={draftIdentifiers[user.id] ?? user.identifier}
-                            onChange={(event) => setDraftIdentifiers((current) => ({ ...current, [user.id]: event.target.value.replace(/\D/g, "").slice(0, 10) }))}
-                          />
-                          {draftIdentifiers[user.id] !== user.identifier && (
-                            <button className="secondary small" disabled={working || !/^\d{10}$/.test(draftIdentifiers[user.id] || "")} onClick={() => saveIdentifier(user)}>Simpan NISN</button>
-                          )}
-                        </>
-                      ) : user.identifier}
+                      {editingUserId === user.id && user.role === "student" ? (
+                        <input
+                          aria-label={`NISN ${user.full_name}`}
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={10}
+                          value={editIdentifier}
+                          onChange={(event) => setEditIdentifier(event.target.value.replace(/\\D/g, "").slice(0, 10))}
+                        />
+                      ) : <span className="admin-users-identifier">{user.identifier}</span>}
                     </td>
-                    <td>{roleLabel[user.role]}</td>
+                    <td><span className={`admin-users-role admin-users-role--${user.role}`}>{roleLabel[user.role]}</span></td>
                     <td><span className={`status ${user.is_active ? "status--green" : "status--red"}`}>{user.is_active ? "Aktif" : "Nonaktif"}</span></td>
-                    <td><button className={user.is_active ? "secondary small" : "primary small"} disabled={working} onClick={() => toggleActive(user)}>{user.is_active ? "Nonaktifkan" : "Aktifkan"}</button></td>
+                    <td>
+                      <div className="admin-users-actions">
+                        {editingUserId === user.id ? (
+                          <>
+                            <button type="button" className="primary small" disabled={working || !editName.trim() || (user.role === "student" && !/^\\d{10}$/.test(editIdentifier))} onClick={() => saveUserChanges(user)}>{working ? "Menyimpan..." : "Simpan"}</button>
+                            <button type="button" className="secondary small" disabled={working} onClick={cancelEditing}>Batal</button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" className="secondary small" disabled={working || editingUserId !== null} onClick={() => startEditing(user)}>Edit</button>
+                            <button type="button" className={user.is_active ? "danger small" : "primary small"} disabled={working || editingUserId !== null} onClick={() => toggleActive(user)}>{user.is_active ? "Nonaktifkan" : "Aktifkan"}</button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        {!loading && !shown.length && <p className="table-foot">Tidak ada akun yang cocok dengan pencarian.</p>}
+        {!loading && !shown.length && <p className="table-foot">Tidak ada akun yang cocok. Coba ubah kata kunci atau filter.</p>}
       </section>
 
       {confirmUser && (
