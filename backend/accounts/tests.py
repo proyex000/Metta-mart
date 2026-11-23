@@ -34,6 +34,31 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
 
+    def test_admin_created_student_and_parent_identifiers_are_validated(self):
+        self.client.force_authenticate(user=self.admin)
+        invalid_student = self.client.post("/api/admin/users/", {
+            "identifier": "12345", "full_name": "Invalid Student",
+            "role": "student", "password": "TestPassword!2026",
+        }, format="json")
+        self.assertEqual(invalid_student.status_code, 400)
+        self.assertIn("identifier", invalid_student.data)
+
+        invalid_parent = self.client.post("/api/admin/users/", {
+            "identifier": "not-an-email", "full_name": "Invalid Parent",
+            "role": "parent", "password": "TestPassword!2026",
+        }, format="json")
+        self.assertEqual(invalid_parent.status_code, 400)
+        self.assertIn("identifier", invalid_parent.data)
+
+        valid_parent = self.client.post("/api/admin/users/", {
+            "identifier": "Parent@Example.Test", "full_name": "Valid Parent",
+            "role": "parent", "password": "TestPassword!2026",
+        }, format="json")
+        self.assertEqual(valid_parent.status_code, 201, valid_parent.data)
+        parent = User.objects.get(pk=valid_parent.data["id"])
+        self.assertEqual(parent.identifier, "parent@example.test")
+        self.assertEqual(parent.email, "parent@example.test")
+
     def test_admin_can_rename_and_deactivate_student(self):
         self.client.force_authenticate(user=self.admin)
         response = self.client.patch(f"/api/admin/users/{self.student.pk}/", {
