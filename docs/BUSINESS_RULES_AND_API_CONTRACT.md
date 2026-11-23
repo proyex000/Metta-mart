@@ -9,9 +9,9 @@ This document records the confirmed operating decisions for the school cooperati
 | Payment methods | `cash_transfer_qris` | Support cash, bank transfer, and QRIS. Each method can be enabled/disabled by Admin. |
 | Pickup | `anytime` during operating hours, once ready | A customer may collect an order at any time the cooperative is open, but only after staff has marked it ready for pickup. No fixed pickup slot is required. |
 | Ordering | `anytime` | Customers may submit orders at any time, including outside cooperative operating hours, subject to product availability and stock rules. |
-| Fulfilment | Pickup only | All orders are collected at the school cooperative. No delivery or courier flow. |
+| Fulfilment | Pickup or GoSend | Buyers may collect at the cooperative or request GoSend when enabled. GoSend fee is an estimate from the configured school origin; staff books the courier manually. |
  
-## 2. Order and pickup rules
+## 2. Order fulfilment rules
 
 1. Ordering availability is independent of the cooperative's current opening hours. Do not block checkout solely because the cooperative is currently closed.
 2. Admin-configured operating hours govern when physical pickup is possible, not when an order can be submitted.
@@ -85,7 +85,7 @@ Suggested settings representation (adapt to existing project conventions):
 ```json
 {
   "ordering_policy": "always",
-  "fulfillment_method": "pickup",
+  "fulfillment_methods": ["pickup", "gosend"],
   "pickup_policy": "anytime_when_ready_during_hours",
   "operating_hours": [],
   "payment_methods": {
@@ -135,7 +135,7 @@ Suggested endpoint groups (names are illustrative; align with existing API):
 - `GET /api/products/` — active catalogue with filtering/pagination.
 - `POST /api/orders/` — authenticated Student/Parent checkout; accepts product IDs/quantities, beneficiary where authorized, payment method, and note; never accepts trusted prices/totals.
 - `GET /api/orders/` and `GET /api/orders/{id}/` — ownership-scoped buyer views.
-- `GET /api/admin/orders/` — Admin order queue.
+- `GET /api/admin/orders/` — Admin order queue.\n- `GET/PATCH /api/admin/users/<id>/` — Admin views and updates account name/active status; roles and login identifiers remain protected.
 - `POST /api/admin/orders/{id}/accept/`
 - `POST /api/admin/orders/{id}/ready/`
 - `POST /api/admin/orders/{id}/complete-pickup/`
@@ -176,7 +176,7 @@ The exact use of `pending_confirmation` versus `processing` should be consistent
 - Only Admin can verify/reject payment and confirm pickup handover.
 - Paid does not imply completed; ready does not imply paid.
 - Checkout remains blocked when all payment methods are disabled.
-- No delivery/courier/shipping fields or states are present.
+- Pickup and GoSend are distinct fulfillment methods; GoSend must never be represented as automatically booked or tracked.
 
 ## 9. Explicitly unresolved policy (do not invent)
 
