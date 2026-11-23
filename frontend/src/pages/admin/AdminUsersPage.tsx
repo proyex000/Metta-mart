@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createManagedUser, fetchManagedUsers, updateManagedUser, type ManagedUser } from "../../services/accounts";
-import "./AdminUsersPage.css";
+import "./ManagedUsersPage.css";
 
 const roleLabel: Record<ManagedUser["role"], string> = {
   admin: "Admin",
@@ -8,7 +8,7 @@ const roleLabel: Record<ManagedUser["role"], string> = {
   parent: "Orang tua",
 };
 
-export function AdminUsersPage() {
+export function ManagedUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [draftNames, setDraftNames] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
@@ -71,7 +71,7 @@ export function AdminUsersPage() {
     }
   };
 
-  const saveName = async (user: AdminUser) => {
+  const saveName = async (user: ManagedUser) => {
     const nextName = (draftNames[user.id] || "").trim();
     if (!nextName || nextName === user.full_name || working) return;
     setWorking(true);
@@ -88,7 +88,7 @@ export function AdminUsersPage() {
     }
   };
 
-  const toggleActive = async (user: AdminUser) => {
+  const toggleActive = async (user: ManagedUser) => {
     if (working) return;
     const action = user.is_active ? "menonaktifkan" : "mengaktifkan";
     if (!window.confirm(`Yakin ingin ${action} akun ${user.full_name}?`)) return;
