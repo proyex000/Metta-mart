@@ -1,7 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
-from .models import StoreSetting
+from .models import AuditLog, StoreSetting
 
 
 class StorefrontSettingsTests(TestCase):
@@ -63,6 +63,25 @@ class StorefrontSettingsTests(TestCase):
             "operating_hours": {"days": ["monday"], "open_time": "08:00", "close_time": "17:00"},
         }, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_multi_section_patch_is_atomic_when_later_section_is_invalid(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.patch("/api/storefront/settings/", {
+            "store_profile": {
+                "name": "Perubahan Tidak Boleh Tersimpan",
+                "description": "Uji transaksi",
+                "address": "",
+                "email": "",
+                "phone": "",
+            },
+            "payment_methods": {
+                "cash": "false",
+            },
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(StoreSetting.objects.filter(key="store_profile").exists())
+        self.assertFalse(StoreSetting.objects.filter(key="payment_methods").exists())
+        self.assertFalse(AuditLog.objects.filter(event="store.settings_updated").exists())
 
     def test_admin_announcement_respects_notification_preference(self):
         StoreSetting.objects.create(key="notification_preferences", value={

@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, permissions, status
 from accounts.permissions import IsAdminRole
@@ -30,12 +31,10 @@ class StoreSettingDetailView(generics.RetrieveUpdateAPIView):
         serializer.save(updated_by=self.request.user)
 
 
-from rest_framework import permissions, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Notification
-from rest_framework.views import APIView
 
 
 QRIS_IMAGE_PATTERN = re.compile(r"^data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$")
@@ -63,6 +62,7 @@ class StorefrontSettingsView(APIView):
             data.pop("payment_instructions", None)  # rekening/QRIS hanya tampil di detail pesanan setelah dikonfirmasi
         return Response(data)
 
+    @transaction.atomic
     def patch(self, request):
         if request.user.role != "admin":
             return Response({"detail": "Hanya admin yang dapat mengubah pengaturan koperasi."}, status=status.HTTP_403_FORBIDDEN)
