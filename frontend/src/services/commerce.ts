@@ -48,8 +48,8 @@ export type DeliveryQuote = { distance_km: string; fee: number };
 export function quoteDelivery(address: string) {
   return apiRequest<DeliveryQuote>("/delivery/quote/", { method: "POST", body: JSON.stringify({ address }) });
 }
-export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; student_id?: number } & Partial<DeliveryInput>) {
-  return apiRequest<CommerceOrder>("/orders/", { method: "POST", body: JSON.stringify(input) });
+export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; student_id?: number } & Partial<DeliveryInput>, requestId?: string) {
+  return apiRequest<CommerceOrder>("/orders/", { method: "POST", headers: requestId ? { "Idempotency-Key": requestId } : undefined, body: JSON.stringify(input) });
 }
 export function fetchOrders() {
   return apiRequest<CommerceOrder[]>("/orders/");
@@ -108,8 +108,8 @@ export function fetchAdminDashboard() {
   return apiRequest<AdminDashboardSummary>("/admin/dashboard/");
 }
 
-export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; cash_received?: number }) {
-  return apiRequest<CommerceOrder>("/admin/pos/checkout/", { method: "POST", body: JSON.stringify(input) });
+export function createPOSOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; cash_received?: number }, requestId?: string) {
+  return apiRequest<CommerceOrder>("/admin/pos/checkout/", { method: "POST", headers: requestId ? { "Idempotency-Key": requestId } : undefined, body: JSON.stringify(input) });
 }
 
 export type InventoryMovementRow = {
