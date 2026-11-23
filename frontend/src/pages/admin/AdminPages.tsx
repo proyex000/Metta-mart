@@ -782,6 +782,7 @@ export function Orders() {
             <p><span>Metode Pembayaran</span><b>{selected.payment_method === "bank_transfer" ? "Transfer Bank" : selected.payment_method === "qris" ? "QRIS" : "Tunai"}</b></p>
             <p><span>Status Pembayaran</span><b>{adminPaymentStatus(selected.payment_status)}</b></p>
             {selected.payment_method !== "cash" && selected.payment_sender_name && <><p><span>Nama Pengirim</span><b>{selected.payment_sender_name}</b></p><p><span>Bank / E-wallet Asal</span><b>{selected.payment_source}</b></p>{selected.payment_account_last4 && <p><span>4 Digit Akhir Rekening</span><b>•••• {selected.payment_account_last4}</b></p>}</>}
+            <div className="form-row"><a className="primary" href={`/admin/orders/${encodeURIComponent(selected.code)}/receipt`}>Cetak / Simpan Struk</a></div>
             <h3>Rincian Barang</h3>
             {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
             {selected.delivery_method === "gosend" && <p><span>Ongkir GoSend</span><b>{money(selected.delivery_fee)}</b></p>}
@@ -1062,7 +1063,7 @@ export function POS() {
             <dt>Total</dt><dd>{money(receipt.total)}</dd>
             {receipt.cash_received !== null && <><dt>Uang diterima</dt><dd>{money(receipt.cash_received)}</dd><dt>Kembalian</dt><dd>{money(receipt.change_due || 0)}</dd></>}
           </dl>
-          <button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button>
+          <div className="form-row"><a className="primary" href={`/admin/orders/${encodeURIComponent(receipt.code)}/receipt`}>Cetak / Simpan Struk</a><button className="secondary" onClick={() => setReceipt(null)}>Tutup Bukti Transaksi</button></div>
         </section>
       )}
     </>
