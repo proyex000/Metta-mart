@@ -1,4 +1,6 @@
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
@@ -48,6 +50,28 @@ class LogoutView(APIView):
         AuditLog.objects.create(actor=user, event="auth.logout", target_type="user", target_id=str(user.pk))
         logout(request)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class ChangePasswordView(APIView):
+    def post(self, request):
+        current_password = request.data.get("current_password", "")
+        new_password = request.data.get("new_password", "")
+        if not isinstance(current_password, str) or not isinstance(new_password, str) or not current_password or not new_password:
+            raise ValidationError({"detail": "Password lama dan password baru wajib diisi."})
+        user = request.user
+        if not user.check_password(current_password):
+            raise ValidationError({"current_password": "Password lama tidak sesuai."})
+        if current_password == new_password:
+            raise ValidationError({"new_password": "Password baru harus berbeda dari password lama."})
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as exc:
+            raise ValidationError({"new_password": list(exc.messages)})
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+        update_session_auth_hash(request, user)
+        AuditLog.objects.create(actor=user, event="user.password_changed", target_type="user", target_id=str(user.pk))
+        return Response({"detail": "Password berhasil diperbarui."})
+
 
 class MeView(APIView):
     def get(self, request):
