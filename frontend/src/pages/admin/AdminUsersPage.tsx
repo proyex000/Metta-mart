@@ -1,49 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../../services/api";
+import { createManagedUser, fetchManagedUsers, updateManagedUser, type ManagedUser } from "../../services/accounts";
 import "./AdminUsersPage.css";
 
-type AdminUser = {
-  id: number;
-  identifier: string;
-  full_name: string;
-  email: string;
-  role: "admin" | "student" | "parent";
-  is_active: boolean;
-  date_joined: string;
-};
-
-const roleLabel: Record<AdminUser["role"], string> = {
+const roleLabel: Record<ManagedUser["role"], string> = {
   admin: "Admin",
   student: "Siswa",
   parent: "Orang tua",
 };
 
-async function loadUsers() {
-  return apiRequest<AdminUser[]>("/admin/users/");
-}
-
-async function createUser(input: {
-  identifier: string;
-  full_name: string;
-  email: string;
-  role: AdminUser["role"];
-  password: string;
-}) {
-  return apiRequest<AdminUser>("/admin/users/", {
-    method: "POST",
-    body: JSON.stringify({ ...input, is_active: true }),
-  });
-}
-
-async function updateUser(user: AdminUser, changes: { full_name?: string; is_active?: boolean }) {
-  return apiRequest<AdminUser>(`/admin/users/${user.id}/`, {
-    method: "PATCH",
-    body: JSON.stringify(changes),
-  });
-}
-
 export function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [draftNames, setDraftNames] = useState<Record<number, string>>({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -54,11 +20,11 @@ export function AdminUsersPage() {
   const [identifier, setIdentifier] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<AdminUser["role"]>("student");
+  const [role, setRole] = useState<ManagedUser["role"]>("student");
   const [password, setPassword] = useState("");
 
   const refresh = async () => {
-    const rows = await loadUsers();
+    const rows = await fetchManagedUsers();
     setUsers(rows);
     setDraftNames(Object.fromEntries(rows.map((user) => [user.id, user.full_name])));
   };
@@ -84,7 +50,7 @@ export function AdminUsersPage() {
     setError("");
     setNotice("");
     try {
-      const created = await createUser({
+      const created = await createManagedUser({
         identifier: identifier.trim(),
         full_name: fullName.trim(),
         email: email.trim(),
@@ -112,7 +78,7 @@ export function AdminUsersPage() {
     setError("");
     setNotice("");
     try {
-      const updated = await updateUser(user, { full_name: nextName });
+      const updated = await updateManagedUser(user.id, { full_name: nextName });
       setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
       setNotice(`Nama akun ${updated.identifier} diperbarui.`);
     } catch (reason) {
@@ -130,7 +96,7 @@ export function AdminUsersPage() {
     setError("");
     setNotice("");
     try {
-      const updated = await updateUser(user, { is_active: !user.is_active });
+      const updated = await updateManagedUser(user.id, { is_active: !user.is_active });
       setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
       setNotice(`Akun ${updated.full_name} sekarang ${updated.is_active ? "aktif" : "nonaktif"}.`);
     } catch (reason) {
@@ -156,7 +122,7 @@ export function AdminUsersPage() {
         <div className="panel__title"><h2>Buat Akun</h2></div>
         <form onSubmit={submit} className="admin-users-form">
           <label>Jenis akun
-            <select value={role} onChange={(event) => setRole(event.target.value as AdminUser["role"])}>
+            <select value={role} onChange={(event) => setRole(event.target.value as ManagedUser["role"])}>
               <option value="student">Siswa</option>
               <option value="parent">Orang tua</option>
               <option value="admin">Admin koperasi</option>
