@@ -69,3 +69,36 @@ class AuthApiTests(TestCase):
         duplicate = self.client.post("/api/admin/parent-student-links/", payload, format="json")
         self.assertEqual(duplicate.status_code, 200)
         self.assertEqual(listed.data[0]["student_identifier"], self.student.identifier)
+
+
+    def test_authenticated_user_can_change_own_password(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/auth/change-password/", {
+            "current_password": "TestPassword!2026",
+            "new_password": "NewSecurePass!2026",
+        }, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.student.refresh_from_db()
+        self.admin.refresh_from_db()
+        self.assertTrue(self.student.check_password("NewSecurePass!2026"))
+        self.assertTrue(self.admin.check_password("TestPassword!2026"))
+
+    def test_password_change_rejects_wrong_current_password(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/auth/change-password/", {
+            "current_password": "wrong-password",
+            "new_password": "NewSecurePass!2026",
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.check_password("TestPassword!2026"))
+
+    def test_password_change_rejects_weak_password(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post("/api/auth/change-password/", {
+            "current_password": "TestPassword!2026",
+            "new_password": "123",
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.check_password("TestPassword!2026"))
