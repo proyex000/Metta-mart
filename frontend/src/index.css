@@ -4716,3 +4716,12 @@ a.primary {
   margin: 0 0 14px;
   text-decoration: none;
 }
+
+/* Tombol tujuan setelah pesanan dibuat (tautan, bukan button) */
+a.order-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  text-align: center;
+}
