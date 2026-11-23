@@ -68,7 +68,7 @@ Payment state is separate from fulfilment state:
 - pending_verification
 - paid
 - failed
-- refunded (only when a refund is actually recorded)
+- refunded (not supported in this release; cancellation only)
 
 Do not mark an order completed merely because it is paid. Pickup handover must be explicitly confirmed by Admin. Record who confirmed handover and when.
 
@@ -83,7 +83,7 @@ Do not mark an order completed merely because it is paid. Pickup handover must b
 - Use database transactions for order creation, item creation, payment record creation, and stock reservation.
 - Use unique, human-readable order numbers backed by a database uniqueness constraint.
 - Prevent duplicate submissions with idempotency protection or equivalent server-side safeguards.
-- Completed orders and financial records must not be silently deleted or rewritten. Use reversal/refund/adjustment records.
+- Completed orders and financial records must not be silently deleted or rewritten. This release does not process refunds; cancellation is allowed only before payment is submitted or marked paid.
 
 ## 6. Suggested data entities
 
@@ -134,7 +134,7 @@ Do not expose unnecessary student personal data on pickup screens. A short picku
 - Transaction count and average transaction value.
 - Sales by product and category.
 - Top-selling and low-selling products.
-- Gross sales, discounts, and recorded refunds.
+- Gross sales and discounts; refunds are not supported in this release.
 - Cost and gross-profit reports only when cost prices are maintained accurately.
 - Current stock and inventory movement history.
 - Online vs POS transaction breakdown.
@@ -200,8 +200,8 @@ Notifications must be scoped to the buyer and authorized linked parents. In-app 
 ### Payments and reports
 - [ ] Manual payment verification is attributable to an admin.
 - [ ] POS and online sales are included in reports and distinguishable.
-- [ ] Refunds/adjustments are auditable.
-- [ ] Reports distinguish sales, cash received, refunds, and gross profit.
+- [ ] Cancellation is blocked while payment is pending verification or already paid; refunds are not offered.
+- [ ] Reports distinguish sales, cash received, and gross profit; do not imply refund support.
 
 ### Release quality
 - [ ] Production build succeeds.
