@@ -22,6 +22,7 @@ import {
 } from "../pages/shop/ShopPages";
 import { ShopSettings } from "../pages/shop/ShopSettings";
 import { ReceiptPage } from "../pages/shared/ReceiptPage";
+import { AdminUsersPage } from "../pages/admin/AdminUsersPage";
 import type { Role } from "../types";
 
 function ProtectedRole({ role }: { role: Role }) {
@@ -86,6 +87,7 @@ export const router = createBrowserRouter([
       { path: "notifications", Component: Notifications },
       { path: "reports", Component: Reports },
       { path: "settings", Component: Settings },
+      { path: "users", Component: AdminUsersPage },
       { path: "*", Component: RoleNotFound },
     ],
   },
