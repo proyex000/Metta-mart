@@ -403,12 +403,14 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           Pesanan {createdCode} berhasil dibuat. Status awal: menunggu konfirmasi admin.{selectedPayment !== "cash" ? " Info pembayaran muncul di detail pesanan setelah pesanan dikonfirmasi." : ""} Pembayaran belum dianggap lunas.
         </p>
       )}
-      {sent && createdCode && <Link className="secondary order-created-link" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
       {submitError && <p className="payment-unavailable" role="alert">{submitError}</p>}
-      <button className="primary wide order-submit" disabled={!subtotal || sent || submitting || !methods.length || !deliveryReady} onClick={submit}>
-        {submitting ? "Mengirim pesanan..." : sent ? "Pesanan berhasil dibuat" : "Kirim Pesanan"}
-      </button>
-      {sent && <Link className="primary wide" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>}
+      {sent && createdCode ? (
+        <Link className="primary wide order-submit" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>
+      ) : (
+        <button className="primary wide order-submit" disabled={!subtotal || submitting || !methods.length || !deliveryReady} onClick={submit}>
+          {submitting ? "Mengirim pesanan..." : "Kirim Pesanan"}
+        </button>
+      )}
       {isGosend && !deliveryReady && !!subtotal && <p className="payment-help" role="status">Lengkapi nama, nomor HP, alamat, lalu tekan “Hitung Ongkir” sebelum mengirim pesanan.</p>}
       <p className="payment-disclaimer">Pemesanan ambil di koperasi dapat dilakukan kapan saja; pengambilan hanya saat koperasi buka dan pesanan berstatus siap diambil. Pesanan GoSend hanya dapat dibuat saat koperasi buka.</p>
     </>
