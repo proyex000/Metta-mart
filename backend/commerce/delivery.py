@@ -22,6 +22,8 @@ from core.models import StoreSetting
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "MettaMart/1.0 (koperasi sekolah)"
 ROAD_FACTOR = 1.3
+# Koordinat tetap koperasi sekolah yang telah dikonfirmasi; fallback saat geocoding alamat asal gagal.
+SCHOOL_ORIGIN_COORDINATES = (0.4985725, 101.4245111)
 EARTH_RADIUS_KM = 6371.0088
 DAY_CODES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DAY_LABELS = {"mon": "Senin", "tue": "Selasa", "wed": "Rabu", "thu": "Kamis", "fri": "Jumat", "sat": "Sabtu", "sun": "Minggu"}
@@ -152,9 +154,8 @@ def quote_delivery(address):
         or ((profile.value or {}).get("address", "").strip() if profile else "")
     )
 
-    # Koordinat tetap sekolah/koperasi sebagai fallback karena alamat profil
-    # yang panjang kadang tidak ditemukan oleh Nominatim.
-    school_origin = (0.4985725, 101.4245111)
+    # Gunakan pin tetap koperasi yang telah dikonfirmasi bila alamat asal
+    # tidak dapat ditemukan oleh Nominatim.
     origin = None
     if origin_address:
         try:
@@ -163,7 +164,7 @@ def quote_delivery(address):
             # Estimasi tetap dapat berjalan dengan pin sekolah yang tersimpan.
             origin = None
     if not origin:
-        origin = school_origin
+        origin = SCHOOL_ORIGIN_COORDINATES
     destination = geocode(address)
     if not destination:
         raise ValidationError({"delivery_address": "Alamat tidak ditemukan di peta. Lengkapi dengan kelurahan/kecamatan dan kota."})
