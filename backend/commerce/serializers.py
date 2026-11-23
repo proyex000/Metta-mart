@@ -10,7 +10,7 @@ from .models import InventoryMovement, Order, OrderItem, Product
 
 class ProductSerializer(serializers.ModelSerializer):
     stock_note = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=80)
-    image = serializers.ImageField(required=False, allow_null=True, write_only=True)
+    image = serializers.ImageField(required=False, write_only=True)
     remove_image = serializers.BooleanField(write_only=True, required=False, default=False)
     image_url = serializers.SerializerMethodField(read_only=True)
 
