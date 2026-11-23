@@ -25,3 +25,53 @@
   .admin-users-toolbar select { width: 100%; }
   .admin-users-list table { min-width: 650px; }
 }
+
+
+.admin-users-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 55%);
+  backdrop-filter: blur(3px);
+}
+.admin-users-confirm-modal {
+  width: min(100%, 420px);
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+  text-align: center;
+  animation: admin-users-modal-in 160ms ease-out;
+}
+.admin-users-confirm-modal h2 { margin: 14px 0 8px; font-size: 20px; }
+.admin-users-confirm-modal p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.admin-users-confirm-modal p strong { color: var(--ink); }
+.admin-users-confirm-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 24px;
+  font-weight: 700;
+}
+.admin-users-confirm-icon.is-warning { background: #fff1e7; color: #c65b16; }
+.admin-users-confirm-icon.is-success { background: #e8f7ee; color: #18834b; }
+.admin-users-confirm-actions { display: flex; justify-content: center; gap: 10px; margin-top: 24px; }
+.admin-users-confirm-actions button { min-height: 40px; padding: 9px 16px; }
+.admin-users-confirm-actions .danger { border: 0; border-radius: 7px; background: #c94343; color: #fff; font-weight: 600; cursor: pointer; }
+.admin-users-confirm-actions .danger:hover:not(:disabled) { background: #ad3434; }
+.admin-users-confirm-actions button:disabled { opacity: .65; cursor: wait; }
+@keyframes admin-users-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-users-confirm-modal { animation: none; }
+}
