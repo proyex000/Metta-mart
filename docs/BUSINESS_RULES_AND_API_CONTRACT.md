@@ -67,7 +67,7 @@ Validation:
 - Explain the selected method's actual next step: cash at cooperative; transfer to official account; QRIS using official QRIS.
 - Show payment state and order state separately.
 - Show pickup instructions and cooperative operating hours.
-- Show pickup availability only when order state is `ready_for_pickup` and current time is within configured opening hours; otherwise explain whether the order is not ready or the cooperative is closed.
+- Show the order state and cooperative operating hours clearly; distinguish pickup readiness from GoSend courier handover.
 - For GoSend, collect recipient, phone, and address; show the server-calculated fee as an estimate, not an official GoSend quote.
 - Explain that staff books GoSend manually and that there is no live tracking.
 - Show pickup availability only when the order is ready and the cooperative is open.
