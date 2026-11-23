@@ -62,6 +62,16 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password")
         return User.objects.create_user(password=password, **validated_data)
 
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("full_name", "is_active")
+
+    def validate_full_name(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Nama lengkap wajib diisi.")
+        return value.strip()
+
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
