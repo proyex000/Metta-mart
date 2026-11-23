@@ -176,6 +176,7 @@ Notifications must be scoped to the buyer and authorized linked parents. In-app 
 - [ ] Student cannot access admin endpoints by changing URLs or API requests.
 - [ ] Parent can access only their own profile, orders, and payments.
 - [ ] Student can see only own orders and payments.
+- [ ] Every authenticated user can change only their own password after entering the current password; admins cannot reset another user's password.
 
 ### Catalogue and stock
 - [ ] Admin can create, edit, deactivate, and categorize products.
