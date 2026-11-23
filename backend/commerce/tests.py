@@ -416,6 +416,19 @@ class DeliveryTests(TestCase):
         with mock.patch("commerce.delivery.geocode", side_effect=self.fake_points(overrides.pop("destination", (-6.20, 106.82)))):
             return self.client.post("/api/orders/", self.payload(**overrides), format="json", HTTP_IDEMPOTENCY_KEY=f"delivery-order-{Order.objects.count() + 1:08d}")
 
+    def test_quote_uses_confirmed_school_pin_when_origin_geocoding_fails(self):
+        from unittest import mock
+        self.client.force_authenticate(user=self.student)
+        with mock.patch("commerce.delivery.geocode", side_effect=[None, (0.5085725, 101.4245111)]):
+            response = self.client.post(
+                "/api/delivery/quote/",
+                {"address": "Jl. Tujuan No. 1, Pekanbaru"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["distance_km"], "1.4")
+        self.assertEqual(response.data["fee"], 10000)
+
     def test_gosend_order_stores_address_and_adds_server_calculated_fee(self):
         response = self.post_order()
         self.assertEqual(response.status_code, 201, response.data)
