@@ -92,7 +92,7 @@ export function AdminUsersPage() {
     const nextName = editName.trim();
     const nextIdentifier = editIdentifier.trim();
     if (!nextName || working) return;
-    if (user.role === "student" && !/^\\d{10}$/.test(nextIdentifier)) return;
+    if (user.role === "student" && !/^\d{10}$/.test(nextIdentifier)) return;
     const changes: { full_name?: string; identifier?: string } = {};
     if (nextName !== user.full_name) changes.full_name = nextName;
     if (user.role === "student" && nextIdentifier !== user.identifier) changes.identifier = nextIdentifier;
@@ -215,7 +215,7 @@ export function AdminUsersPage() {
                           autoComplete="off"
                           maxLength={10}
                           value={editIdentifier}
-                          onChange={(event) => setEditIdentifier(event.target.value.replace(/\\D/g, "").slice(0, 10))}
+                          onChange={(event) => setEditIdentifier(event.target.value.replace(/\D/g, "").slice(0, 10))}
                         />
                       ) : <span className="admin-users-identifier">{user.identifier}</span>}
                     </td>
@@ -225,7 +225,7 @@ export function AdminUsersPage() {
                       <div className="admin-users-actions">
                         {editingUserId === user.id ? (
                           <>
-                            <button type="button" className="primary small" disabled={working || !editName.trim() || (user.role === "student" && !/^\\d{10}$/.test(editIdentifier))} onClick={() => saveUserChanges(user)}>{working ? "Menyimpan..." : "Simpan"}</button>
+                            <button type="button" className="primary small" disabled={working || !editName.trim() || (user.role === "student" && !/^\d{10}$/.test(editIdentifier))} onClick={() => saveUserChanges(user)}>{working ? "Menyimpan..." : "Simpan"}</button>
                             <button type="button" className="secondary small" disabled={working} onClick={cancelEditing}>Batal</button>
                           </>
                         ) : (
