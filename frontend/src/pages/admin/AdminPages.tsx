@@ -611,35 +611,53 @@ export function Stock() {
                 placeholder="Contoh: Kemeja Seragam"
               />
             </label>
-            <div className="product-image-field">
-              <span className="product-image-field__title">Foto produk <small>Opsional · JPG, PNG, atau WEBP · Maks. 5 MB</small></span>
-              <div className="product-image-field__preview">
-                {imagePreview || (editing !== "new" && !removeImage ? editing.image_url : null)
-                  ? <img src={imagePreview || (editing !== "new" && !removeImage ? editing.image_url || "" : "")} alt="Pratinjau produk" />
-                  : <ProductArt type={editing === "new" ? "book" : editing.art} />}
+            <section className="product-image-field" aria-labelledby="product-image-heading">
+              <div className="product-image-field__heading">
+                <div>
+                  <h3 id="product-image-heading">Foto produk <span>Opsional</span></h3>
+                  <p>Tambahkan foto agar produk lebih mudah dikenali pelanggan.</p>
+                </div>
+                <span className="product-image-field__format">JPG · PNG · WEBP</span>
               </div>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  if (file && file.size > 5 * 1024 * 1024) {
-                    setError("Ukuran gambar maksimal 5 MB.");
-                    event.target.value = "";
-                    return;
-                  }
-                  setImageFile(file);
-                  setRemoveImage(false);
-                  setError("");
-                }}
-              />
-              {editing !== "new" && editing.image_url && !imageFile && (
-                <label className="product-image-field__remove">
-                  <input type="checkbox" checked={removeImage} onChange={(event) => setRemoveImage(event.target.checked)} />
-                  Hapus foto produk
-                </label>
-              )}
-            </div>
+              <div className="product-image-field__body">
+                <div className="product-image-field__preview">
+                  {imagePreview || (editing !== "new" && !removeImage ? editing.image_url : null)
+                    ? <img src={imagePreview || (editing !== "new" && !removeImage ? editing.image_url || "" : "")} alt="Pratinjau foto produk" />
+                    : <div className="product-image-field__empty"><span aria-hidden="true">▧</span><b>Belum ada foto</b><small>Pratinjau foto produk</small></div>}
+                </div>
+                <div className="product-image-field__controls">
+                  <label className="product-image-field__choose" htmlFor="product-image-upload">
+                    <span aria-hidden="true">＋</span>
+                    {imagePreview || (editing !== "new" && editing.image_url && !removeImage) ? "Ganti foto" : "Pilih foto"}
+                  </label>
+                  <input
+                    id="product-image-upload"
+                    className="product-image-field__input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (file && file.size > 5 * 1024 * 1024) {
+                        setError("Ukuran gambar maksimal 5 MB.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setImageFile(file);
+                      setRemoveImage(false);
+                      setError("");
+                    }}
+                  />
+                  <small className="product-image-field__hint">Maksimal 5 MB. Gunakan foto yang jelas dan tidak buram.</small>
+                  {imageFile && <span className="product-image-field__filename" title={imageFile.name}>{imageFile.name}</span>}
+                  {editing !== "new" && editing.image_url && !imageFile && (
+                    <label className="product-image-field__remove">
+                      <input type="checkbox" checked={removeImage} onChange={(event) => setRemoveImage(event.target.checked)} />
+                      Hapus foto produk
+                    </label>
+                  )}
+                </div>
+              </div>
+            </section>
             <div className="form-row">
               <label>
                 Kategori
