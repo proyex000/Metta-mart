@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -283,7 +284,7 @@ class CommerceApiTests(TestCase):
                 self.assertEqual(removed.status_code, 200, removed.data)
                 product.refresh_from_db()
                 self.assertFalse(product.image)
-                self.assertFalse(__import__("os").path.exists(image_path))
+                self.assertFalse(os.path.exists(image_path))
                 self.assertIsNone(removed.data["image_url"])
 
     def test_product_image_rejects_files_over_five_megabytes(self):
