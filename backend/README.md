@@ -25,6 +25,7 @@ Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOn
 - `POST /api/auth/register/` — registrasi mandiri hanya untuk role student dan parent.
 - `GET/POST /api/admin/users/` — daftar/buat akun, khusus admin.
 - `GET/PATCH /api/admin/users/<id>/` — lihat/perbarui nama dan status aktif akun, khusus admin.
+- `GET/PATCH /api/admin/users/<id>/` — lihat/perbarui nama dan status aktif akun, khusus admin.
 - `GET /api/admin/audit-logs/` — audit log, khusus admin.
 - `GET/POST /api/admin/settings/` — baca/buat pengaturan global, khusus admin.
 - `GET/PATCH /api/admin/settings/<key>/` — baca/perbarui satu pengaturan, khusus admin.
