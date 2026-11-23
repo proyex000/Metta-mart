@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
+import { ChangePasswordForm } from "../../components/ChangePasswordForm";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
@@ -1336,10 +1337,11 @@ export function Settings() {
           </>}
           {tab === "account" && <>
             <h2>Akun Admin</h2>
-            <p>Ubah nama dan email tampilan admin yang digunakan pada panel ini.</p>
+            <p>Ubah informasi profil admin dan kelola password akun sendiri.</p>
             {field("Nama Admin", "adminName")}
             {field("Email Admin", "adminEmail", "email")}
-            <p className="settings-help">Kata sandi demo masih dikelola oleh sistem autentikasi prototipe. Jangan masukkan kata sandi baru di sini.</p>
+            <h3>Keamanan akun</h3>
+            <ChangePasswordForm />
           </>}
           {tab === "payment" && <>
             <h2>Metode Pembayaran</h2>

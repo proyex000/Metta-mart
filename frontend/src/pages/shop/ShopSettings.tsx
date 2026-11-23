@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Icon, PageTitle } from "../../components/ui";
+import { ChangePasswordForm } from "../../components/ChangePasswordForm";
 import { useAuth } from "../../hooks/useAuth";
 import type { Role } from "../../types";
 import "./ShopSettings.css";
@@ -149,9 +150,9 @@ export function ShopSettings({ role }: { role: ShopRole }) {
             </div>
           </div>
           <div className="shop-settings-security-row">
-            <div><strong>Kata sandi</strong><span>Jika perlu mengganti kata sandi, hubungi administrator sekolah.</span></div>
-            <span className="shop-settings-managed">Dikelola admin</span>
+            <div><strong>Kata sandi</strong><span>Ganti password sendiri. Admin tidak dapat melihat atau mengubah password Anda.</span></div>
           </div>
+          <ChangePasswordForm />
           <div className="shop-settings-security-row">
             <div><strong>Status sesi</strong><span>Akun sedang digunakan pada sesi ini.</span></div>
             <span className="shop-settings-active">Aktif</span>

@@ -6,10 +6,11 @@ This document describes the school-cooperative scope implemented on the developm
 
 - Admin is the cooperative staff member and the only in-person POS operator; there is no separate cashier role.
 - Student and parent accounts can browse the catalogue, place orders, view their own orders, and receive notifications.
+- Authenticated users can change their own password after confirming the current password; password-change attempts are rate-limited and recorded in the audit log.
 - Online ordering is available at any time.
 - Physical pickup and POS transactions are restricted to configured cooperative operating hours.
 - Pickup can be confirmed only after an order is marked ready.
-- Pickup only: no courier, shipping address, delivery fee, or GoSend workflow.
+- Buyers can choose pickup or GoSend when delivery is enabled. GoSend fee/address are validated and calculated by the backend; staff books the courier manually.
 
 ## Implemented modules
 
@@ -30,6 +31,12 @@ This document describes the school-cooperative scope implemented on the developm
 - For transfer/QRIS, customers submit sender account name, bank/e-wallet source, optional last four account digits, and an optional note. This is identification information, not proof of payment.
 - Admin must verify that funds actually arrived before marking the payment paid.
 - Payment receipt image upload and automated bank/QRIS settlement are out of scope.
+
+### Delivery (GoSend)
+- Buyer provides recipient, phone, and destination address.
+- Backend estimates delivery distance and fee using cooperative settings; it is not an official GoSend quote.
+- GoSend orders require transfer/QRIS and must be paid before handover to the courier.
+- Staff manually books GoSend outside Metta-mart; no automatic booking or live tracking integration.
 
 ### Admin POS
 - Admin-only POS checkout with current server prices and atomic stock checks.
@@ -57,7 +64,7 @@ This document describes the school-cooperative scope implemented on the developm
 - Student class/grade fields.
 - Permanent logo upload.
 - Price-change history.
-- Courier, shipping, delivery fee, and GoSend.
+- Automated courier booking, courier payment, and live GoSend tracking integration.
 - Automated order expiry or uncollected-order cancellation until the school defines a policy.
 - Dynamic QRIS, automatic transfer reconciliation, and automatic settlement without a payment provider.
 
@@ -66,7 +73,7 @@ This document describes the school-cooperative scope implemented on the developm
 - Confirm production environment variables, database connectivity, and apply pending migrations on the deployment database.
 - Configure actual cooperative opening days/hours and official bank/QRIS payment instructions.
 - Create admin, student, and parent accounts according to school policy.
-- Test online ordering, transfer/QRIS manual verification, ready-for-pickup handover, POS sale, cancellation, and stock reconciliation in the deployed environment.
+- Test online ordering, transfer/QRIS manual verification, pickup and GoSend handover, POS sale, cancellation, and stock reconciliation in the deployed environment.
 - Configure database backups and basic operational monitoring.
 
 CI checks do not by themselves prove that the deployed production environment is correctly configured.

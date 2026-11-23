@@ -4986,3 +4986,48 @@ a.order-submit {
   .receipt-screen { min-height: 0; padding: 0; background: #fff; }
   .receipt-paper { margin: 0; box-shadow: none; }
 }
+
+
+/* ---------- Self-service account password ---------- */
+.password-change {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.password-change__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.password-change__fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted, #64748b);
+  font-size: 12px;
+  font-weight: 600;
+}
+.password-change__fields input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--line, #dce5eb);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+  color: var(--ink, #263746);
+}
+.password-change__hint {
+  margin: 0;
+  color: var(--muted, #718096);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.password-change__success {
+  margin: 0;
+  color: #16734b;
+  font-size: 13px;
+}
+@media (max-width: 700px) {
+  .password-change__fields { grid-template-columns: minmax(0, 1fr); }
+}

@@ -4,7 +4,7 @@
 
 Metta-Mart is a school-cooperative commerce and operations system, not a general marketplace. There is no separate cashier role: cooperative staff use the Admin account for both administration and point-of-sale (POS) operations.
 
-**Fulfilment policy: PICKUP ONLY.** No GoSend, courier, shipping address, delivery fee, delivery tracking, or delivery-provider integration is in scope. Orders are collected at the school cooperative.
+**Fulfilment policy: PICKUP or GoSend.** Buyers may collect orders at the school cooperative or request GoSend delivery. GoSend distance and fee are estimated by the system from cooperative settings; staff still books the courier manually. Automated GoSend booking and live courier tracking are not included.
 
 ## 2. Roles and access
 
@@ -28,15 +28,14 @@ Metta-Mart is a school-cooperative commerce and operations system, not a general
 
 ### Parent
 - Browse and search available products.
-- Place pickup orders for self or a linked child, where enabled.
-- View only children explicitly linked to the parent account.
-- View authorized order and payment history for linked children.
+- Place independent orders for their own account; parents do not purchase on behalf of students.
+- View and manage only their own profile, orders, and payments.
 - Receive notifications for relevant orders.
 
 ### Authorization rules
 - Deny access by default; enforce role and record ownership on the server/API, not only in the UI.
 - Students can only read their own profile, orders, and payments.
-- Parents can only read their own profile and records belonging to explicitly linked children.
+- Parents can only read their own profile, orders, and payments.
 - Admin-only operations must be protected server-side.
 - Never trust a client-supplied user ID, price, discount, total, role, payment state, or stock quantity.
 
@@ -54,7 +53,7 @@ Metta-Mart is a school-cooperative commerce and operations system, not a general
 10. Notifications and in-app order updates.
 11. Reports, exports, audit logs, and cooperative settings.
 
-## 4. Pickup-only order lifecycle
+## 4. Order fulfilment lifecycle (pickup and GoSend)
 
 Suggested order states:
 - pending_payment: order created and awaiting payment, if prepayment is required.
@@ -69,7 +68,7 @@ Payment state is separate from fulfilment state:
 - pending_verification
 - paid
 - failed
-- refunded (only when a refund is actually recorded)
+- refunded (not supported in this release; cancellation only)
 
 Do not mark an order completed merely because it is paid. Pickup handover must be explicitly confirmed by Admin. Record who confirmed handover and when.
 
@@ -84,7 +83,7 @@ Do not mark an order completed merely because it is paid. Pickup handover must b
 - Use database transactions for order creation, item creation, payment record creation, and stock reservation.
 - Use unique, human-readable order numbers backed by a database uniqueness constraint.
 - Prevent duplicate submissions with idempotency protection or equivalent server-side safeguards.
-- Completed orders and financial records must not be silently deleted or rewritten. Use reversal/refund/adjustment records.
+- Completed orders and financial records must not be silently deleted or rewritten. This release does not process refunds; cancellation is allowed only before payment is submitted or marked paid.
 
 ## 6. Suggested data entities
 
@@ -119,14 +118,13 @@ Potential product fields: SKU, name, description, category, image, selling price
 6. Stock movement and audit records are created.
 7. POS transactions appear in the same reports as online orders, with source clearly identified.
 
-## 8. Pickup workflow
+## 8. Pickup and GoSend workflow
 
-1. Buyer selects pickup at checkout; no delivery fields are collected.
-2. Admin accepts and prepares the order.
-3. Admin marks the order ready for pickup.
-4. Buyer receives an in-app notification/status update.
-5. Staff verifies the order number or pickup code and hands over the items.
-6. Admin confirms handover; the order becomes completed and records the staff member and timestamp.
+1. Buyer selects pickup or GoSend at checkout. GoSend requires a recipient name, valid phone number, and delivery address.
+2. The server calculates the configured delivery estimate; the estimate is not an official GoSend quote.
+3. Admin accepts and prepares the order, then marks it ready.
+4. For pickup, staff verifies the order number and hands over the items. For GoSend, staff books the courier manually outside Metta-mart.
+5. Admin confirms handover for pickup or dispatch/handover to the GoSend courier. The order becomes completed and records the staff member and timestamp.
 
 Do not expose unnecessary student personal data on pickup screens. A short pickup code/order number is preferable to displaying sensitive profile details.
 
@@ -136,7 +134,7 @@ Do not expose unnecessary student personal data on pickup screens. A short picku
 - Transaction count and average transaction value.
 - Sales by product and category.
 - Top-selling and low-selling products.
-- Gross sales, discounts, and recorded refunds.
+- Gross sales and discounts; refunds are not supported in this release.
 - Cost and gross-profit reports only when cost prices are maintained accurately.
 - Current stock and inventory movement history.
 - Online vs POS transaction breakdown.
@@ -176,8 +174,9 @@ Notifications must be scoped to the buyer and authorized linked parents. In-app 
 ### Roles
 - [ ] Admin can access management and POS functions.
 - [ ] Student cannot access admin endpoints by changing URLs or API requests.
-- [ ] Parent can see only explicitly linked children and their authorized records.
+- [ ] Parent can access only their own profile, orders, and payments.
 - [ ] Student can see only own orders and payments.
+- [ ] Every authenticated user can change only their own password after entering the current password; admins cannot reset another user's password.
 
 ### Catalogue and stock
 - [ ] Admin can create, edit, deactivate, and categorize products.
@@ -193,16 +192,17 @@ Notifications must be scoped to the buyer and authorized linked parents. In-app 
 - [ ] Cancellation releases reserved stock exactly once.
 
 ### Pickup
-- [ ] Checkout offers pickup only.
-- [ ] No delivery address, courier, shipping fee, GoSend, or delivery tracking feature remains.
-- [ ] Admin can mark ready for pickup and confirm handover.
+- [ ] Checkout offers pickup and GoSend when enabled.
+- [ ] GoSend address, recipient, phone, and server-calculated estimated fee are validated.
+- [ ] Staff manually books GoSend; Metta-mart does not claim automatic booking or live tracking.
+- [ ] Admin can mark orders ready and confirm pickup handover or courier handoff.
 - [ ] Completion records staff identity and timestamp.
 
 ### Payments and reports
 - [ ] Manual payment verification is attributable to an admin.
 - [ ] POS and online sales are included in reports and distinguishable.
-- [ ] Refunds/adjustments are auditable.
-- [ ] Reports distinguish sales, cash received, refunds, and gross profit.
+- [ ] Cancellation is blocked while payment is pending verification or already paid; refunds are not offered.
+- [ ] Reports distinguish sales, cash received, and gross profit; do not imply refund support.
 
 ### Release quality
 - [ ] Production build succeeds.
@@ -214,8 +214,7 @@ Notifications must be scoped to the buyer and authorized linked parents. In-app 
 ## 13. Explicit scope exclusions
 
 Out of scope for this school-cooperative release:
-- GoSend and all courier/shipping integrations.
-- Delivery to home/classroom and delivery fee calculation.
+- Automated GoSend booking, payment, and live courier tracking integrations.
 - Separate cashier role.
 - Multi-vendor marketplace features.
 - Complex accounting/ERP, payroll, procurement approval chains, and enterprise multi-branch controls.

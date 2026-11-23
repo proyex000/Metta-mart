@@ -123,4 +123,11 @@ export async function updateProfileApi(input: { name: string; email: string }): 
 }
 
 
+export async function changePasswordApi(input: { currentPassword: string; newPassword: string }): Promise<void> {
+  await request<{ detail: string }>("/auth/change-password/", {
+    method: "POST",
+    body: JSON.stringify({ current_password: input.currentPassword, new_password: input.newPassword }),
+  });
+}
+
 export const apiRequest = request;
