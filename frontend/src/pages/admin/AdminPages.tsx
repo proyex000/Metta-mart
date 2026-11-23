@@ -478,6 +478,8 @@ export function Stock() {
     try {
       if (editing === "new") await productService.create(input);
       else await productService.update(editing.id, input);
+      setImageFile(null);
+      setRemoveImage(false);
       setEditing(null);
       await reloadMovements();
     } catch (reason) {
