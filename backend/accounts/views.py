@@ -52,6 +52,9 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class ChangePasswordView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_change"
+
     def post(self, request):
         current_password = request.data.get("current_password", "")
         new_password = request.data.get("new_password", "")
