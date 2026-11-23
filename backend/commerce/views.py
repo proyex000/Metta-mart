@@ -1,3 +1,5 @@
+import hashlib
+import json
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.db.models import F, Sum, Count
@@ -38,7 +40,10 @@ NET_REVENUE = F("total") - F("delivery_fee")  # ongkir diteruskan ke kurir, buka
 
 
 def cancel_order(order, actor, now):
-    """Batalkan pesanan dan kembalikan stok (dipakai admin dan pelanggan)."""
+    """Batalkan pesanan dan kembalikan stok tepat satu kali; pemanggil mengunci baris order."""
+    changed = Order.objects.filter(pk=order.pk, status__in=(Order.Status.PENDING, Order.Status.ACCEPTED, Order.Status.READY)).update(status=Order.Status.CANCELLED, cancelled_at=now)
+    if not changed:
+        raise ValidationError({"status": "Pesanan sudah berubah atau sudah dibatalkan; stok tidak dikembalikan ulang."})
     for item in order.items.all():
         Product.objects.filter(pk=item.product_id).update(stock=F("stock") + item.quantity)
         InventoryMovement.objects.create(product_id=item.product_id, actor=actor, quantity_delta=item.quantity, reason="order_cancelled", reference=order.code)
@@ -118,6 +123,8 @@ class OrderListCreateView(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
+        if getattr(serializer, "idempotent_replay", False):
+            return Response(OrderReadSerializer(order).data, status=status.HTTP_200_OK)
         AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
         via = " (diantar via GoSend)" if order.delivery_method == Order.DeliveryMethod.GOSEND else ""
         notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}{via}.", target_code=order.code)
