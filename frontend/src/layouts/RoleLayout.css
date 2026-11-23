@@ -11,18 +11,3 @@
   .role-account-link { justify-content: flex-start; }
   .role-account-link div { display: block; }
 }
-
-/* Keep the MettaMart mark visible when the desktop sidebar collapses. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .role-sidebar .brand {
-    width: 100%;
-    min-height: 46px;
-    margin: 0 auto 18px;
-    justify-content: center;
-  }
-  .role-sidebar .brand__image {
-    width: 54px;
-    max-height: 46px;
-    object-fit: contain;
-  }
-}
