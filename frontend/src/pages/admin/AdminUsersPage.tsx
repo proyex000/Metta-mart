@@ -22,6 +22,7 @@ export function AdminUsersPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<ManagedUser["role"]>("student");
   const [password, setPassword] = useState("");
+  const [confirmUser, setConfirmUser] = useState<ManagedUser | null>(null);
 
   const refresh = async () => {
     const rows = await fetchManagedUsers();
@@ -88,10 +89,14 @@ export function AdminUsersPage() {
     }
   };
 
-  const toggleActive = async (user: ManagedUser) => {
+  const toggleActive = (user: ManagedUser) => {
     if (working) return;
-    const action = user.is_active ? "menonaktifkan" : "mengaktifkan";
-    if (!window.confirm(`Yakin ingin ${action} akun ${user.full_name}?`)) return;
+    setConfirmUser(user);
+  };
+
+  const confirmToggleActive = async () => {
+    if (!confirmUser || working) return;
+    const user = confirmUser;
     setWorking(true);
     setError("");
     setNotice("");
@@ -99,6 +104,7 @@ export function AdminUsersPage() {
       const updated = await updateManagedUser(user.id, { is_active: !user.is_active });
       setUsers((current) => current.map((row) => row.id === updated.id ? updated : row));
       setNotice(`Akun ${updated.full_name} sekarang ${updated.is_active ? "aktif" : "nonaktif"}.`);
+      setConfirmUser(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Status akun gagal diperbarui.");
     } finally {
@@ -186,6 +192,40 @@ export function AdminUsersPage() {
         )}
         {!loading && !shown.length && <p className="table-foot">Tidak ada akun yang cocok dengan pencarian.</p>}
       </section>
+
+      {confirmUser && (
+        <div className="admin-users-modal-backdrop" onClick={() => !working && setConfirmUser(null)}>
+          <section
+            className="admin-users-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-users-confirm-title"
+            aria-describedby="admin-users-confirm-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={`admin-users-confirm-icon ${confirmUser.is_active ? "is-warning" : "is-success"}`} aria-hidden="true">
+              {confirmUser.is_active ? "!" : "✓"}
+            </div>
+            <h2 id="admin-users-confirm-title">{confirmUser.is_active ? "Nonaktifkan akun?" : "Aktifkan akun?"}</h2>
+            <p id="admin-users-confirm-description">
+              {confirmUser.is_active
+                ? <>Akun <strong>{confirmUser.full_name}</strong> akan dinonaktifkan dan tidak dapat digunakan untuk masuk sampai diaktifkan kembali.</>
+                : <>Akun <strong>{confirmUser.full_name}</strong> akan diaktifkan kembali dan dapat digunakan untuk masuk.</>}
+            </p>
+            <div className="admin-users-confirm-actions">
+              <button type="button" className="secondary" disabled={working} onClick={() => setConfirmUser(null)}>Batal</button>
+              <button
+                type="button"
+                className={confirmUser.is_active ? "danger" : "primary"}
+                disabled={working}
+                onClick={confirmToggleActive}
+              >
+                {working ? "Memproses..." : confirmUser.is_active ? "Ya, Nonaktifkan" : "Ya, Aktifkan"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
