@@ -1,5 +1,6 @@
 import hashlib
 import json
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from PIL import Image, UnidentifiedImageError
 from django.db.models import F
@@ -200,7 +201,7 @@ class OrderCreateSerializer(serializers.Serializer):
         fingerprint_data = {name: value for name, value in validated_data.items() if not name.startswith("_")}
         fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
         if key:
-            type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            get_user_model().objects.select_for_update().get(pk=request.user.pk)
             existing = Order.objects.filter(idempotency_key=key).first()
             if existing:
                 if existing.customer_id != request.user.pk or existing.request_fingerprint != fingerprint or existing.sales_channel != "online":
