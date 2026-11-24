@@ -367,12 +367,6 @@ class AdminSalesReportView(APIView):
         bucket = "day"
 
         month_start = today.replace(day=1)
-        previous_month_start = (month_start - timedelta(days=1)).replace(day=1)
-        two_months_ago_start = (previous_month_start - timedelta(days=1)).replace(day=1)
-        eleven_months_ago_start = two_months_ago_start
-        for _ in range(9):
-            eleven_months_ago_start = (eleven_months_ago_start - timedelta(days=1)).replace(day=1)
-
         if period == "1d":
             start, end, bucket = today - timedelta(days=1), today, "three_hours"
         elif period == "7d":
@@ -380,9 +374,9 @@ class AdminSalesReportView(APIView):
         elif period == "1m":
             start, end, bucket = today - timedelta(days=29), today, "week"
         elif period == "3m":
-            start, end, bucket = two_months_ago_start, today, "month"
+            start, end, bucket = today - timedelta(days=89), today, "month"
         elif period == "1y":
-            start, end, bucket = eleven_months_ago_start, today, "month"
+            start, end, bucket = today - timedelta(days=364), today, "month"
         elif period == "custom":
             try:
                 start = datetime.strptime(request.query_params.get("from", ""), "%Y-%m-%d").date()
