@@ -473,7 +473,7 @@ function ContactInfo({ store, error, orderCode }: { store: StorefrontSettings | 
   if (error) return <p className="payment-unavailable" role="alert">{error}</p>;
   if (!store) return <p className="contact-info__loading">Memuat info kontak...</p>;
   const { phone, email, address } = store.store_profile;
-  const phoneHref = phone.trim().replace(/[^\\d+]/g, "");
+  const phoneHref = phone.trim().replace(/\D/g, "");
   const emailAddress = email.trim();
   const hours = store.operating_hours;
   const days = DAY_ORDER.filter((day) => hours.days.includes(day)).map((day) => DAY_LABELS[day]).join(", ");
