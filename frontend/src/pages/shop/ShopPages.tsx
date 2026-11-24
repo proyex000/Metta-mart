@@ -469,36 +469,34 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
 const DAY_LABELS: Record<string, string> = { mon: "Senin", tue: "Selasa", wed: "Rabu", thu: "Kamis", fri: "Jumat", sat: "Sabtu", sun: "Minggu" };
 const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
-// Ubah nomor lokal (08xx / +62 / 62) menjadi format wa.me (62xx); kosong bila tidak valid.
-function whatsappNumber(phone: string) {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 8) return "";
-  if (digits.startsWith("62")) return digits;
-  if (digits.startsWith("0")) return `62${digits.slice(1)}`;
-  return digits;
-}
-
 function ContactInfo({ store, error, orderCode }: { store: StorefrontSettings | null; error: string; orderCode: string }) {
   if (error) return <p className="payment-unavailable" role="alert">{error}</p>;
   if (!store) return <p className="contact-info__loading">Memuat info kontak...</p>;
-  const { phone, email, address, name } = store.store_profile;
-  const wa = whatsappNumber(phone);
+  const { phone, email, address } = store.store_profile;
+  const phoneHref = phone.trim().replace(/\D/g, "");
+  const emailAddress = email.trim();
   const hours = store.operating_hours;
   const days = DAY_ORDER.filter((day) => hours.days.includes(day)).map((day) => DAY_LABELS[day]).join(", ");
-  const message = encodeURIComponent(`Halo admin ${name || "koperasi"}, saya ingin menanyakan pesanan #${orderCode}.`);
+  const emailSubject = encodeURIComponent(`Pertanyaan pesanan #${orderCode}`);
+  const emailBody = encodeURIComponent(`Halo admin, saya ingin menanyakan pesanan #${orderCode}.`);
   return (
     <div className="contact-info">
       <p>Hubungi koperasi untuk menanyakan pesanan <b>#{orderCode}</b>.</p>
       <dl>
-        <dt>WhatsApp</dt>
-        <dd>{phone || "Belum diatur admin"}</dd>
-        {email && <><dt>Email</dt><dd><a href={`mailto:${email}`}>{email}</a></dd></>}
+        <dt>Nomor Telepon</dt>
+        <dd>{phoneHref ? <a href={`tel:${phoneHref}`}>{phone}</a> : "Belum diatur admin"}</dd>
+        <dt>Email</dt>
+        <dd>{emailAddress ? <a href={`mailto:${emailAddress}`}>{emailAddress}</a> : "Belum diatur admin"}</dd>
         {address && <><dt>Lokasi</dt><dd>{address}</dd></>}
         {days && <><dt>Jam layanan</dt><dd>{days} · {hours.open_time}–{hours.close_time}</dd></>}
       </dl>
-      {wa
-        ? <a className="primary wide" href={`https://wa.me/${wa}?text=${message}`} target="_blank" rel="noopener noreferrer">Chat via WhatsApp</a>
-        : <p className="table-foot">Nomor WhatsApp koperasi belum diatur. Silakan datang langsung ke koperasi pada jam layanan.</p>}
+      <div className="contact-info__actions">
+        {phoneHref && <a className="primary wide" href={`tel:${phoneHref}`}>Telepon Admin</a>}
+        {emailAddress && <a className="secondary wide" href={`mailto:${emailAddress}?subject=${emailSubject}&body=${emailBody}`}>Kirim Email</a>}
+      </div>
+      {!phoneHref && !emailAddress && (
+        <p className="table-foot">Nomor telepon dan email koperasi belum diatur admin. Silakan perbarui melalui Informasi Toko.</p>
+      )}
     </div>
   );
 }

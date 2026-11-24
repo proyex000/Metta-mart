@@ -4287,6 +4287,16 @@ a.primary {
 .contact-info .primary.wide {
   min-height: 44px;
 }
+.contact-info__actions {
+  display: grid;
+  gap: 10px;
+}
+.contact-info__actions > a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
 .contact-info__loading {
   margin: 0;
   padding: 18px 0;
