@@ -97,7 +97,7 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
-MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media"))).expanduser()
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT") or str(BASE_DIR / "media")).expanduser()
 # Enable only when the host provides persistent storage mounted at MEDIA_ROOT.
 MEDIA_SERVE_ENABLED = env_bool("MEDIA_SERVE_ENABLED", DEBUG)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
