@@ -1176,13 +1176,13 @@ export function POS() {
       setSettingsReady(true);
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
   }, []);
-  const selected = products.filter((product) => (counts[product.id] || 0) > 0);
+  const selected = products.filter((product) => product.is_active && (counts[product.id] || 0) > 0);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
   const keyword = search.trim().toLowerCase();
   const activeProducts = products.filter((product) => product.is_active);
   const visibleProducts = keyword ? activeProducts.filter((product) => product.name.toLowerCase().includes(keyword)) : activeProducts;
   const change = (id: number, delta: number) => {
-    const product = products.find((item) => item.id === id);
+    const product = products.find((item) => item.id === id && item.is_active);
     if (!product) return;
     setCounts((current) => ({ ...current, [id]: Math.min(product.stock, Math.max(0, (current[id] || 0) + delta)) }));
     setReceipt(null);
