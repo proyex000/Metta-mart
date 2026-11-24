@@ -125,8 +125,10 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost
 if not DEBUG:
     if not CORS_ALLOWED_ORIGINS or not CSRF_TRUSTED_ORIGINS:
         raise ImproperlyConfigured("Production requires explicit CORS_ALLOWED_ORIGINS and DJANGO_CSRF_TRUSTED_ORIGINS.")
-    if "*" in CORS_ALLOWED_ORIGINS or "*" in CSRF_TRUSTED_ORIGINS:
+    if any("*" in origin for origin in (*CORS_ALLOWED_ORIGINS, *CSRF_TRUSTED_ORIGINS)):
         raise ImproperlyConfigured("Production CORS and CSRF origins must be explicit; wildcards are not allowed.")
+    if any(not origin.startswith("https://") for origin in (*CORS_ALLOWED_ORIGINS, *CSRF_TRUSTED_ORIGINS)):
+        raise ImproperlyConfigured("Production CORS and CSRF origins must use HTTPS.")
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax" if DEBUG else "None")
