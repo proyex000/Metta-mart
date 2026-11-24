@@ -8,6 +8,7 @@ This document records the confirmed operating decisions for the school cooperati
 |---|---|---|
 | Payment methods | `cash_transfer_qris` | Support cash, bank transfer, and QRIS. Each method can be enabled/disabled by Admin. |
 | Pickup | `anytime` during operating hours, once ready | A customer may collect an order at any time the cooperative is open, but only after staff has marked it ready for pickup. No fixed pickup slot is required. |
+| POS operating hours | No time gate in this release | Admin POS remains available regardless of the configured pickup hours; do not add an opening-hours gate without a separate business decision. |
 | Ordering | `anytime` | Customers may submit orders at any time, including outside cooperative operating hours, subject to product availability and stock rules. |
 | Fulfilment | Pickup or GoSend | Buyers may collect at the cooperative or request GoSend when enabled. GoSend fee is an estimate from the configured school origin; staff books the courier manually. |
  
