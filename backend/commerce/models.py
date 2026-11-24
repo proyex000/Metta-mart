@@ -13,7 +13,7 @@ class Product(models.Model):
         ("lainnya", "Lainnya"),
     ]
     name = models.CharField(max_length=180)
-    image = models.ImageField(upload_to="product_images/", null=True, blank=True)
+    image = models.TextField(null=True, blank=True)
     sku = models.CharField(max_length=64, unique=True, null=True, blank=True)
     category = models.CharField(max_length=32, choices=CATEGORIES, default="lainnya")
     price = models.PositiveIntegerField()

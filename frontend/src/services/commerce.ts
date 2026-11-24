@@ -50,7 +50,7 @@ export type DeliveryQuote = { distance_km: string | null; fee: number; manual_re
 export function quoteDelivery(address: string) {
   return apiRequest<DeliveryQuote>("/delivery/quote/", { method: "POST", body: JSON.stringify({ address }) });
 }
-export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string; student_id?: number } & Partial<DeliveryInput>, requestId?: string) {
+export function createOrder(input: { items: { product_id: number; quantity: number }[]; payment_method: PaymentMethod; note?: string } & Partial<DeliveryInput>, requestId?: string) {
   return apiRequest<CommerceOrder>("/orders/", { method: "POST", headers: requestId ? { "Idempotency-Key": requestId } : undefined, body: JSON.stringify(input) });
 }
 export function fetchOrders() {

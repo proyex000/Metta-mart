@@ -1,14 +1,13 @@
+import base64
 import io
-import os
-import tempfile
 from unittest import mock
 from PIL import Image
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
-from core.models import StoreSetting
-from .models import InventoryMovement, Order, Product
+from core.models import AuditLog, Notification, StoreSetting
+from .models import InventoryMovement, Order, PaymentEvent, Product
+from .serializers import OrderReadSerializer
 
 
 class CommerceApiTests(TestCase):
@@ -25,6 +24,118 @@ class CommerceApiTests(TestCase):
             "payment_method": payment_method,
             "items": [{"product_id": self.product.id, "quantity": 2}],
         }, format="json", HTTP_IDEMPOTENCY_KEY=f"test-order-{Order.objects.count() + 1:08d}")
+
+    def test_qris_image_is_excluded_from_order_lists_and_included_in_order_detail(self):
+        qris_image = "data:image/png;base64,QUJDRA=="
+        StoreSetting.objects.create(key="payment_instructions", value={
+            "bank_name": "BCA",
+            "account_name": "MettaMart",
+            "account_number": "123",
+            "qris_image": qris_image,
+        })
+        self.client.force_authenticate(user=self.student)
+        created = self.create_order("qris")
+        code = created.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+
+        self.client.force_authenticate(user=self.student)
+        listed = self.client.get("/api/orders/")
+        self.assertIsNone(next(row for row in listed.data if row["code"] == code)["payment_info"])
+
+        detail = self.client.get(f"/api/orders/{code}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["payment_info"]["qris_image"], qris_image)
+
+        self.client.force_authenticate(user=self.admin)
+        admin_list = self.client.get("/api/admin/orders/")
+        self.assertIsNone(next(row for row in admin_list.data if row["code"] == code)["payment_info"])
+
+    def test_order_lists_do_not_query_or_repeat_payment_instructions(self):
+        StoreSetting.objects.create(
+            key="payment_instructions",
+            value={"bank_name": "BCA", "account_name": "MettaMart", "account_number": "123", "qris_image": ""},
+        )
+        for _ in range(3):
+            Order.objects.create(
+                customer=self.student,
+                payment_method=Order.PaymentMethod.BANK_TRANSFER,
+                payment_status=Order.PaymentStatus.UNPAID,
+                status=Order.Status.ACCEPTED,
+                subtotal=10000,
+                total=10000,
+            )
+        orders = list(Order.objects.select_related("customer", "beneficiary").prefetch_related("items").all())
+        with self.assertNumQueries(0):
+            data = OrderReadSerializer(orders, many=True, context={}).data
+        self.assertEqual(len(data), 3)
+        self.assertTrue(all(row["payment_info"] is None for row in data))
+
+    def make_product_image_data(self, color=(40, 120, 80)):
+        image_buffer = io.BytesIO()
+        Image.new("RGB", (24, 24), color).save(image_buffer, format="JPEG", quality=85)
+        encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+
+    def test_product_image_is_saved_as_base64_text_and_returned_by_api(self):
+        self.client.force_authenticate(user=self.admin)
+        image_data = self.make_product_image_data()
+        response = self.client.post("/api/products/", {
+            "name": "Foto Produk",
+            "category": "buku",
+            "price": 5000,
+            "stock": 2,
+            "image": image_data,
+        }, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["image_url"], image_data)
+        product = Product.objects.get(pk=response.data["id"])
+        self.assertEqual(product.image, image_data)
+        self.assertIsInstance(product.image, str)
+
+    def test_product_image_can_be_replaced_and_removed_without_filesystem_storage(self):
+        self.client.force_authenticate(user=self.admin)
+        first_image = self.make_product_image_data((40, 120, 80))
+        second_image = self.make_product_image_data((120, 60, 40))
+        product = Product.objects.create(name="Foto", category="buku", price=1000, stock=0, image=first_image)
+
+        replaced = self.client.patch(f"/api/products/{product.id}/", {"image": second_image}, format="json")
+        self.assertEqual(replaced.status_code, 200, replaced.data)
+        product.refresh_from_db()
+        self.assertEqual(product.image, second_image)
+        self.assertEqual(replaced.data["image_url"], second_image)
+
+        removed = self.client.patch(f"/api/products/{product.id}/", {"remove_image": True}, format="json")
+        self.assertEqual(removed.status_code, 200, removed.data)
+        product.refresh_from_db()
+        self.assertIsNone(product.image)
+        self.assertIsNone(removed.data["image_url"])
+
+    def test_product_image_rejects_invalid_or_unsupported_data_urls(self):
+        self.client.force_authenticate(user=self.admin)
+        for invalid_image in (
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            "data:image/jpeg;base64,not-valid-base64!",
+            "https://example.invalid/product.jpg",
+        ):
+            response = self.client.post("/api/products/", {
+                "name": "Gambar Tidak Valid",
+                "category": "buku",
+                "price": 1000,
+                "stock": 0,
+                "image": invalid_image,
+            }, format="json")
+            self.assertEqual(response.status_code, 400, invalid_image[:40])
+
+    def test_legacy_product_image_paths_keep_their_media_url(self):
+        product = Product.objects.create(
+            name="Foto Lama", category="buku", price=1000, stock=0,
+            image="product_images/legacy.jpg",
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get(f"/api/products/{product.id}/")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["image_url"], f"http://testserver/media/product_images/legacy.jpg")
 
     def test_product_creation_rolls_back_if_initial_stock_movement_fails(self):
         self.client.force_authenticate(user=self.admin)
@@ -105,6 +216,37 @@ class CommerceApiTests(TestCase):
         completed = self.client.post(f"/api/admin/orders/{code}/complete-pickup/", {}, format="json")
         self.assertEqual(completed.status_code, 200)
         self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
+
+    def test_payment_rejection_requires_reason_and_notifies_customer_with_it(self):
+        self.client.force_authenticate(user=self.student)
+        created = self.create_order("bank_transfer")
+        code = created.data["code"]
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.force_authenticate(user=self.student)
+        self.client.post(
+            f"/api/orders/{code}/payment-submission/",
+            {"sender_name": "Nama Pengirim", "payment_source": "BCA"},
+            format="json",
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        missing_reason = self.client.post(f"/api/admin/orders/{code}/payment/reject/", {}, format="json")
+        self.assertEqual(missing_reason.status_code, 400)
+        self.assertIn("note", missing_reason.data)
+
+        rejected = self.client.post(
+            f"/api/admin/orders/{code}/payment/reject/",
+            {"note": "Nama pengirim tidak sesuai mutasi rekening."},
+            format="json",
+        )
+        self.assertEqual(rejected.status_code, 200, rejected.data)
+        self.assertEqual(rejected.data["payment_status"], Order.PaymentStatus.FAILED)
+        event = PaymentEvent.objects.get(order__code=code, event="reject")
+        self.assertIn("tidak sesuai", event.note)
+        notice = Notification.objects.filter(recipient=self.student, target_code=code, kind="payment").latest("created_at")
+        self.assertIn("Nama pengirim tidak sesuai", notice.message)
 
     def test_bank_transfer_requires_manual_verification_before_pickup(self):
         from django.utils import timezone
@@ -287,14 +429,35 @@ class CommerceApiTests(TestCase):
         self.assertEqual(self.product.stock, 7)
         self.assertEqual(InventoryMovement.objects.filter(reason="pos_sale", reference=first.data["code"]).count(), 1)
 
-    def test_delete_product_with_inventory_history_archives_instead_of_raising_500(self):
+    def test_archived_product_can_be_restored_by_admin_but_stays_hidden_from_customers(self):
         self.client.force_authenticate(user=self.admin)
         InventoryMovement.objects.create(product=self.product, actor=self.admin, quantity_delta=10, reason="initial_stock", reference="initial")
-        response = self.client.delete(f"/api/products/{self.product.id}/")
-        self.assertEqual(response.status_code, 204)
+
+        archived = self.client.delete(f"/api/products/{self.product.id}/")
+        self.assertEqual(archived.status_code, 204)
         self.product.refresh_from_db()
         self.assertFalse(self.product.is_active)
         self.assertEqual(InventoryMovement.objects.filter(product=self.product).count(), 1)
+        self.assertTrue(AuditLog.objects.filter(event="product.deactivated", target_id=str(self.product.id)).exists())
+
+        admin_list = self.client.get("/api/products/")
+        archived_row = next(row for row in admin_list.data if row["id"] == self.product.id)
+        self.assertFalse(archived_row["is_active"])
+
+        self.client.force_authenticate(user=self.student)
+        customer_list = self.client.get("/api/products/")
+        self.assertNotIn(self.product.id, [row["id"] for row in customer_list.data])
+
+        self.client.force_authenticate(user=self.admin)
+        restored = self.client.patch(f"/api/products/{self.product.id}/", {"is_active": True}, format="json")
+        self.assertEqual(restored.status_code, 200, restored.data)
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.is_active)
+        self.assertTrue(AuditLog.objects.filter(event="product.activated", target_id=str(self.product.id)).exists())
+
+        self.client.force_authenticate(user=self.student)
+        customer_list = self.client.get("/api/products/")
+        self.assertIn(self.product.id, [row["id"] for row in customer_list.data])
 
     def test_student_cannot_use_admin_pos(self):
         self.client.force_authenticate(user=self.student)
@@ -306,49 +469,16 @@ class CommerceApiTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
 
-    def test_admin_can_upload_optional_product_image_and_remove_it(self):
+    def test_product_upload_rejects_payload_exceeding_database_limit(self):
         self.client.force_authenticate(user=self.admin)
-        image_buffer = io.BytesIO()
-        Image.new("RGB", (4, 4), color="red").save(image_buffer, format="PNG")
-        image_bytes = image_buffer.getvalue()
-
-        with tempfile.TemporaryDirectory() as media_dir:
-            with override_settings(MEDIA_ROOT=media_dir):
-                uploaded = SimpleUploadedFile("buku.png", image_bytes, content_type="image/png")
-                created = self.client.post("/api/products/", {
-                    "name": "Buku Bergambar",
-                    "category": "buku",
-                    "price": "7000",
-                    "stock": "3",
-                    "image": uploaded,
-                }, format="multipart")
-                self.assertEqual(created.status_code, 201, created.data)
-                self.assertTrue(created.data["image_url"].endswith(".png"))
-                product = Product.objects.get(pk=created.data["id"])
-                image_path = product.image.path
-                self.assertTrue(product.image.storage.exists(product.image.name))
-
-                removed = self.client.patch(
-                    f"/api/products/{product.id}/",
-                    {"remove_image": "true"},
-                    format="multipart",
-                )
-                self.assertEqual(removed.status_code, 200, removed.data)
-                product.refresh_from_db()
-                self.assertFalse(product.image)
-                self.assertFalse(os.path.exists(image_path))
-                self.assertIsNone(removed.data["image_url"])
-
-    def test_product_image_rejects_files_over_five_megabytes(self):
-        self.client.force_authenticate(user=self.admin)
-        oversized = SimpleUploadedFile("large.png", b"x" * (5 * 1024 * 1024 + 1), content_type="image/png")
+        oversized_data_url = "data:image/jpeg;base64," + ("A" * 380_000)
         response = self.client.post("/api/products/", {
-            "name": "Gambar Besar",
+            "name": "Gambar Terlalu Besar",
             "category": "buku",
-            "price": "1000",
-            "stock": "1",
-            "image": oversized,
-        }, format="multipart")
+            "price": 1000,
+            "stock": 1,
+            "image": oversized_data_url,
+        }, format="json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("image", response.data)
 

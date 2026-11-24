@@ -1,5 +1,7 @@
 # Metta-Mart — Phase 0: Audit dan Gap Analysis
 
+> **Dokumen historis (18 November 2026).** Isi di bawah adalah snapshot prototipe sebelum backend dibangun dan tidak menggambarkan kondisi repository saat ini. Untuk status implementasi terkini, lihat `docs/IMPLEMENTATION_STATUS.md`.
+
 Tanggal audit: 18 November 2026
 Cakupan: seluruh isi repo `proyex000/Metta-mart` (branch `main` + perubahan di `feat/phase1-categories-settings-ui`).
 

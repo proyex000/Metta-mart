@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { ChangePasswordForm } from "../../components/ChangePasswordForm";
 import { Brand } from "../../components/ui";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
-import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
+import { productService, refreshProducts, stockLabel, useProductLoadState, useProducts } from "../../services/products";
 import type { Product } from "../../types";
 import { adminOrderAction, adminPaymentAction, adminSetDeliveryFee, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchInventoryMovements, fetchOrders, type AdminDashboardSummary, type InventoryMovementRow, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
@@ -388,10 +388,11 @@ const emptyProductForm: ProductForm = {
   stock: "",
   stockNote: "",
 };
-type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
+type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis" | "Nonaktif";
 
 export function Stock() {
   const items = useProducts();
+  const productLoad = useProductLoadState();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
   const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
@@ -413,7 +414,7 @@ export function Stock() {
         p.name.toLowerCase().includes(needle) ||
         categoryLabel(p.category).toLowerCase().includes(needle)) &&
       (category === ALL_CATEGORIES || p.category === category) &&
-      (stockFilter === "Semua Stok" || stockLabel(p.stock) === stockFilter)
+      (stockFilter === "Nonaktif" ? !p.is_active : p.is_active && (stockFilter === "Semua Stok" || stockLabel(p.stock) === stockFilter))
     );
   });
   const openNew = () => {
@@ -503,11 +504,14 @@ export function Stock() {
             <option>Tersedia</option>
             <option>Hampir Habis</option>
             <option>Habis</option>
+            <option>Nonaktif</option>
           </select>
           <button className="primary" onClick={openNew}>
             <Icon name="plus" size={16} /> Tambah Produk
           </button>
         </div>
+        {productLoad.loading && !items.length && <p className="table-foot">Memuat katalog produk...</p>}
+        {productLoad.error && <div className="auth-error" role="alert"><p>{productLoad.error}</p><button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba Muat Ulang Katalog</button></div>}
         <div className="desktop-table">
           <table>
             <thead>
@@ -536,7 +540,7 @@ export function Stock() {
                   <td>{money(p.price)}</td>
                   <td className={p.stock < 10 ? "danger" : ""}>{p.stock}</td>
                   <td>
-                    <Status>{stockLabel(p.stock)}</Status>
+                    <Status>{p.is_active ? stockLabel(p.stock) : "Nonaktif"}</Status>
                   </td>
                   <td>
                     <button
@@ -546,18 +550,31 @@ export function Stock() {
                     >
                       <Icon name="edit" size={15} />
                     </button>
-                    <button
-                      className="icon-button"
-                      aria-label={`Hapus ${p.name}`}
-                      onClick={async () => {
-                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, sistem akan menonaktifkannya agar catatan lama tetap aman.`)) {
-                          try { await productService.remove(p.id); }
-                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
-                        }
-                      }}
-                    >
-                      <Icon name="trash" size={15} />
-                    </button>
+                    {p.is_active ? (
+                      <button
+                        className="icon-button"
+                        aria-label={`Hapus atau nonaktifkan ${p.name}`}
+                        onClick={async () => {
+                          if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, produk akan diarsipkan dan dapat diaktifkan kembali.`)) {
+                            try { await productService.remove(p.id); }
+                            catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
+                          }
+                        }}
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    ) : (
+                      <button
+                        className="secondary small"
+                        aria-label={`Aktifkan kembali ${p.name}`}
+                        onClick={async () => {
+                          try { await productService.setActive(p.id, true); }
+                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal diaktifkan kembali."); }
+                        }}
+                      >
+                        Aktifkan
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -628,7 +645,7 @@ export function Stock() {
                       setError("");
                     }}
                   />
-                  <small className="product-image-field__hint">Maksimal 5 MB. Gunakan foto yang jelas dan tidak buram.</small>
+                  <small className="product-image-field__hint">Maksimal 5 MB. Foto dikompres otomatis menjadi JPG 640 px sebelum disimpan.</small>
                   {imageFile && <span className="product-image-field__filename" title={imageFile.name}>{imageFile.name}</span>}
                   {editing !== "new" && editing.image_url && !imageFile && (
                     <label className="product-image-field__remove">
@@ -719,6 +736,7 @@ export function Orders() {
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const [deliveryFeeInput, setDeliveryFeeInput] = useState("0");
+  const [paymentActionNote, setPaymentActionNote] = useState("");
   const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
   const reload = async () => { const data = await fetchOrders(); setItems(data); };
   useEffect(() => {
@@ -786,10 +804,15 @@ export function Orders() {
   };
   const verify = async (action: "verify" | "reject") => {
     if (!selected || working) return;
+    if (action === "reject" && paymentActionNote.trim().length < 3) {
+      setError("Isi alasan penolakan minimal 3 karakter.");
+      return;
+    }
     setWorking(true); setError("");
     try {
-      const updated = await adminPaymentAction(selected.code, action);
+      const updated = await adminPaymentAction(selected.code, action, paymentActionNote.trim());
       setSelected(updated);
+      setPaymentActionNote("");
       setItems((current) => current.map((item) => item.code === updated.code ? updated : item));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Status pembayaran gagal diperbarui.");
@@ -844,7 +867,7 @@ export function Orders() {
         </div>
         {loading ? <p>Memuat pesanan...</p> : (
           <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Pengambilan</th><th>Status</th><th>Aksi</th></tr></thead>
-            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{order.delivery_method === "gosend" && !order.delivery_fee_confirmed ? "Ongkir belum diatur" : money(order.total)}</b></td><td><span className={`delivery-badge delivery-badge--${order.delivery_method}`}>{deliveryLabel(order.delivery_method)}</span></td><td><Status>{adminOrderStatus(order.status, order.delivery_method)}</Status></td><td><button className="primary small" onClick={() => { setDeliveryFeeInput(String(order.delivery_fee ?? 0)); setSelected(order); }}>Detail</button></td></tr>)}</tbody>
+            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{order.delivery_method === "gosend" && !order.delivery_fee_confirmed ? "Ongkir belum diatur" : money(order.total)}</b></td><td><span className={`delivery-badge delivery-badge--${order.delivery_method}`}>{deliveryLabel(order.delivery_method)}</span></td><td><Status>{adminOrderStatus(order.status, order.delivery_method)}</Status></td><td><button className="primary small" onClick={() => { setDeliveryFeeInput(String(order.delivery_fee ?? 0)); setPaymentActionNote(""); setSelected(order); }}>Detail</button></td></tr>)}</tbody>
           </table></div>
         )}
         {!loading && !shown.length && <p className="table-foot">Tidak ada pesanan pada filter ini.</p>}
@@ -880,12 +903,19 @@ export function Orders() {
             {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
             {selected.delivery_method === "gosend" && <p><span>Ongkir GoSend</span><b>{money(selected.delivery_fee)}</b></p>}
             {selected.note && <p><span>Catatan</span><b>{selected.note}</b></p>}
-            {selected.payment_status === "pending_verification" && <div className="form-row"><button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button><button className="secondary" disabled={working} onClick={() => verify("reject")}>Tolak Pembayaran</button></div>}
+            {selected.payment_status === "pending_verification" && <>
+              <label>Catatan verifikasi / alasan penolakan<textarea value={paymentActionNote} onChange={(event) => setPaymentActionNote(event.target.value)} maxLength={500} placeholder="Untuk penolakan, jelaskan bagian yang perlu diperbaiki pelanggan." /></label>
+              <div className="form-row">
+                <button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button>
+                <button className="secondary" disabled={working || paymentActionNote.trim().length < 3} onClick={() => verify("reject")}>Tolak Pembayaran</button>
+              </div>
+              <small className="table-foot">Alasan wajib diisi saat menolak pembayaran dan akan dikirimkan kepada pelanggan.</small>
+            </>}
             <div className="form-row">
               {selected.status === "pending" && (selected.delivery_method !== "gosend" || selected.delivery_fee_confirmed) && <button className="primary" disabled={working} onClick={() => act("accept")}>Terima Pesanan</button>}
               {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>{selected.delivery_method === "gosend" ? "Tandai Siap Diantar" : "Tandai Siap Diambil"}</button>}
               {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>{selected.delivery_method === "gosend" ? "Konfirmasi Pengantaran" : "Konfirmasi Pengambilan"}</button>}
-              {["pending", "accepted"].includes(selected.status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
+              {["pending", "accepted", "ready_for_pickup"].includes(selected.status) && !["paid", "pending_verification"].includes(selected.payment_status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
             </div>
             <button className="primary wide" onClick={() => setSelected(null)}>Tutup Detail</button>
           </div>
@@ -1124,9 +1154,11 @@ export function Reports() {
 }
 export function POS() {
   const products = useProducts();
+  const productLoad = useProductLoadState();
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "qris">("cash");
-  const [enabled, setEnabled] = useState({ cash: true, bank_transfer: true, qris: true });
+  const [enabled, setEnabled] = useState({ cash: false, bank_transfer: false, qris: false });
+  const [settingsReady, setSettingsReady] = useState(false);
   const [note, setNote] = useState("");
   const [cashReceived, setCashReceived] = useState("");
   const [working, setWorking] = useState(false);
@@ -1141,14 +1173,16 @@ export function POS() {
         const first = (["cash", "bank_transfer", "qris"] as const).find((method) => settings.payment_methods[method]);
         if (first) setPaymentMethod(first);
       }
+      setSettingsReady(true);
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
   }, []);
-  const selected = products.filter((product) => (counts[product.id] || 0) > 0);
+  const selected = products.filter((product) => product.is_active && (counts[product.id] || 0) > 0);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
   const keyword = search.trim().toLowerCase();
-  const visibleProducts = keyword ? products.filter((product) => product.name.toLowerCase().includes(keyword)) : products;
+  const activeProducts = products.filter((product) => product.is_active);
+  const visibleProducts = keyword ? activeProducts.filter((product) => product.name.toLowerCase().includes(keyword)) : activeProducts;
   const change = (id: number, delta: number) => {
-    const product = products.find((item) => item.id === id);
+    const product = products.find((item) => item.id === id && item.is_active);
     if (!product) return;
     setCounts((current) => ({ ...current, [id]: Math.min(product.stock, Math.max(0, (current[id] || 0) + delta)) }));
     setReceipt(null);
@@ -1180,6 +1214,8 @@ export function POS() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama produk..." aria-label="Cari produk" />
           </label>
           <div className="pos-product-list">
+            {productLoad.loading && !products.length && <p className="table-foot">Memuat katalog produk...</p>}
+            {productLoad.error && <p className="auth-error" role="alert">{productLoad.error} <button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba lagi</button></p>}
             {visibleProducts.map((product) => (
               <article key={product.id} className={counts[product.id] ? "is-selected" : ""}>
                 <div><b>{product.name}</b><small>{money(product.price)} · Stok {product.stock}</small></div>
@@ -1190,8 +1226,8 @@ export function POS() {
                 </div>
               </article>
             ))}
-            {!products.length && <p className="table-foot">Belum ada produk aktif.</p>}
-            {!!products.length && !visibleProducts.length && <p className="table-foot">Tidak ada produk yang cocok dengan “{search.trim()}”.</p>}
+            {!activeProducts.length && <p className="table-foot">Belum ada produk aktif.</p>}
+            {!!activeProducts.length && !visibleProducts.length && <p className="table-foot">Tidak ada produk yang cocok dengan “{search.trim()}”.</p>}
           </div>
         </section>
         <section className="panel table-panel pos-summary">
@@ -1209,7 +1245,8 @@ export function POS() {
             </>}
             <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
           </div>
-          <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
+          {!settingsReady && <p className="payment-unavailable" role="alert">Pengaturan metode pembayaran belum berhasil dimuat. {error || "Tunggu sebentar atau muat ulang halaman."}</p>}
+          <button className="primary wide" disabled={!settingsReady || productLoad.loading || !!productLoad.error || !selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
           <p className="pos-summary__hint">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
         </section>
       </div>

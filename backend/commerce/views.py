@@ -88,9 +88,18 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         locked_product = Product.objects.select_for_update().get(pk=serializer.instance.pk)
         serializer.instance = locked_product
         previous_stock = locked_product.stock
+        previous_active = locked_product.is_active
         note = serializer.validated_data.get("stock_note", "").strip()
         product = serializer.save()
         delta = product.stock - previous_stock
+        if previous_active != product.is_active:
+            AuditLog.objects.create(
+                actor=self.request.user,
+                event="product.activated" if product.is_active else "product.deactivated",
+                target_type="product",
+                target_id=str(product.pk),
+                metadata={"name": product.name, "is_active": product.is_active},
+            )
         if delta:
             InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment", reference=note)
             if previous_stock >= 10 and product.stock < 10:
@@ -98,15 +107,28 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                 if not preferences or not isinstance(preferences.value, dict) or preferences.value.get("low_stock_alerts", True):
                     notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         # Keep products referenced by stock history or orders so audit trails remain valid.
         if instance.stock_movements.exists() or instance.order_items.exists():
             if instance.is_active:
                 instance.is_active = False
                 instance.save(update_fields=["is_active", "updated_at"])
+                AuditLog.objects.create(
+                    actor=self.request.user,
+                    event="product.deactivated",
+                    target_type="product",
+                    target_id=str(instance.pk),
+                    metadata={"name": instance.name, "reason": "archived_with_history"},
+                )
             return
-        if instance.image:
-            instance.image.delete(save=False)
+        AuditLog.objects.create(
+            actor=self.request.user,
+            event="product.deleted",
+            target_type="product",
+            target_id=str(instance.pk),
+            metadata={"name": instance.name},
+        )
         instance.delete()
 
 
@@ -120,19 +142,25 @@ class OrderListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView):
     def get_serializer_class(self):
         return OrderCreateSerializer if self.request.method == "POST" else OrderReadSerializer
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         if request.user.role not in ("student", "parent"):
             return Response({"detail": "Pembuatan pesanan mandiri hanya tersedia untuk siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Validate first: GoSend address geocoding performs an external network
+        # request and must never hold the order/stock database transaction open.
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = serializer.save()
-        if getattr(serializer, "idempotent_replay", False):
-            return Response(OrderReadSerializer(order).data, status=status.HTTP_200_OK)
-        AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
-        via = " (diantar via GoSend)" if order.delivery_method == Order.DeliveryMethod.GOSEND else ""
-        notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}{via}.", target_code=order.code)
-        return Response(OrderReadSerializer(order).data, status=status.HTTP_201_CREATED)
+
+        with transaction.atomic():
+            order = serializer.save()
+            if getattr(serializer, "idempotent_replay", False):
+                return Response(OrderReadSerializer(order).data, status=status.HTTP_200_OK)
+            AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
+            via = " (diantar via GoSend)" if order.delivery_method == Order.DeliveryMethod.GOSEND else ""
+            notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}{via}.", target_code=order.code)
+            response_data = OrderReadSerializer(order).data
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class DeliveryQuoteView(APIView):
@@ -172,6 +200,11 @@ class OrderCancelView(APIView):
 class OrderDetailView(generics.RetrieveAPIView):
     serializer_class = OrderReadSerializer
     lookup_field = "code"
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["include_payment_info"] = True
+        return context
 
     def get_queryset(self):
         qs = Order.objects.select_related("customer", "beneficiary").prefetch_related("items")
@@ -293,6 +326,12 @@ class AdminPaymentActionView(APIView):
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
         if order.status == Order.Status.CANCELLED:
             raise ValidationError({"payment_status": "Pembayaran pesanan yang dibatalkan tidak dapat diverifikasi."})
+        note = str(request.data.get("note", "")).strip()
+        if action == "reject" and len(note) < 3:
+            raise ValidationError({"note": "Alasan penolakan wajib diisi (minimal 3 karakter) agar pelanggan tahu tindakan yang perlu dilakukan."})
+        if len(note) > 500:
+            raise ValidationError({"note": "Catatan maksimal 500 karakter."})
+
         if action == "verify" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
             order.payment_status = Order.PaymentStatus.PAID
         elif action == "reject" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
@@ -300,10 +339,14 @@ class AdminPaymentActionView(APIView):
         else:
             raise ValidationError({"payment_status": "Verifikasi pembayaran tidak valid."})
         order.save(update_fields=["payment_status", "updated_at"])
-        PaymentEvent.objects.create(order=order, actor=request.user, event=action, note=str(request.data.get("note", ""))[:500])
-        AuditLog.objects.create(actor=request.user, event=f"payment.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        PaymentEvent.objects.create(order=order, actor=request.user, event=action, note=note)
+        AuditLog.objects.create(actor=request.user, event=f"payment.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "note": note})
         title = "Pembayaran berhasil diverifikasi" if action == "verify" else "Pembayaran perlu diperiksa kembali"
-        message = f"Status pembayaran pesanan {order.code}: {'lunas' if action == 'verify' else 'ditolak'}. Periksa detail pesanan."
+        message = (
+            f"Pembayaran pesanan {order.code} telah diverifikasi dan dinyatakan lunas."
+            if action == "verify"
+            else f"Pembayaran pesanan {order.code} belum dapat diverifikasi. Alasan: {note}"
+        )
         notify_user(order.customer, title, message, kind="payment", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
 

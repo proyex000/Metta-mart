@@ -3,18 +3,18 @@ import type { Order, Product } from "../types";
 // Seed data for the prototype only. Replace with a backend/database source.
 // The two "Seragam Sekolah" rows are SAMPLE items (names, prices, stock are placeholders).
 export const products: Product[] = [
-  { id: 1, name: "Buku Tulis", category: "buku", price: 5000, stock: 120, art: "book" },
-  { id: 2, name: "Pensil 2B", category: "alat-tulis", price: 3000, stock: 50, art: "pencil" },
-  { id: 3, name: "Penghapus", category: "alat-tulis", price: 2000, stock: 8, art: "eraser" },
-  { id: 4, name: "Rautan", category: "alat-tulis", price: 4000, stock: 0, art: "sharpener" },
-  { id: 5, name: "Minuman Botol", category: "minuman", price: 8000, stock: 35, art: "bottle" },
+  { id: 1, name: "Buku Tulis", category: "buku", price: 5000, stock: 120, image_url: null, is_active: true, art: "book" },
+  { id: 2, name: "Pensil 2B", category: "alat-tulis", price: 3000, stock: 50, image_url: null, is_active: true, art: "pencil" },
+  { id: 3, name: "Penghapus", category: "alat-tulis", price: 2000, stock: 8, image_url: null, is_active: true, art: "eraser" },
+  { id: 4, name: "Rautan", category: "alat-tulis", price: 4000, stock: 0, image_url: null, is_active: true, art: "sharpener" },
+  { id: 5, name: "Minuman Botol", category: "minuman", price: 8000, stock: 35, image_url: null, is_active: true, art: "bottle" },
   {
     id: 6,
     name: "Kemeja Seragam Putih (contoh)",
     category: "seragam-sekolah",
     price: 85000,
     stock: 20,
-    art: "shirt", image_url: null,
+    art: "shirt", image_url: null, is_active: true,
   },
   {
     id: 7,
@@ -22,7 +22,7 @@ export const products: Product[] = [
     category: "seragam-sekolah",
     price: 90000,
     stock: 15,
-    art: "shirt", image_url: null,
+    art: "shirt", image_url: null, is_active: true,
   },
 ];
 

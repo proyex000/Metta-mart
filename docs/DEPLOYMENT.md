@@ -1,10 +1,10 @@
 # MettaMart deployment guide
 
-This guide assumes the frontend is built with Vite and served by Nginx, while Django runs behind Gunicorn. Use a separate production database (MySQL/TiDB) and persistent storage for uploaded media.
+This guide covers the split deployment used by this project: the Vite frontend is deployed on Vercel and the Django API on Hostless. The backend uses Gunicorn and a production MySQL/TiDB database. Product photos are compressed in the browser and stored as Base64 text in TiDB, so new uploads do not require a persistent disk or an external image-storage service. If the hosting providers change, adapt the platform-specific steps below.
 
 ## 1. Production environment
 
-Copy `backend/.env.example` to a private `.env` or set the variables in your hosting provider. Never commit production secrets.
+The tracked `backend/.env.example` is a **local-development template only**. Do not copy it unchanged into Hostless. Configure the production values directly in Hostless's environment-variable settings. Never commit production secrets.
 
 Required:
 - `DJANGO_DEBUG=false`
@@ -12,18 +12,21 @@ Required:
 - `DJANGO_ALLOWED_HOSTS`: comma-separated hostnames, without schemes
 - `DJANGO_CSRF_TRUSTED_ORIGINS`: full HTTPS origins
 - `CORS_ALLOWED_ORIGINS`: full frontend origins
-- `DB_ENGINE=mysql` and database credentials
-- `DB_SSL=true` for managed MySQL/TiDB unless your provider says otherwise
+- `DB_ENGINE=mysql`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT`
+- `DB_SSL=true` for encrypted MySQL/TiDB connections
+- `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true`
+- `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` set to explicit HTTPS origins (no wildcards)
 
-Production startup fails when DEBUG is false and the secret is still the development placeholder/too short, or allowed hosts are empty or contain `*`.
+Production startup fails closed if DEBUG is not explicitly disabled safely, the secret is missing/too short, allowed hosts are empty or contain `*`, SQLite is selected, database credentials are missing, database TLS is disabled, origins are missing/wildcarded, or session/CSRF cookies are not Secure.
 
-For a same-domain deployment, proxy `/api/` and `/media/` to Django and all other paths to the built frontend. For separate frontend/backend origins, explicitly set CORS and CSRF trusted origins.
+For the current split deployment, set Vercel environment variable `VITE_API_BASE_URL` to `https://<hostless-backend-domain>/api`. On Hostless, set `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the exact HTTPS Vercel frontend origin. For the current split deployment, explicitly set `SESSION_COOKIE_SAMESITE=None` and `CSRF_COOKIE_SAMESITE=None` together with both Secure flags. Browsers or privacy settings may still block third-party cookies; if login does not persist in the deployed browser, use a same-site custom domain or proxy `/api/` through the frontend origin rather than weakening cookie security. For a same-domain deployment, proxy `/api/` to Django and use `SameSite=Lax`.
 
 ## 2. Build and start
 
 From `frontend/`:
 ```sh
 npm ci
+npm run typecheck
 npm run build
 ```
 
@@ -32,33 +35,33 @@ From `backend/`:
 python -m pip install -r requirements.txt
 python manage.py check --deploy
 python manage.py makemigrations --check --dry-run
+# Back up the production database before this step.
 python manage.py migrate
 python manage.py collectstatic --noinput
 gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
-Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. Uploaded product images need persistent storage and a backup policy; do not rely on ephemeral container filesystems.
+Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. For each new product photo, the browser resizes the longest side to at most 640 pixels, converts it to JPEG, and limits the Base64 data URL to 380,000 characters before sending it to Django. Django validates the encoded image and stores it in the product row. No Hostless persistent disk, Cloudinary account, or other media-storage service is required for new uploads. Existing legacy rows that contain file paths can still be served from `MEDIA_ROOT` when legacy media is available and `MEDIA_SERVE_ENABLED=true`; if those files were lost with an ephemeral filesystem, replace the photos from Admin → Kelola Stok.
 
 ## 3. HTTPS and proxy headers
 
 Terminate TLS at Nginx or your platform. The supplied Nginx example redirects HTTP to HTTPS and sends the forwarded protocol header. Only enable `SECURE_PROXY_SSL_HEADER_ENABLED=true` when the trusted reverse proxy overwrites inbound `X-Forwarded-Proto` values. Set `SECURE_SSL_REDIRECT=true` after HTTPS is working end-to-end. Enable HSTS only after confirming every relevant subdomain supports HTTPS; begin with `SECURE_HSTS_SECONDS=300`, then increase deliberately.
 
-Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HTTPS (the example file keeps these false for local HTTP development, and explicit false values override Django defaults). Keep `SESSION_COOKIE_SAMESITE=Lax` and `CSRF_COOKIE_SAMESITE=Lax` unless the hosting architecture requires a documented alternative.
+Production startup refuses insecure session/CSRF cookies. Keep both Secure flags true. Use `SameSite=None` for separate Vercel/Hostless sites; use `Lax` only when frontend and API are served from the same site. Do not enable `SECURE_SSL_REDIRECT` until the platform's trusted HTTPS-forwarding behavior is confirmed, or the app may enter a redirect loop. Enable `SECURE_PROXY_SSL_HEADER_ENABLED=true` only if the platform strips/overwrites untrusted forwarded-protocol headers.
 
 ## 4. Order operations
 
 - Order policy defaults to 5 active orders per account. Set 0 for no active-order cap.
-- Automatic cancellation is disabled by default. Configure `auto_cancel_unpaid_after_hours` in Admin → Pengaturan → Kebijakan Pesanan.
-- Schedule `python manage.py cancel_stale_orders` with cron/system scheduler at a suitable interval (for example every 10 minutes). The command is idempotent; new checkout requests also check stale orders for that account.
+- Automatic cancellation is disabled by default. Leave `auto_cancel_unpaid_after_hours=0` unless the school has approved an expiry policy and the host has a scheduled-task facility. If enabled, schedule `python manage.py cancel_stale_orders` every 10 minutes (or an interval approved by the operator). Without that scheduled task, only the account making a new checkout gets stale-order cleanup; the system does not guarantee global expiry in the background. The command is idempotent.
 - Paid orders and payment submissions waiting for admin verification are excluded from automatic cancellation.
 - GoSend fallback: if Nominatim cannot resolve the destination or is temporarily unavailable, the order can still be placed as `ongkir menunggu admin`. The admin must set the fee in the order detail before accepting; the customer receives the final amount notification. No payment can be submitted until the fee is set.
-- Nominatim remains a best-effort public geocoder without an uptime guarantee. The 1.1-second request slot is reserved through a database row lock, so Gunicorn workers sharing the same MySQL/TiDB database share the rate limit. The default geocode result cache is process-local, so separate workers may repeat a lookup after a cache miss, but they still serialize the external requests. Keep the manual-fee fallback enabled; do not use public geocoding for bulk lookups. For manually priced deliveries, the admin must verify the address is reachable before accepting the order.
+- Nominatim remains a best-effort public geocoder without an uptime guarantee. Checkout performs address lookup before opening the transaction that reserves stock, so a slow map response does not hold an order/stock database transaction open. The 1.1-second request slot is reserved through a database row lock, so workers sharing the database share the rate limit. The default geocode result cache is process-local, so separate workers may repeat a lookup after a cache miss, but requests still serialize. Keep the manual-fee fallback enabled; do not use public geocoding for bulk lookups. For manually priced deliveries, the admin must verify the address is reachable before accepting the order.
 
 ## 5. Logs, health, backup, and recovery
 
 - `/api/health/` returns HTTP 200 only when Django can query the database; otherwise it returns 503. Point an uptime monitor at this endpoint.
 - Logs always go to stdout/stderr. Set `LOG_DIR` to enable rotating `mettamart.log` files (5 MiB per file, five backups). Ensure the service account can write to that directory and monitor disk usage.
-- Back up the MySQL/TiDB database daily and before every migration. Test restore to a separate database before go-live. Back up uploaded media separately.
+- Back up the MySQL/TiDB database daily and before every migration. Product photos are stored in the database, so include them in database backups. Test restore to a separate database before go-live.
 - Never restore a backup over the live database without a verified recovery plan.
 
 ## 6. Go-live checklist
@@ -70,8 +73,10 @@ Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HT
 - [ ] Admin login, student login, registration policy, and role permissions tested
 - [ ] Online checkout, POS checkout, stock restoration, payment verification, and receipt tested
 - [ ] Manual GoSend fee path tested end-to-end
-- [ ] Scheduled stale-order command installed and tested
 - [ ] Health endpoint and log collection monitored
-- [ ] Product media persistence and restore tested
+- [ ] Upload, view, replace, and remove a product image; verify it remains available after a backend restart
+- [ ] Database backup and restore verified with product images included
+- [ ] Cross-origin login survives a full browser reload; if third-party cookies are blocked, configure a same-site custom domain or frontend API proxy
+- [ ] Scheduled stale-order task installed and tested only if automatic cancellation is enabled (otherwise keep the setting at 0)
 
 This checklist does not replace the school's approval of its student-data retention and privacy policy.
