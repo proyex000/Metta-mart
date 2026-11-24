@@ -1222,7 +1222,7 @@ export function Settings() {
       ...saved,
       // Account identity must come from the authenticated server session, not stale localStorage.
       adminName: session?.name || defaults.adminName,
-      adminEmail: session?.email || "richardalvarowu2010@gmail.com",
+      adminEmail: session?.email && session.email !== "admin@mettamart.id" ? session.email : "richardalvarowu2010@gmail.com",
     };
   });
   useEffect(() => {
