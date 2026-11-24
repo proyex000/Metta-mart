@@ -553,7 +553,7 @@ export function Stock() {
                       className="icon-button"
                       aria-label={`Hapus ${p.name}`}
                       onClick={async () => {
-                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, sistem akan menonaktifkannya agar catatan lama tetap aman.`)) {
+                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, data produk akan tetap disimpan agar riwayat lama tidak rusak.`)) {
                           try { await productService.remove(p.id); }
                           catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
                         }
