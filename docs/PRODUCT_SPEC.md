@@ -59,8 +59,9 @@ Suggested order states:
 - pending_payment: order created and awaiting payment, if prepayment is required.
 - pending_confirmation: order awaits staff review, where applicable.
 - processing: staff has accepted and is preparing the order.
-- ready_for_pickup: order is ready at the cooperative.
-- completed: order has been handed over and confirmed.
+- ready_for_pickup: pickup order is ready at the cooperative; GoSend order is ready for courier handover.
+- delivering: GoSend parcel has been handed to the courier and is in transit.
+- completed: pickup order has been handed over, or GoSend delivery has been confirmed.
 - cancelled: order was cancelled with a recorded reason.
 
 Payment state is separate from fulfilment state:
