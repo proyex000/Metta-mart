@@ -81,7 +81,7 @@ jobs:
           DB_PASSWORD: root
           DB_HOST: 127.0.0.1
           DB_PORT: "3306"
-          DB_SSL: "false"
+          DB_SSL: "true"
         run: |
           if DJANGO_DEBUG=false DB_ENGINE=sqlite python manage.py check; then
             echo "Production configuration incorrectly accepted SQLite."
