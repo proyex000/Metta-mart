@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { fetchStorefrontSettings } from "../services/settings";
 
 export type IconName =
   | "home"
@@ -108,13 +109,46 @@ export function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
   );
 }
 
+const DEFAULT_BRAND_LOGO = "/assets/mettamart-logo.png";
+
 export function Brand({ compact = false }: { compact?: boolean }) {
+  const [logo, setLogo] = useState(DEFAULT_BRAND_LOGO);
+
+  useEffect(() => {
+    let active = true;
+    const applyLogo = (value: string) => {
+      const nextLogo = value || DEFAULT_BRAND_LOGO;
+      setLogo(nextLogo);
+      const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (favicon) favicon.href = nextLogo;
+    };
+    const loadLogo = () => {
+      fetchStorefrontSettings()
+        .then((settings) => {
+          if (active) applyLogo(settings.store_profile.logo);
+        })
+        .catch(() => undefined);
+    };
+    const syncLogo = (event: Event) => {
+      const value = (event as CustomEvent<string>).detail;
+      if (typeof value === "string") applyLogo(value);
+      else loadLogo();
+    };
+
+    loadLogo();
+    window.addEventListener("mettamart-logo-updated", syncLogo);
+    return () => {
+      active = false;
+      window.removeEventListener("mettamart-logo-updated", syncLogo);
+    };
+  }, []);
+
   return (
     <div className={`brand ${compact ? "brand--compact" : ""}`}>
       <img
         className="brand__image"
-        src="/assets/mettamart-logo.png"
-        alt="MettaMart — Sekolah Metta Maitreya"
+        src={logo}
+        alt="Logo MettaMart"
       />
     </div>
   );
