@@ -191,6 +191,37 @@ class CommerceApiTests(TestCase):
         self.assertEqual(completed.status_code, 200)
         self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
 
+    def test_payment_rejection_requires_reason_and_notifies_customer_with_it(self):
+        self.client.force_authenticate(user=self.student)
+        created = self.create_order("bank_transfer")
+        code = created.data["code"]
+
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.force_authenticate(user=self.student)
+        self.client.post(
+            f"/api/orders/{code}/payment-submission/",
+            {"sender_name": "Nama Pengirim", "payment_source": "BCA"},
+            format="json",
+        )
+
+        self.client.force_authenticate(user=self.admin)
+        missing_reason = self.client.post(f"/api/admin/orders/{code}/payment/reject/", {}, format="json")
+        self.assertEqual(missing_reason.status_code, 400)
+        self.assertIn("note", missing_reason.data)
+
+        rejected = self.client.post(
+            f"/api/admin/orders/{code}/payment/reject/",
+            {"note": "Nama pengirim tidak sesuai mutasi rekening."},
+            format="json",
+        )
+        self.assertEqual(rejected.status_code, 200, rejected.data)
+        self.assertEqual(rejected.data["payment_status"], Order.PaymentStatus.FAILED)
+        event = PaymentEvent.objects.get(order__code=code, event="reject")
+        self.assertIn("tidak sesuai", event.note)
+        notice = Notification.objects.filter(recipient=self.student, target_code=code, kind="payment").latest("created_at")
+        self.assertIn("Nama pengirim tidak sesuai", notice.message)
+
     def test_bank_transfer_requires_manual_verification_before_pickup(self):
         from django.utils import timezone
         day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
