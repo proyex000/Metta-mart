@@ -361,20 +361,28 @@ class AdminSalesReportView(APIView):
 
     def get(self, request):
         today = timezone.localdate()
+        now = timezone.now()
         period = str(request.query_params.get("period", "7d"))
         start = end = None
         bucket = "day"
+
+        month_start = today.replace(day=1)
+        previous_month_start = (month_start - timedelta(days=1)).replace(day=1)
+        two_months_ago_start = (previous_month_start - timedelta(days=1)).replace(day=1)
+        eleven_months_ago_start = two_months_ago_start
+        for _ in range(9):
+            eleven_months_ago_start = (eleven_months_ago_start - timedelta(days=1)).replace(day=1)
+
         if period == "1d":
-            start = end = today
-            bucket = "hour"
+            start, end, bucket = today - timedelta(days=1), today, "three_hours"
         elif period == "7d":
             start, end, bucket = today - timedelta(days=6), today, "day"
         elif period == "1m":
-            start, end, bucket = today - timedelta(days=29), today, "day"
+            start, end, bucket = today - timedelta(days=29), today, "week"
         elif period == "3m":
-            start, end, bucket = today - timedelta(days=89), today, "week"
+            start, end, bucket = two_months_ago_start, today, "month"
         elif period == "1y":
-            start, end, bucket = today - timedelta(days=364), today, "month"
+            start, end, bucket = eleven_months_ago_start, today, "month"
         elif period == "custom":
             try:
                 start = datetime.strptime(request.query_params.get("from", ""), "%Y-%m-%d").date()
@@ -384,7 +392,7 @@ class AdminSalesReportView(APIView):
             if start > end:
                 raise ValidationError({"date_range": "Tanggal awal tidak boleh melewati tanggal akhir."})
             span = (end - start).days + 1
-            bucket = "day" if span <= 31 else "week" if span <= 120 else "month"
+            bucket = "day" if span <= 7 else "week" if span <= 45 else "month"
         else:
             raise ValidationError({"period": "Periode laporan tidak dikenal."})
 
@@ -394,41 +402,56 @@ class AdminSalesReportView(APIView):
             completed_at__isnull=False,
         )
         today_summary = paid_orders.filter(completed_at__date=today).aggregate(total=Sum(NET_REVENUE), count=Count("id"))
-        month_start = today.replace(day=1)
         month_summary = paid_orders.filter(completed_at__date__gte=month_start, completed_at__date__lte=today).aggregate(total=Sum(NET_REVENUE), count=Count("id"))
-        scoped_orders = paid_orders.filter(completed_at__date__gte=start, completed_at__date__lte=end)
 
-        if bucket == "hour":
-            grouped = scoped_orders.annotate(bucket=TruncHour("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
-            values = {timezone.localtime(row["bucket"]).hour: row for row in grouped}
-            daily = [{"date": f"{start.isoformat()}T{hour:02d}", "label": f"{hour:02d}.00", "total": values.get(hour, {}).get("total") or 0, "orders": values.get(hour, {}).get("count") or 0} for hour in range(24)]
-        elif bucket == "day":
-            grouped = scoped_orders.annotate(bucket=TruncDate("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
-            values = {row["bucket"].isoformat(): row for row in grouped}
+        if bucket == "three_hours":
+            # Eight rolling three-hour windows covering exactly the last 24 hours.
+            first_boundary = now - timedelta(hours=24)
             daily = []
-            day = start
-            while day <= end:
-                row = values.get(day.isoformat(), {})
-                daily.append({"date": day.isoformat(), "label": day.strftime("%d %b"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
-                day += timedelta(days=1)
-        elif bucket == "week":
-            grouped = scoped_orders.annotate(bucket=TruncWeek("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
-            values = {row["bucket"].date().isoformat(): row for row in grouped}
-            week = start - timedelta(days=start.weekday())
-            daily = []
-            while week <= end:
-                row = values.get(week.isoformat(), {})
-                daily.append({"date": week.isoformat(), "label": week.strftime("%d %b"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
-                week += timedelta(days=7)
+            for index in range(8):
+                interval_start = first_boundary + timedelta(hours=index * 3)
+                interval_end = interval_start + timedelta(hours=3)
+                aggregate = paid_orders.filter(
+                    completed_at__gte=interval_start,
+                    completed_at__lt=min(interval_end, now),
+                ).aggregate(total=Sum(NET_REVENUE), count=Count("id"))
+                local_start = timezone.localtime(interval_start)
+                local_end = timezone.localtime(min(interval_end, now))
+                daily.append({
+                    "date": interval_start.isoformat(),
+                    "label": f"{local_start:%H.%M}–{local_end:%H.%M}",
+                    "total": aggregate["total"] or 0,
+                    "orders": aggregate["count"] or 0,
+                })
         else:
-            grouped = scoped_orders.annotate(bucket=TruncMonth("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
-            values = {row["bucket"].date().replace(day=1).isoformat(): row for row in grouped}
-            month = start.replace(day=1)
-            daily = []
-            while month <= end:
-                row = values.get(month.isoformat(), {})
-                daily.append({"date": month.isoformat(), "label": month.strftime("%b %y"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
-                month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+            scoped_orders = paid_orders.filter(completed_at__date__gte=start, completed_at__date__lte=end)
+            if bucket == "day":
+                grouped = scoped_orders.annotate(bucket=TruncDate("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+                values = {row["bucket"].isoformat(): row for row in grouped}
+                daily = []
+                day = start
+                while day <= end:
+                    row = values.get(day.isoformat(), {})
+                    daily.append({"date": day.isoformat(), "label": day.strftime("%d %b"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
+                    day += timedelta(days=1)
+            elif bucket == "week":
+                grouped = scoped_orders.annotate(bucket=TruncWeek("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+                values = {row["bucket"].date().isoformat(): row for row in grouped}
+                week = start - timedelta(days=start.weekday())
+                daily = []
+                while week <= end:
+                    row = values.get(week.isoformat(), {})
+                    daily.append({"date": week.isoformat(), "label": week.strftime("%d %b"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
+                    week += timedelta(days=7)
+            else:
+                grouped = scoped_orders.annotate(bucket=TruncMonth("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+                values = {row["bucket"].date().replace(day=1).isoformat(): row for row in grouped}
+                month = start.replace(day=1)
+                daily = []
+                while month <= end:
+                    row = values.get(month.isoformat(), {})
+                    daily.append({"date": month.isoformat(), "label": month.strftime("%b %y"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
+                    month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
 
         top_products = list(
             OrderItem.objects.filter(
