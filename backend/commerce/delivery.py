@@ -14,6 +14,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -71,11 +72,31 @@ def operating_hours_text():
     return f"{', '.join(days)} pukul {hours['open_time']}–{hours['close_time']}"
 
 
+def _reserve_nominatim_slot():
+    """Reserve one globally shared Nominatim request slot using the database row lock."""
+    while True:
+        with transaction.atomic():
+            slot, _ = StoreSetting.objects.select_for_update().get_or_create(
+                key="nominatim_request_slot",
+                defaults={"value": {"next_request_at": 0}},
+            )
+            value = slot.value if isinstance(slot.value, dict) else {}
+            try:
+                next_request_at = float(value.get("next_request_at", 0))
+            except (TypeError, ValueError):
+                next_request_at = 0
+            now = timezone.now().timestamp()
+            delay = max(0.0, next_request_at - now)
+            if delay <= 0:
+                slot.value = {"next_request_at": now + 1.1}
+                slot.save(update_fields=["value", "updated_at"])
+                return
+        time.sleep(min(delay, 1.1))
+
+
 def _lookup(query):
-    # Nominatim public service permits at most one request per second.
-    # cache.add provides a shared rate-limit window when the configured cache is shared.
-    while not cache.add("nominatim:request-window", True, timeout=1.1):
-        time.sleep(0.1)
+    # The database row lock coordinates workers sharing this application's database.
+    _reserve_nominatim_slot()
 
     params = urllib.parse.urlencode({"q": query, "format": "jsonv2", "limit": 1, "countrycodes": "id"})
     request = urllib.request.Request(
@@ -165,10 +186,23 @@ def quote_delivery(address):
             origin = None
     if not origin:
         origin = SCHOOL_ORIGIN_COORDINATES
-    destination = geocode(address)
+    try:
+        destination = geocode(address)
+    except ValidationError:
+        return {
+            "distance_km": None,
+            "fee": 0,
+            "manual_review": True,
+            "message": "Layanan peta tidak tersedia saat ini. Admin akan menetapkan ongkir dan mengirimkan total akhir sebelum pembayaran.",
+        }
     if not destination:
-        raise ValidationError({"delivery_address": "Alamat tidak ditemukan di peta. Lengkapi dengan kelurahan/kecamatan dan kota."})
+        return {
+            "distance_km": None,
+            "fee": 0,
+            "manual_review": True,
+            "message": "Alamat belum dapat ditemukan di peta. Pesanan tetap dapat dikirim; admin akan menetapkan ongkir dan mengirimkan total akhir sebelum pembayaran.",
+        }
     distance = Decimal(str(round(haversine_km(origin, destination) * ROAD_FACTOR, 1)))
     if distance > Decimal(str(config["max_distance_km"])):
         raise ValidationError({"delivery_address": f"Alamat di luar jangkauan pengantaran (maksimal {config['max_distance_km']} km dari koperasi)."})
-    return {"distance_km": distance, "fee": calculate_fee(distance, config)}
+    return {"distance_km": distance, "fee": calculate_fee(distance, config), "manual_review": False, "message": ""}

@@ -7,10 +7,12 @@ from accounts.permissions import IsAdminRole
 from commerce.delivery import DEFAULT_DELIVERY_SETTINGS
 from .models import AuditLog, StoreSetting
 from .serializers import AuditLogSerializer, StoreSettingSerializer
+from .pagination import OptionalPaginationMixin
 
-class AuditLogListView(generics.ListAPIView):
+class AuditLogListView(OptionalPaginationMixin, generics.ListAPIView):
+    default_limit = 200
     permission_classes = [IsAdminRole]
-    queryset = AuditLog.objects.select_related("actor").all()
+    queryset = AuditLog.objects.select_related("actor").all().order_by("-created_at")
     serializer_class = AuditLogSerializer
 
 class StoreSettingListCreateView(generics.ListCreateAPIView):
@@ -48,6 +50,7 @@ DEFAULT_STORE_SETTINGS = {
     "store_profile": {"name": "MettaMart", "description": "Koperasi sekolah", "address": "", "email": "", "phone": ""},
     "notification_preferences": {"order_alerts": True, "low_stock_alerts": True, "announcements_enabled": True},
     "delivery_settings": DEFAULT_DELIVERY_SETTINGS,
+    "order_policy": {"max_active_orders_per_account": 5, "auto_cancel_unpaid_after_hours": 0},
 }
 
 
@@ -118,6 +121,11 @@ class StorefrontSettingsView(APIView):
                         raise ValidationError({key: "Jarak pengiriman harus berupa angka lebih dari 0 dan maksimal 100 km."})
                 if merged["base_distance_km"] > merged["max_distance_km"]:
                     raise ValidationError({key: "Jarak tarif dasar tidak boleh melebihi jangkauan maksimal."})
+            if key == "order_policy":
+                for field, maximum in (("max_active_orders_per_account", 100), ("auto_cancel_unpaid_after_hours", 8760)):
+                    value = merged[field]
+                    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= maximum:
+                        raise ValidationError({key: f"{field} harus bilangan bulat antara 0 dan {maximum}."})
             if key == "notification_preferences" and any(not isinstance(merged[field], bool) for field in ("order_alerts", "low_stock_alerts", "announcements_enabled")):
                 raise ValidationError({key: "Preferensi notifikasi harus berupa boolean."})
             StoreSetting.objects.update_or_create(key=key, defaults={"value": merged, "updated_by": request.user})

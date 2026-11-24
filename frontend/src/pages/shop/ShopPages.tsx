@@ -216,7 +216,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
     : !storeOpen ? `GoSend hanya tersedia saat koperasi buka (${hoursText(hours)}).` : "";
   const isGosend = deliveryMethod === "gosend" && gosendAvailable;
   const quoteValid = !!quote && quoteFor === address.trim();
-  const deliveryFee = isGosend && quoteValid ? quote.fee : 0;
+  const deliveryFee = isGosend && quoteValid && !quote?.manual_review ? (quote?.fee ?? 0) : 0;
   const changeAddress = (value: string) => { setAddress(value); setQuoteError(""); };
   const calculateFee = async () => {
     const trimmed = address.trim();
@@ -277,7 +277,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       <PageTitle title="Pesan Barang" subtitle="Pilih jumlah barang dan metode pembayaran." />
       <section className="order-summary-card">
         <div>
-          <small>{isGosend ? "Total Bayar (termasuk ongkir)" : "Total Belanja"}</small>
+          <small>{isGosend ? (quoteValid ? (quote?.manual_review ? "Subtotal sementara · ongkir menyusul" : "Total Bayar (termasuk ongkir)") : "Subtotal sementara · hitung ongkir dahulu") : "Total Belanja"}</small>
           <strong>{money(total)}</strong>
         </div>
         <Icon name="bag" size={30} />
@@ -334,7 +334,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           <label className={`payment-method-card ${isGosend ? "selected" : ""} ${!gosendAvailable ? "is-disabled" : ""}`}>
             <input type="radio" name="delivery-method" checked={isGosend} onChange={() => setDeliveryMethod("gosend")} disabled={sent || !gosendAvailable} />
             <span className="payment-method-symbol" aria-hidden="true">GO</span>
-            <span className="payment-method-copy"><strong>GoSend</strong><small>{gosendAvailable ? "Diantar ke alamat Anda. Ongkir dihitung otomatis dari jarak." : gosendReason}</small></span>
+            <span className="payment-method-copy"><strong>GoSend</strong><small>{gosendAvailable ? "Diantar ke alamat Anda. Ongkir diestimasi otomatis; bila peta gagal, admin menetapkan tarif." : gosendReason}</small></span>
             <span className="payment-method-check" aria-hidden="true">{isGosend ? "✓" : ""}</span>
           </label>
         </div>
@@ -347,7 +347,13 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
             <label>Alamat lengkap pengantaran<textarea value={address} onChange={(event) => changeAddress(event.target.value)} maxLength={300} placeholder="Jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota" disabled={sent} /></label>
             <button type="button" className="secondary" onClick={calculateFee} disabled={quoting || sent || address.trim().length < 10}>{quoting ? "Menghitung..." : quoteValid ? "Hitung Ulang Ongkir" : "Hitung Ongkir"}</button>
             {quoteError && <p className="payment-unavailable" role="alert">{quoteError}</p>}
-            {quoteValid && quote && (
+            {quoteValid && quote?.manual_review && (
+              <p className="payment-unavailable" role="status">
+                {quote.message || "Ongkir belum dapat dihitung otomatis. Pesanan tetap bisa dibuat; admin akan menetapkan ongkir dan memberi tahu total akhir sebelum pembayaran."}
+                <br />Subtotal barang saat ini: <b>{money(subtotal)}</b>. Ini belum termasuk ongkir.
+              </p>
+            )}
+            {quoteValid && quote && !quote.manual_review && (
               <dl className="delivery-breakdown">
                 <dt>Jarak (estimasi)</dt><dd>{quote.distance_km} km</dd>
                 <dt>Subtotal barang</dt><dd>{money(subtotal)}</dd>
@@ -355,7 +361,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
                 <dt>Total bayar</dt><dd><b>{money(subtotal + quote.fee)}</b></dd>
               </dl>
             )}
-            <p className="payment-help">Ongkir adalah estimasi berdasarkan jarak dan tarif koperasi. Pesanan GoSend dibayar lewat transfer bank atau QRIS, dan hanya dapat dibuat saat koperasi buka ({hoursText(hours)}).</p>
+            <p className="payment-help">Ongkir otomatis adalah estimasi berdasarkan jarak dan tarif koperasi. Jika alamat tidak ditemukan atau layanan peta sedang bermasalah, admin akan menetapkan ongkir manual lalu mengirim total akhir sebelum pembayaran. Pesanan GoSend dibayar lewat transfer bank atau QRIS, dan hanya dapat dibuat saat koperasi buka ({hoursText(hours)}).</p>
           </div>
         )}
       </section>
@@ -575,11 +581,11 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
         <div className="order-detail__items">
           {order.items.map((item) => <div className="detail-product" key={item.product_id}><ProductArt type="book" /><div><b>{item.product_name}</b><small>{item.quantity} × {money(item.unit_price)}</small></div><strong>{money(item.line_total)}</strong></div>)}
         </div>
-        {isGosend && <div className="detail-total detail-total--sub"><span>Ongkir GoSend{order.delivery_distance_km ? ` (${order.delivery_distance_km} km)` : ""}</span><strong>{money(order.delivery_fee)}</strong></div>}
-        <div className="detail-total"><span>{isGosend ? "Total Bayar" : "Total Belanja"}</span><strong>{money(order.total)}</strong></div>
+        {isGosend && <div className="detail-total detail-total--sub"><span>Ongkir GoSend{order.delivery_distance_km ? ` (${order.delivery_distance_km} km)` : ""}</span><strong>{order.delivery_fee_confirmed ? money(order.delivery_fee) : "Belum ditetapkan"}</strong></div>}
+        <div className="detail-total"><span>{isGosend && !order.delivery_fee_confirmed ? "Subtotal sementara (belum termasuk ongkir)" : isGosend ? "Total Bayar" : "Total Belanja"}</span><strong>{money(order.total)}</strong></div>
         <h2>{isGosend ? "Informasi Pengantaran" : "Informasi Pengambilan"}</h2>
         {isGosend
-          ? <dl><dt>Metode</dt><dd>GoSend (diantar)</dd><dt>Penerima</dt><dd>{order.delivery_recipient} · {order.delivery_phone}</dd><dt>Alamat</dt><dd>{order.delivery_address}</dd><dt>Ketentuan</dt><dd>Pesanan diantar pada jam operasional setelah pembayaran diverifikasi admin.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
+          ? <dl><dt>Metode</dt><dd>GoSend (diantar)</dd><dt>Penerima</dt><dd>{order.delivery_recipient} · {order.delivery_phone}</dd><dt>Alamat</dt><dd>{order.delivery_address}</dd><dt>Ketentuan</dt><dd>{order.delivery_fee_confirmed ? "Pesanan diantar pada jam operasional setelah pembayaran diverifikasi admin." : "Ongkir sedang ditetapkan admin. Total akhir akan dikirim melalui notifikasi sebelum pembayaran."}</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
           : <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>}
         <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? (isGosend ? "Siap diantar" : "Siap diambil") : (isGosend ? "Belum siap diantar" : "Belum siap diambil")}</span><span>{order.completed_at ? (isGosend ? "Pengantaran selesai" : "Pengambilan selesai") : (isGosend ? "Menunggu pengantaran" : "Menunggu pengambilan")}</span></div>
         {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (

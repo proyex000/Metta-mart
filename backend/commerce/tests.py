@@ -474,13 +474,17 @@ class DeliveryTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 10)
 
-    def test_unknown_address_is_rejected(self):
+    def test_unknown_address_uses_manual_fee_fallback(self):
         from unittest import mock
         self.client.force_authenticate(user=self.student)
         with mock.patch("commerce.delivery.geocode", side_effect=lambda address: (-6.20, 106.80) if "Sudirman" in address else None):
             response = self.client.post("/api/orders/", self.payload(), format="json", HTTP_IDEMPOTENCY_KEY="unknown-address-0001")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("delivery_address", response.data)
+        self.assertEqual(response.status_code, 201, response.data)
+        order = Order.objects.get(code=response.data["code"])
+        self.assertFalse(order.delivery_fee_confirmed)
+        self.assertIsNone(order.delivery_distance_km)
+        self.assertEqual(order.delivery_fee, 0)
+        self.assertEqual(order.total, order.subtotal)
 
     def test_quote_endpoint_returns_estimate_for_customers_only(self):
         from unittest import mock

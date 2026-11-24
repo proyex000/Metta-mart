@@ -28,6 +28,7 @@ export type CommerceOrder = {
   sales_channel: "online" | "pos";
   delivery_method: "pickup" | "gosend";
   delivery_fee: number;
+  delivery_fee_confirmed: boolean;
   delivery_distance_km: string | null;
   delivery_address: string;
   delivery_recipient: string;
@@ -43,7 +44,7 @@ export type PaymentMethod = CommerceOrder["payment_method"];
 export type PaymentInfo = { bank_name: string; account_name: string; account_number: string; qris_image: string };
 
 export type DeliveryInput = { delivery_method: "pickup" | "gosend"; delivery_address?: string; delivery_recipient?: string; delivery_phone?: string };
-export type DeliveryQuote = { distance_km: string; fee: number };
+export type DeliveryQuote = { distance_km: string | null; fee: number; manual_review: boolean; message: string };
 
 export function quoteDelivery(address: string) {
   return apiRequest<DeliveryQuote>("/delivery/quote/", { method: "POST", body: JSON.stringify({ address }) });
@@ -63,6 +64,13 @@ export function cancelOrder(code: string) {
 export function submitPayment(code: string, input: { sender_name: string; payment_source: string; account_last4?: string; note?: string }) {
   return apiRequest<CommerceOrder>(`/orders/${encodeURIComponent(code)}/payment-submission/`, { method: "POST", body: JSON.stringify(input) });
 }
+export function adminSetDeliveryFee(code: string, delivery_fee: number) {
+  return apiRequest<CommerceOrder>(`/admin/orders/${encodeURIComponent(code)}/delivery-fee/`, {
+    method: "POST",
+    body: JSON.stringify({ delivery_fee }),
+  });
+}
+
 export function adminOrderAction(code: string, action: "accept" | "ready" | "complete-pickup" | "cancel") {
   return apiRequest<CommerceOrder>(`/admin/orders/${encodeURIComponent(code)}/${action}/`, { method: "POST", body: JSON.stringify({}) });
 }

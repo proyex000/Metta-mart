@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,6 +15,12 @@ def env_list(name: str, default: str = "") -> list[str]:
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-deploy")
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
+
+if not DEBUG:
+    if SECRET_KEY == "unsafe-development-key-change-before-deploy" or len(SECRET_KEY) < 50:
+        raise ImproperlyConfigured("Set DJANGO_SECRET_KEY to a unique random value of at least 50 characters in production.")
+    if "DJANGO_ALLOWED_HOSTS" not in os.environ or not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
+        raise ImproperlyConfigured("Set DJANGO_ALLOWED_HOSTS to explicit production hostnames.")
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -88,6 +95,7 @@ TIME_ZONE = "Asia/Jakarta"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -103,6 +111,14 @@ SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", False)
+SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
+if env_bool("SECURE_PROXY_SSL_HEADER_ENABLED", False):
+    # Enable only when a trusted reverse proxy overwrites inbound forwarded-proto headers.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
@@ -110,3 +126,30 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.ScopedRateThrottle"],
     "DEFAULT_THROTTLE_RATES": {"login": "5/min", "register": "3/hour", "password_change": "5/hour"},
 }
+
+# Console logging is always enabled. Set LOG_DIR to also write rotating log files.
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {"standard": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard"},
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+    "loggers": {"django": {"handlers": ["console"], "level": LOG_LEVEL, "propagate": False}},
+}
+LOG_DIR = os.getenv("LOG_DIR", "").strip()
+if LOG_DIR:
+    log_path = Path(LOG_DIR).expanduser()
+    log_path.mkdir(parents=True, exist_ok=True)
+    LOGGING["handlers"]["rotating_file"] = {
+        "class": "logging.handlers.RotatingFileHandler",
+        "filename": str(log_path / "mettamart.log"),
+        "maxBytes": 5 * 1024 * 1024,
+        "backupCount": 5,
+        "encoding": "utf-8",
+        "formatter": "standard",
+    }
+    LOGGING["root"]["handlers"].append("rotating_file")
+    LOGGING["loggers"]["django"]["handlers"].append("rotating_file")

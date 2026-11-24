@@ -87,6 +87,7 @@ class Order(models.Model):
     cash_received = models.PositiveIntegerField(null=True, blank=True)
     delivery_method = models.CharField(max_length=12, choices=DeliveryMethod.choices, default=DeliveryMethod.PICKUP)
     delivery_fee = models.PositiveIntegerField(default=0)
+    delivery_fee_confirmed = models.BooleanField(default=True)
     delivery_distance_km = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
     delivery_address = models.CharField(max_length=300, blank=True)
     delivery_recipient = models.CharField(max_length=120, blank=True)
