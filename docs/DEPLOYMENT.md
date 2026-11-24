@@ -1,6 +1,6 @@
 # MettaMart deployment guide
 
-This guide covers the split deployment used by this project: the Vite frontend is deployed on Vercel and the Django API on Hostless. The backend uses Gunicorn, a production MySQL/TiDB database, and persistent storage for uploaded product media. If the hosting providers change, adapt the platform-specific steps below.
+This guide covers the split deployment used by this project: the Vite frontend is deployed on Vercel and the Django API on Hostless. The backend uses Gunicorn and a production MySQL/TiDB database. Product photos are compressed in the browser and stored as Base64 text in TiDB, so new uploads do not require a persistent disk or an external image-storage service. If the hosting providers change, adapt the platform-specific steps below.
 
 ## 1. Production environment
 
@@ -37,7 +37,7 @@ python manage.py collectstatic --noinput
 gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
-Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. Product uploads require a persistent disk. On Hostless, attach a persistent disk mounted at `/data`, then set `MEDIA_ROOT=/data/media` and `MEDIA_SERVE_ENABLED=true`. The app serves only `/media/product_images/` from that directory; directory listing is disabled. This Django media endpoint is intended for this small, low-traffic school catalog. For larger traffic or stronger media delivery guarantees, move product images to S3-compatible object storage/CDN. Back up uploaded media separately from the database; a persistent disk is not itself a backup.
+Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. For each new product photo, the browser resizes the longest side to at most 640 pixels, converts it to JPEG, and limits the Base64 data URL to 380,000 characters before sending it to Django. Django validates the encoded image and stores it in the product row. No Hostless persistent disk, Cloudinary account, or other media-storage service is required for new uploads. Existing legacy rows that contain file paths can still be served from `MEDIA_ROOT` when legacy media is available and `MEDIA_SERVE_ENABLED=true`; if those files were lost with an ephemeral filesystem, replace the photos from Admin → Kelola Stok.
 
 ## 3. HTTPS and proxy headers
 
@@ -58,7 +58,7 @@ Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HT
 
 - `/api/health/` returns HTTP 200 only when Django can query the database; otherwise it returns 503. Point an uptime monitor at this endpoint.
 - Logs always go to stdout/stderr. Set `LOG_DIR` to enable rotating `mettamart.log` files (5 MiB per file, five backups). Ensure the service account can write to that directory and monitor disk usage.
-- Back up the MySQL/TiDB database daily and before every migration. Test restore to a separate database before go-live. Back up uploaded media separately.
+- Back up the MySQL/TiDB database daily and before every migration. Product photos are stored in the database, so include them in database backups. Test restore to a separate database before go-live.
 - Never restore a backup over the live database without a verified recovery plan.
 
 ## 6. Go-live checklist
@@ -72,9 +72,8 @@ Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HT
 - [ ] Manual GoSend fee path tested end-to-end
 - [ ] Scheduled stale-order command installed and tested
 - [ ] Health endpoint and log collection monitored
-- [ ] Host persistent disk mounted at `/data`; `MEDIA_ROOT=/data/media` and `MEDIA_SERVE_ENABLED=true` configured
-- [ ] Upload, view, replace, and remove a product image after a backend restart
-- [ ] Product media backup and restore tested
+- [ ] Upload, view, replace, and remove a product image; verify it remains available after a backend restart
+- [ ] Database backup and restore verified with product images included
 - [ ] Cross-origin login survives a full browser reload; if third-party cookies are blocked, configure a same-site custom domain or frontend API proxy
 - [ ] Scheduled stale-order task installed and tested if automatic cancellation is enabled (otherwise keep the setting at 0)
 
