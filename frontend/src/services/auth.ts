@@ -5,6 +5,9 @@ import {
   registerApi,
   updateProfileApi,
   changePasswordApi,
+  fetchAccountNotificationPreferences,
+  updateAccountNotificationPreferences,
+  type AccountNotificationPreferences,
   type AuthSession,
 } from "./api";
 
@@ -41,4 +44,14 @@ export async function updateProfile(input: { name: string; email: string }): Pro
 
 export async function changePassword(input: { currentPassword: string; newPassword: string }): Promise<void> {
   await changePasswordApi(input);
+}
+
+export async function getNotificationPreferences(): Promise<AccountNotificationPreferences> {
+  return fetchAccountNotificationPreferences();
+}
+
+export async function saveNotificationPreferences(
+  updates: Partial<AccountNotificationPreferences>,
+): Promise<AccountNotificationPreferences> {
+  return updateAccountNotificationPreferences(updates);
 }
