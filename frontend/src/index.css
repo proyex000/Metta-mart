@@ -1377,7 +1377,16 @@ td b {
   display: flex;
   align-items: center;
   gap: 9px;
-  border-top: 1px solid var(--line);
+  border-top: 0;
+}
+.role-account::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 4px;
+  right: 4px;
+  height: 1px;
+  background: var(--line);
 }
 .role-avatar {
   width: 35px;
@@ -1385,6 +1394,9 @@ td b {
   flex: none;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  line-height: 1;
   color: var(--red);
   background: #ffe8e3;
   border-radius: 50%;
