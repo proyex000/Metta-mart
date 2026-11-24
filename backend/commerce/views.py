@@ -118,19 +118,25 @@ class OrderListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView):
     def get_serializer_class(self):
         return OrderCreateSerializer if self.request.method == "POST" else OrderReadSerializer
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         if request.user.role not in ("student", "parent"):
             return Response({"detail": "Pembuatan pesanan mandiri hanya tersedia untuk siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Validate first: GoSend address geocoding performs an external network
+        # request and must never hold the order/stock database transaction open.
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = serializer.save()
-        if getattr(serializer, "idempotent_replay", False):
-            return Response(OrderReadSerializer(order).data, status=status.HTTP_200_OK)
-        AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
-        via = " (diantar via GoSend)" if order.delivery_method == Order.DeliveryMethod.GOSEND else ""
-        notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}{via}.", target_code=order.code)
-        return Response(OrderReadSerializer(order).data, status=status.HTTP_201_CREATED)
+
+        with transaction.atomic():
+            order = serializer.save()
+            if getattr(serializer, "idempotent_replay", False):
+                return Response(OrderReadSerializer(order).data, status=status.HTTP_200_OK)
+            AuditLog.objects.create(actor=request.user, event="order.created", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "total": order.total})
+            via = " (diantar via GoSend)" if order.delivery_method == Order.DeliveryMethod.GOSEND else ""
+            notify_admins("Pesanan baru masuk", f"{request.user.full_name} membuat pesanan {order.code}{via}.", target_code=order.code)
+            response_data = OrderReadSerializer(order).data
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class DeliveryQuoteView(APIView):
@@ -291,6 +297,12 @@ class AdminPaymentActionView(APIView):
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
         if order.status == Order.Status.CANCELLED:
             raise ValidationError({"payment_status": "Pembayaran pesanan yang dibatalkan tidak dapat diverifikasi."})
+        note = str(request.data.get("note", "")).strip()
+        if action == "reject" and len(note) < 3:
+            raise ValidationError({"note": "Alasan penolakan wajib diisi (minimal 3 karakter) agar pelanggan tahu tindakan yang perlu dilakukan."})
+        if len(note) > 500:
+            raise ValidationError({"note": "Catatan maksimal 500 karakter."})
+
         if action == "verify" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
             order.payment_status = Order.PaymentStatus.PAID
         elif action == "reject" and order.payment_method != Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.PENDING:
@@ -298,10 +310,14 @@ class AdminPaymentActionView(APIView):
         else:
             raise ValidationError({"payment_status": "Verifikasi pembayaran tidak valid."})
         order.save(update_fields=["payment_status", "updated_at"])
-        PaymentEvent.objects.create(order=order, actor=request.user, event=action, note=str(request.data.get("note", ""))[:500])
-        AuditLog.objects.create(actor=request.user, event=f"payment.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code})
+        PaymentEvent.objects.create(order=order, actor=request.user, event=action, note=note)
+        AuditLog.objects.create(actor=request.user, event=f"payment.{action}", target_type="order", target_id=str(order.pk), metadata={"code": order.code, "note": note})
         title = "Pembayaran berhasil diverifikasi" if action == "verify" else "Pembayaran perlu diperiksa kembali"
-        message = f"Status pembayaran pesanan {order.code}: {'lunas' if action == 'verify' else 'ditolak'}. Periksa detail pesanan."
+        message = (
+            f"Pembayaran pesanan {order.code} telah diverifikasi dan dinyatakan lunas."
+            if action == "verify"
+            else f"Pembayaran pesanan {order.code} belum dapat diverifikasi. Alasan: {note}"
+        )
         notify_user(order.customer, title, message, kind="payment", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
 
