@@ -51,7 +51,7 @@ class CommerceApiTests(TestCase):
         admin_list = self.client.get("/api/admin/orders/")
         self.assertIsNone(next(row for row in admin_list.data if row["code"] == code)["payment_info"])
 
-    def test_order_payment_instructions_are_loaded_once_for_a_list(self):
+    def test_order_lists_do_not_query_or_repeat_payment_instructions(self):
         StoreSetting.objects.create(
             key="payment_instructions",
             value={"bank_name": "BCA", "account_name": "MettaMart", "account_number": "123", "qris_image": ""},
@@ -66,10 +66,10 @@ class CommerceApiTests(TestCase):
                 total=10000,
             )
         orders = list(Order.objects.select_related("customer", "beneficiary").prefetch_related("items").all())
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(0):
             data = OrderReadSerializer(orders, many=True, context={}).data
         self.assertEqual(len(data), 3)
-        self.assertTrue(all(row["payment_info"]["account_number"] == "123" for row in data))
+        self.assertTrue(all(row["payment_info"] is None for row in data))
 
     def make_product_image_data(self, color=(40, 120, 80)):
         image_buffer = io.BytesIO()
