@@ -24,6 +24,7 @@ This document describes the current implementation in the deploy-readiness branc
 ### Catalogue and inventory
 - Persistent product catalogue with the configured categories, search, active/inactive products, create/edit/archive/delete.
 - Product photos are compressed in the browser to JPEG (maximum 640 px longest edge) and stored as Base64 text in the MySQL/TiDB product row. No persistent media disk or external image service is required for new uploads.
+- Products with stock/order history are archived rather than physically deleted. Admin can view archived products and reactivate them; customers and POS only receive/use active products.
 - The backend validates the image data URL, format, decoded size, and image contents. Legacy file paths remain readable only while their old media files are available.
 - Stock receipts/adjustments require an attributable reason and create inventory-movement records.
 - Online checkout reserves stock atomically; eligible cancellation restores stock exactly once. POS checkout uses the same authoritative stock records.
