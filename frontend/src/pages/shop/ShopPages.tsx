@@ -10,7 +10,7 @@ import {
 } from "../../data/categories";
 import { money } from "../../data/mock";
 import { useAuth } from "../../hooks/useAuth";
-import { refreshProducts, stockLabel, useProducts } from "../../services/products";
+import { refreshProducts, stockLabel, useProductLoadState, useProducts } from "../../services/products";
 import type { Role } from "../../types";
 import { cancelOrder, createOrder, fetchOrders, fetchOrder, quoteDelivery, submitPayment, type CommerceOrder, type DeliveryQuote } from "../../services/commerce";
 import { fetchStorefrontSettings, type StorefrontSettings } from "../../services/settings";
@@ -20,6 +20,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const { session } = useAuth();
   const navigate = useNavigate();
   const products = useProducts();
+  const productLoad = useProductLoadState();
   const base = `/${role}`;
   const [orders, setOrders] = useState<CommerceOrder[]>([]);
   const [dataError, setDataError] = useState("");
@@ -64,7 +65,11 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
       {role === "parent" ? (
         latestOrder ? <section className="recent-order"><span className="mini-icon"><Icon name="bag" /></span><div><b>#{latestOrder.code}</b><small>{latestOrder.beneficiary_name ? `Untuk ${latestOrder.beneficiary_name} · ` : ""}{new Date(latestOrder.created_at).toLocaleString("id-ID")}</small></div><Status>{statusText}</Status><strong>{money(latestOrder.total)}</strong><Link to={`${base}/orders/${latestOrder.code}`}>Detail</Link></section> : <div className="empty-state"><p>Belum ada pesanan dari akun ini.</p></div>
       ) : (
-        <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} imageUrl={product.image_url} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={`${base}/order?product=${product.id}`}>Pesan</Link></article>)}</section>
+        <>
+          {productLoad.loading && !products.length && <p className="table-foot">Memuat katalog produk...</p>}
+          {productLoad.error && <p className="payment-unavailable" role="alert">{productLoad.error} <button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba lagi</button></p>}
+          {!productLoad.loading && !productLoad.error && <section className="product-strip shop-strip">{products.slice(0, 3).map((product) => <article key={product.id}><ProductArt type={product.art} imageUrl={product.image_url} /><b>{product.name}</b><span>{money(product.price)}</span><Status>{stockLabel(product.stock)}</Status><Link to={`${base}/order?product=${product.id}`}>Pesan</Link></article>)}</section>}
+        </>
       )}
       <section className="shop-promo"><Icon name="bag" size={28} /><div><b>Dukung kebutuhan belajar</b><p>Pesan perlengkapan sekolah dengan mudah dan aman.</p></div></section>
     </>
@@ -73,6 +78,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
 
 export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
   const products = useProducts();
+  const productLoad = useProductLoadState();
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const requested = params.get("category");
@@ -116,6 +122,8 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
           </button>
         ))}
       </div>
+      {productLoad.loading && !products.length && <p className="table-foot">Memuat katalog produk...</p>}
+      {productLoad.error && <p className="payment-unavailable" role="alert">{productLoad.error} <button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba lagi</button></p>}
       <section className="shop-product-grid">
         {list.map((product) => (
           <article key={product.id}>
@@ -137,7 +145,7 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
           </article>
         ))}
       </section>
-      {!list.length && (
+      {!productLoad.loading && !productLoad.error && !list.length && (
         <div className="empty-state">
           <Icon name="search" size={34} />
           <h2>Produk tidak ditemukan</h2>
@@ -169,6 +177,7 @@ function storeOpenNow(hours: StorefrontSettings["operating_hours"] | null) {
 
 export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const products = useProducts();
+  const productLoad = useProductLoadState();
   const [params] = useSearchParams();
   const [counts, setCounts] = useState<Record<number, number>>(() => {
     const id = Number(params.get("product"));
@@ -190,7 +199,10 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [submitError, setSubmitError] = useState("");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [payment, setPayment] = useState<"cash" | "qris" | "bankTransfer">("cash");
-  const [paymentSettings, setPaymentSettings] = useState({ cash: true, qris: true, bank_transfer: true });
+  const [paymentSettings, setPaymentSettings] = useState({ cash: false, qris: false, bank_transfer: false });
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState("");
   const { session } = useAuth();
   const [deliveryMethod, setDeliveryMethod] = useState<"pickup" | "gosend">("pickup");
   const [hours, setHours] = useState<StorefrontSettings["operating_hours"] | null>(null);
@@ -202,18 +214,30 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
   const [quoteFor, setQuoteFor] = useState("");
   const [quoting, setQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState("");
-  useEffect(() => {
-    fetchStorefrontSettings().then((settings) => {
+  const loadCheckoutSettings = async () => {
+    setSettingsLoading(true);
+    setSettingsError("");
+    try {
+      const settings = await fetchStorefrontSettings();
       setPaymentSettings(settings.payment_methods);
       setHours(settings.operating_hours);
       setDeliveryConfig(settings.delivery_settings);
-    }).catch(() => undefined);
-  }, []);
+      setSettingsReady(true);
+    } catch (reason) {
+      setSettingsReady(false);
+      setSettingsError(reason instanceof Error ? reason.message : "Pengaturan koperasi gagal dimuat.");
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+  useEffect(() => { void loadCheckoutSettings(); }, []);
   const storeOpen = storeOpenNow(hours);
   const gosendAvailable = !!deliveryConfig?.enabled && storeOpen;
-  const gosendReason = !deliveryConfig?.enabled
-    ? "GoSend sedang tidak tersedia."
-    : !storeOpen ? `GoSend hanya tersedia saat koperasi buka (${hoursText(hours)}).` : "";
+  const gosendReason = !settingsReady
+    ? "Pengaturan koperasi belum berhasil dimuat."
+    : !deliveryConfig?.enabled
+      ? "GoSend sedang tidak tersedia."
+      : !storeOpen ? `GoSend hanya tersedia saat koperasi buka (${hoursText(hours)}).` : "";
   const isGosend = deliveryMethod === "gosend" && gosendAvailable;
   const quoteValid = !!quote && quoteFor === address.trim();
   const deliveryFee = isGosend && quoteValid && !quote?.manual_review ? (quote?.fee ?? 0) : 0;
@@ -251,7 +275,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
     }));
   };
   const submit = async () => {
-    if (!subtotal || !selectedPayment || sent || submitting || !deliveryReady) return;
+    if (!settingsReady || productLoad.loading || productLoad.error || !subtotal || !selectedPayment || sent || submitting || !deliveryReady) return;
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -283,6 +307,8 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
         <Icon name="bag" size={30} />
       </section>
       <h2 className="subheading">Detail Pesanan</h2>
+      {productLoad.loading && !products.length && <p className="table-foot">Memuat katalog produk...</p>}
+      {productLoad.error && <p className="payment-unavailable" role="alert">{productLoad.error} <button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba lagi</button></p>}
       <section className="order-builder">
         {products.map((product) => (
           <article key={product.id}>
@@ -373,7 +399,12 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
           </div>
           <Icon name="bag" size={22} />
         </div>
-        {methods.length ? (
+        {!settingsReady ? (
+          <div className="payment-unavailable" role="alert">
+            {settingsLoading ? "Memuat pengaturan koperasi..." : "Pengaturan pembayaran tidak dapat dimuat. " + settingsError}
+            {!settingsLoading && <button type="button" className="secondary small" onClick={() => void loadCheckoutSettings()}>Coba Muat Ulang</button>}
+          </div>
+        ) : methods.length ? (
           <div className="payment-method-list">
             {methods.map((method) => (
               <label className={`payment-method-card ${selectedPayment === method.id ? "selected" : ""}`} key={method.id}>
@@ -415,7 +446,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       {sent && createdCode ? (
         <Link className="primary wide order-submit" to={`/${role}/orders/${createdCode}`}>Lihat Detail Pesanan</Link>
       ) : (
-        <button className="primary wide order-submit" disabled={!subtotal || submitting || !methods.length || !deliveryReady} onClick={submit}>
+        <button className="primary wide order-submit" disabled={!settingsReady || settingsLoading || productLoad.loading || !!productLoad.error || !subtotal || submitting || !methods.length || !deliveryReady} onClick={submit}>
           {submitting ? "Mengirim pesanan..." : "Kirim Pesanan"}
         </button>
       )}
@@ -440,8 +471,8 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
   useEffect(() => {
     fetchOrders().then(setItems).catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
   }, []);
-  const shown = tab === "Semua" ? items : items.filter((order) => orderStatusText(order.status) === tab);
-  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
+  const shown = tab === "Semua" ? items : items.filter((order) => orderStatusText(order.status, order.delivery_method) === tab);
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Siap Diantar", "Selesai", "Dibatalkan"];
   return (
     <>
       <PageTitle title={role === "student" ? "Pesanan Saya" : "Pesanan"} subtitle="Pantau status pesanan dan pengambilan." />
