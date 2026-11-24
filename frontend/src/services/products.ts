@@ -15,7 +15,7 @@ const setLoadState = (next: ProductLoadState) => {
   emit();
 };
 const errorMessage = (reason: unknown) => reason instanceof Error ? reason.message : "Katalog produk gagal dimuat. Periksa koneksi dan coba lagi.";
-const toProduct = (p: ApiProduct): Product => ({ id: p.id, name: p.name, category: p.category, price: p.price, stock: p.stock, image_url: p.image_url, art: p.category === "seragam-sekolah" ? "shirt" : p.category === "minuman" ? "bottle" : "book" });
+const toProduct = (p: ApiProduct): Product => ({ id: p.id, name: p.name, category: p.category, price: p.price, stock: p.stock, image_url: p.image_url, is_active: p.is_active, art: p.category === "seragam-sekolah" ? "shirt" : p.category === "minuman" ? "bottle" : "book" });
 
 async function compressProductImage(file: File): Promise<string> {
   let source: CanvasImageSource;
@@ -96,7 +96,7 @@ export async function refreshProducts() {
   setLoadState({ loading: true, error: "" });
   try {
     const data = await apiRequest<ApiProduct[]>("/products/");
-    items = data.filter((p) => p.is_active).map(toProduct);
+    items = data.map(toProduct);
     setLoadState({ loading: false, error: "" });
   } catch (reason) {
     setLoadState({ loading: false, error: errorMessage(reason) });
@@ -119,7 +119,19 @@ export const productService = {
   },
   async remove(id: number) {
     await apiRequest<void>(`/products/${id}/`, { method: "DELETE" });
-    items = items.filter((item) => item.id !== id); emit();
+    // Refresh the admin catalogue so products archived due to transaction/stock history
+    // remain visible and can be reactivated without breaking historical references.
+    await refreshProducts();
+  },
+  async setActive(id: number, is_active: boolean) {
+    const updated = await apiRequest<ApiProduct>(`/products/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active }),
+    });
+    const product = toProduct(updated);
+    items = items.map((item) => item.id === id ? product : item);
+    emit();
+    return product;
   },
 };
 export function useProducts(): Product[] { return useSyncExternalStore(productService.subscribe, productService.list, productService.list); }
