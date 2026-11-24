@@ -82,12 +82,17 @@ export type AdminSalesReport = {
   period: { from: string; to: string };
   today: { revenue: number; orders: number };
   month: { revenue: number; orders: number; average_order: number };
-  daily: { date: string; total: number; orders: number }[];
+  daily: { date: string; label: string; total: number; orders: number }[];
   top_products: { product_name: string; quantity: number; revenue: number }[];
 };
 
-export function fetchAdminSalesReport() {
-  return apiRequest<AdminSalesReport>("/admin/reports/summary/");
+export function fetchAdminSalesReport(filters: { period?: string; from?: string; to?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.period) params.set("period", filters.period);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  const query = params.toString();
+  return apiRequest<AdminSalesReport>(`/admin/reports/summary/${query ? `?${query}` : ""}`);
 }
 
 export type AdminDashboardSummary = {
