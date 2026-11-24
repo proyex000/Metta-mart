@@ -1231,7 +1231,7 @@ export function POS() {
             <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
           </div>
           {!settingsReady && <p className="payment-unavailable" role="alert">Pengaturan metode pembayaran belum berhasil dimuat. {error || "Tunggu sebentar atau muat ulang halaman."}</p>}
-          <button className="primary wide" disabled={!settingsReady || productLoad.loading || !!productLoad.error || !selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
+          <button className="primary wide" disabled={!settingsReady || productLoad.loading || !!productLoad.error || !selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
           <p className="pos-summary__hint">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
         </section>
       </div>
