@@ -177,6 +177,11 @@ class OrderDetailView(generics.RetrieveAPIView):
     serializer_class = OrderReadSerializer
     lookup_field = "code"
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["include_payment_info"] = True
+        return context
+
     def get_queryset(self):
         qs = Order.objects.select_related("customer", "beneficiary").prefetch_related("items")
         return qs if self.request.user.role == "admin" else qs.filter(customer=self.request.user)
