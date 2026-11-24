@@ -143,6 +143,33 @@ class NotificationListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Parent digests are generated lazily on first notification-page visit after
+        # seven days, avoiding a separate paid scheduler/cron dependency.
+        if request.user.role == "parent":
+            preference_key = account_notification_preferences_key(request.user)
+            saved = StoreSetting.objects.filter(key=preference_key).only("value").first()
+            preferences = saved.value if saved and isinstance(saved.value, dict) else {}
+            if preferences.get("weekly_summary", True):
+                from datetime import timedelta
+                from django.db.models import Sum
+                from commerce.models import Order
+                since = timezone.now() - timedelta(days=7)
+                has_recent_digest = Notification.objects.filter(
+                    recipient=request.user,
+                    kind="weekly_summary",
+                    created_at__gte=since,
+                ).exists()
+                if not has_recent_digest:
+                    recent_orders = Order.objects.filter(customer=request.user, created_at__gte=since)
+                    order_count = recent_orders.count()
+                    if order_count:
+                        paid_total = recent_orders.filter(payment_status="paid").aggregate(total=Sum("total"))["total"] or 0
+                        Notification.objects.create(
+                            recipient=request.user,
+                            title="Ringkasan mingguan pesanan",
+                            message=f"7 hari terakhir: {order_count} pesanan, dengan total pembayaran lunas Rp{paid_total:,}.",
+                            kind="weekly_summary",
+                        )
         rows = Notification.objects.filter(recipient=request.user)[:100]
         return Response([{
             "id": row.id,
