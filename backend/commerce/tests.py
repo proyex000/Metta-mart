@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 from accounts.models import User
 from core.models import StoreSetting
 from .models import InventoryMovement, Order, Product
+from .serializers import OrderReadSerializer
 
 
 class CommerceApiTests(TestCase):
@@ -25,6 +26,38 @@ class CommerceApiTests(TestCase):
             "payment_method": payment_method,
             "items": [{"product_id": self.product.id, "quantity": 2}],
         }, format="json", HTTP_IDEMPOTENCY_KEY=f"test-order-{Order.objects.count() + 1:08d}")
+
+    def test_order_payment_instructions_are_loaded_once_for_a_list(self):
+        StoreSetting.objects.create(
+            key="payment_instructions",
+            value={"bank_name": "BCA", "account_name": "MettaMart", "account_number": "123", "qris_image": ""},
+        )
+        for _ in range(3):
+            Order.objects.create(
+                customer=self.student,
+                payment_method=Order.PaymentMethod.BANK_TRANSFER,
+                payment_status=Order.PaymentStatus.UNPAID,
+                status=Order.Status.ACCEPTED,
+                subtotal=10000,
+                total=10000,
+            )
+        orders = list(Order.objects.select_related("customer", "beneficiary").all())
+        with self.assertNumQueries(1):
+            data = OrderReadSerializer(orders, many=True, context={}).data
+        self.assertEqual(len(data), 3)
+        self.assertTrue(all(row["payment_info"]["account_number"] == "123" for row in data))
+
+    def test_product_media_can_be_served_from_configured_persistent_root(self):
+        with tempfile.TemporaryDirectory() as media_root:
+            image_dir = os.path.join(media_root, "product_images")
+            os.makedirs(image_dir)
+            image_path = os.path.join(image_dir, "catalog-test.png")
+            with open(image_path, "wb") as image_file:
+                image_file.write(b"persistent-image-content")
+            with override_settings(MEDIA_ROOT=media_root, MEDIA_SERVE_ENABLED=True, DEBUG=False):
+                response = self.client.get("/media/product_images/catalog-test.png")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b"".join(response.streaming_content), b"persistent-image-content")
 
     def test_product_creation_rolls_back_if_initial_stock_movement_fails(self):
         self.client.force_authenticate(user=self.admin)
