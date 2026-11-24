@@ -63,6 +63,27 @@ class OrderPolicyTests(TestCase):
             order.refresh_from_db()
         return order
 
+    def test_session_authenticated_checkout_supports_lazy_request_user(self):
+        # SessionAuthentication leaves request.user as Django's SimpleLazyObject.
+        session_client = APIClient()
+        self.assertTrue(
+            session_client.login(
+                identifier="policy-student",
+                password="TestPassword!2026",
+            )
+        )
+        response = session_client.post(
+            "/api/orders/",
+            {
+                "payment_method": "cash",
+                "items": [{"product_id": self.product.pk, "quantity": 1}],
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="simple-lazy-user-order",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["customer_name"], "Policy Student")
+
     def test_default_policy_limits_five_active_orders(self):
         for _ in range(5):
             self.create_order_record()
