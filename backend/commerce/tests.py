@@ -41,7 +41,7 @@ class CommerceApiTests(TestCase):
                 subtotal=10000,
                 total=10000,
             )
-        orders = list(Order.objects.select_related("customer", "beneficiary").all())
+        orders = list(Order.objects.select_related("customer", "beneficiary").prefetch_related("items").all())
         with self.assertNumQueries(1):
             data = OrderReadSerializer(orders, many=True, context={}).data
         self.assertEqual(len(data), 3)
