@@ -167,12 +167,22 @@ class NotificationListView(APIView):
             return Response({"detail": "Judul (1–180 karakter) dan pesan (1–500 karakter) wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        recipients = User.objects.filter(is_active=True, role__in=("student", "parent"))
-        Notification.objects.bulk_create([
-            Notification(recipient=user, title=title, message=message, kind=kind)
-            for user in recipients
-        ])
-        return Response({"sent_to": recipients.count()}, status=status.HTTP_201_CREATED)
+        recipients = list(User.objects.filter(is_active=True, role__in=("student", "parent")).only("id"))
+        preference_keys = [f"user_notification_preferences_{user.pk}" for user in recipients]
+        saved_preferences = {
+            item.key: item.value
+            for item in StoreSetting.objects.filter(key__in=preference_keys)
+        }
+        notifications = []
+        for user in recipients:
+            values = saved_preferences.get(f"user_notification_preferences_{user.pk}")
+            if not isinstance(values, dict):
+                values = {}
+            if values.get("promotions", False):
+                notifications.append(Notification(recipient=user, title=title, message=message, kind=kind))
+        if notifications:
+            Notification.objects.bulk_create(notifications)
+        return Response({"sent_to": len(notifications)}, status=status.HTTP_201_CREATED)
 
 class NotificationReadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
