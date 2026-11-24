@@ -41,6 +41,8 @@ from .models import Notification
 
 QRIS_IMAGE_PATTERN = re.compile(r"^data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$")
 QRIS_IMAGE_MAX_CHARS = 950_000  # ~700 KB gambar setelah di-encode base64
+LOGO_IMAGE_PATTERN = re.compile(r"^data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$")
+LOGO_IMAGE_MAX_CHARS = 2_100_000  # ~1.5 MB file setelah di-encode base64
 
 DEFAULT_STORE_SETTINGS = {
     "operating_hours": {"days": ["mon", "tue", "wed", "thu", "fri"], "open_time": "", "close_time": ""},
@@ -54,15 +56,15 @@ DEFAULT_STORE_SETTINGS = {
 }
 
 
-LOGO_IMAGE_PATTERN = re.compile(r"^data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$")
-LOGO_IMAGE_MAX_CHARS = 2_100_000  # ~1.5 MB file setelah di-encode base64
+class StorefrontSettingsView(APIView):
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
         # Gabungkan dengan nilai bawaan dan buang kolom usang (mis. qris_note) dari data lama.
         data = {key: {**value, **{k: v for k, v in (saved.get(key) or {}).items() if k in value}} for key, value in DEFAULT_STORE_SETTINGS.items()}
-class StorefrontSettingsView(APIView):
-    permission_classes = [permissions.AllowAny]
+        if getattr(request.user, "role", None) != "admin":
+            data.pop("payment_instructions", None)  # rekening/QRIS hanya tampil di detail pesanan setelah dikonfirmasi
         return Response(data)
 
     @transaction.atomic
@@ -103,9 +105,9 @@ class StorefrontSettingsView(APIView):
                     raise ValidationError({key: "Gambar QRIS harus berformat PNG, JPG, atau WebP dengan ukuran maksimal sekitar 700 KB."})
             if key == "pickup_instructions" and not isinstance(merged["message"], str):
                 raise ValidationError({key: "Instruksi pengambilan harus berupa teks."})
-        if getattr(request.user, "role", None) != "admin":
-            data.pop("payment_instructions", None)  # rekening/QRIS hanya tampil di detail pesanan setelah dikonfirmasi
             if key == "store_profile":
+                if any(not isinstance(merged[field], str) for field in ("name", "description", "address", "email", "phone", "logo")):
+                    raise ValidationError({key: "Informasi koperasi harus berupa teks."})
                 if not merged["name"].strip() or len(merged["name"]) > 120:
                     raise ValidationError({key: "Nama koperasi wajib diisi dan maksimal 120 karakter."})
                 logo = merged["logo"]
@@ -135,6 +137,7 @@ class StorefrontSettingsView(APIView):
         AuditLog.objects.create(actor=request.user, event="store.settings_updated", target_type="store", metadata={"keys": list(request.data.keys())})
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
         return Response({key: saved.get(key, value) for key, value in DEFAULT_STORE_SETTINGS.items()})
+
 
 class NotificationListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
