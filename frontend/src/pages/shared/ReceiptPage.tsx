@@ -106,7 +106,7 @@ export function ReceiptPage() {
         <div className="receipt-rule" />
         <div className="receipt-totals">
           <div><span>Subtotal</span><b>{money(order.subtotal)}</b></div>
-          {isGosend && <div><span>Ongkir GoSend</span><b>{money(order.delivery_fee)}</b></div>}
+          {isGosend && <div><span>Ongkir GoSend</span><b>{order.delivery_fee_confirmed ? money(order.delivery_fee) : "Menunggu konfirmasi admin"}</b></div>}
           <div className="receipt-grand-total"><span>TOTAL</span><strong>{money(order.total)}</strong></div>
           <div><span>Metode pembayaran</span><b>{paymentMethod(order)}</b></div>
           {cash !== null && <>
