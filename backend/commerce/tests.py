@@ -449,6 +449,58 @@ class CommerceApiTests(TestCase):
         self.assertFalse(Product.objects.filter(pk=clean.id).exists())
 
 
+    def test_gosend_order_has_separate_ready_delivering_and_completed_states(self):
+        from django.utils import timezone
+
+        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+        today = day_codes[timezone.localtime().weekday()]
+        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
+
+        created = self.create_order("cash")
+        self.assertEqual(created.status_code, 201, created.data)
+        code = created.data["code"]
+        Order.objects.filter(code=code).update(delivery_method=Order.DeliveryMethod.GOSEND)
+
+        self.client.force_authenticate(user=self.admin)
+        accepted = self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.assertEqual(accepted.status_code, 200, accepted.data)
+        ready = self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
+        self.assertEqual(ready.status_code, 200, ready.data)
+        self.assertEqual(ready.data["status"], Order.Status.READY)
+
+        started = self.client.post(f"/api/admin/orders/{code}/start-delivery/", {}, format="json")
+        self.assertEqual(started.status_code, 200, started.data)
+        self.assertEqual(started.data["status"], Order.Status.DELIVERING)
+        self.assertIsNotNone(started.data["delivering_at"])
+        self.assertTrue(Notification.objects.filter(recipient=self.student, target_code=code, title="Pesanan sedang diantar").exists())
+
+        completed = self.client.post(f"/api/admin/orders/{code}/complete-delivery/", {}, format="json")
+        self.assertEqual(completed.status_code, 200, completed.data)
+        self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
+        self.assertEqual(completed.data["payment_status"], Order.PaymentStatus.PAID)
+
+    def test_delivery_actions_cannot_be_used_for_pickup_orders(self):
+        created = self.create_order("cash")
+        code = created.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
+        response = self.client.post(f"/api/admin/orders/{code}/start-delivery/", {}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Order.objects.get(code=code).status, Order.Status.READY)
+
+    def test_gosend_cannot_start_before_transfer_or_qris_payment_is_verified(self):
+        created = self.create_order("bank_transfer")
+        code = created.data["code"]
+        Order.objects.filter(code=code).update(delivery_method=Order.DeliveryMethod.GOSEND)
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+        self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
+        response = self.client.post(f"/api/admin/orders/{code}/start-delivery/", {}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Order.objects.get(code=code).status, Order.Status.READY)
+
+
 class DeliveryTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -774,55 +826,3 @@ class CustomerCancelAndPaymentInfoTests(TestCase):
         data = self.client.get("/api/storefront/settings/").data["payment_instructions"]
         self.assertNotIn("qris_note", data)
         self.assertEqual(data["qris_image"], "")
-
-
-    def test_gosend_order_has_separate_ready_delivering_and_completed_states(self):
-        from django.utils import timezone
-
-        day_codes = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-        today = day_codes[timezone.localtime().weekday()]
-        StoreSetting.objects.create(key="operating_hours", value={"days": [today], "open_time": "00:00", "close_time": "23:59"})
-
-        created = self.create_order("cash")
-        self.assertEqual(created.status_code, 201, created.data)
-        code = created.data["code"]
-        Order.objects.filter(code=code).update(delivery_method=Order.DeliveryMethod.GOSEND)
-
-        self.client.force_authenticate(user=self.admin)
-        accepted = self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
-        self.assertEqual(accepted.status_code, 200, accepted.data)
-        ready = self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
-        self.assertEqual(ready.status_code, 200, ready.data)
-        self.assertEqual(ready.data["status"], Order.Status.READY)
-
-        started = self.client.post(f"/api/admin/orders/{code}/start-delivery/", {}, format="json")
-        self.assertEqual(started.status_code, 200, started.data)
-        self.assertEqual(started.data["status"], Order.Status.DELIVERING)
-        self.assertIsNotNone(started.data["delivering_at"])
-        self.assertTrue(Notification.objects.filter(recipient=self.student, target_code=code, title="Pesanan sedang diantar").exists())
-
-        completed = self.client.post(f"/api/admin/orders/{code}/complete-delivery/", {}, format="json")
-        self.assertEqual(completed.status_code, 200, completed.data)
-        self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
-        self.assertEqual(completed.data["payment_status"], Order.PaymentStatus.PAID)
-
-    def test_delivery_actions_cannot_be_used_for_pickup_orders(self):
-        created = self.create_order("cash")
-        code = created.data["code"]
-        self.client.force_authenticate(user=self.admin)
-        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
-        self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
-        response = self.client.post(f"/api/admin/orders/{code}/start-delivery/", {}, format="json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(Order.objects.get(code=code).status, Order.Status.READY)
-
-    def test_gosend_cannot_start_before_transfer_or_qris_payment_is_verified(self):
-        created = self.create_order("bank_transfer")
-        code = created.data["code"]
-        Order.objects.filter(code=code).update(delivery_method=Order.DeliveryMethod.GOSEND)
-        self.client.force_authenticate(user=self.admin)
-        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
-        self.client.post(f"/api/admin/orders/{code}/ready/", {}, format="json")
-        response = self.client.post(f"/api/admin/orders/{code}/start-delivery/", {}, format="json")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(Order.objects.get(code=code).status, Order.Status.READY)
