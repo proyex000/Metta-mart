@@ -4,10 +4,17 @@ import { apiRequest } from "./api";
 import type { Product, ProductInput } from "../types";
 
 type ApiProduct = { id: number; name: string; category: Product["category"]; price: number; stock: number; is_active: boolean; image_url: string | null };
+export type ProductLoadState = { loading: boolean; error: string };
 const MAX_IMAGE_DATA_URL_LENGTH = 380_000;
 let items: Product[] = [];
+let loadState: ProductLoadState = { loading: true, error: "" };
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
+const setLoadState = (next: ProductLoadState) => {
+  loadState = next;
+  emit();
+};
+const errorMessage = (reason: unknown) => reason instanceof Error ? reason.message : "Katalog produk gagal dimuat. Periksa koneksi dan coba lagi.";
 const toProduct = (p: ApiProduct): Product => ({ id: p.id, name: p.name, category: p.category, price: p.price, stock: p.stock, image_url: p.image_url, art: p.category === "seragam-sekolah" ? "shirt" : p.category === "minuman" ? "bottle" : "book" });
 
 async function compressProductImage(file: File): Promise<string> {
@@ -86,12 +93,19 @@ function validate(input: ProductInput) {
   if (!Number.isInteger(input.stock) || input.stock < 0) throw new Error("Stok harus berupa bilangan bulat (0 atau lebih).");
 }
 export async function refreshProducts() {
-  const data = await apiRequest<ApiProduct[]>("/products/");
-  items = data.filter((p) => p.is_active).map(toProduct);
-  emit();
+  setLoadState({ loading: true, error: "" });
+  try {
+    const data = await apiRequest<ApiProduct[]>("/products/");
+    items = data.filter((p) => p.is_active).map(toProduct);
+    setLoadState({ loading: false, error: "" });
+  } catch (reason) {
+    setLoadState({ loading: false, error: errorMessage(reason) });
+    throw reason;
+  }
 }
 export const productService = {
   list: () => items,
+  loadState: () => loadState,
   subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
   async create(input: ProductInput): Promise<Product> {
     validate(input);
@@ -109,4 +123,5 @@ export const productService = {
   },
 };
 export function useProducts(): Product[] { return useSyncExternalStore(productService.subscribe, productService.list, productService.list); }
+export function useProductLoadState(): ProductLoadState { return useSyncExternalStore(productService.subscribe, productService.loadState, productService.loadState); }
 export function stockLabel(stock: number): "Habis" | "Hampir Habis" | "Tersedia" { return stock === 0 ? "Habis" : stock < 10 ? "Hampir Habis" : "Tersedia"; }
