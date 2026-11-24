@@ -88,9 +88,18 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         locked_product = Product.objects.select_for_update().get(pk=serializer.instance.pk)
         serializer.instance = locked_product
         previous_stock = locked_product.stock
+        previous_active = locked_product.is_active
         note = serializer.validated_data.get("stock_note", "").strip()
         product = serializer.save()
         delta = product.stock - previous_stock
+        if previous_active != product.is_active:
+            AuditLog.objects.create(
+                actor=self.request.user,
+                event="product.activated" if product.is_active else "product.deactivated",
+                target_type="product",
+                target_id=str(product.pk),
+                metadata={"name": product.name, "is_active": product.is_active},
+            )
         if delta:
             InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment", reference=note)
             if previous_stock >= 10 and product.stock < 10:
@@ -98,13 +107,28 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                 if not preferences or not isinstance(preferences.value, dict) or preferences.value.get("low_stock_alerts", True):
                     notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         # Keep products referenced by stock history or orders so audit trails remain valid.
         if instance.stock_movements.exists() or instance.order_items.exists():
             if instance.is_active:
                 instance.is_active = False
                 instance.save(update_fields=["is_active", "updated_at"])
+                AuditLog.objects.create(
+                    actor=self.request.user,
+                    event="product.deactivated",
+                    target_type="product",
+                    target_id=str(instance.pk),
+                    metadata={"name": instance.name, "reason": "archived_with_history"},
+                )
             return
+        AuditLog.objects.create(
+            actor=self.request.user,
+            event="product.deleted",
+            target_type="product",
+            target_id=str(instance.pk),
+            metadata={"name": instance.name},
+        )
         instance.delete()
 
 
