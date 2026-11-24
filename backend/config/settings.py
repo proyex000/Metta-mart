@@ -13,7 +13,7 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-deploy")
-DEBUG = env_bool("DJANGO_DEBUG", True)
+DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 
 if not DEBUG:
@@ -58,8 +58,23 @@ TEMPLATES = [{
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DB_ENGINE = os.getenv("DB_ENGINE", "sqlite").lower()
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite" if DEBUG else "mysql").strip().lower()
+if DB_ENGINE not in {"sqlite", "mysql"}:
+    raise ImproperlyConfigured("DB_ENGINE must be either 'mysql' or 'sqlite'.")
+
+if not DEBUG and DB_ENGINE != "mysql":
+    raise ImproperlyConfigured("Production requires DB_ENGINE=mysql. SQLite is only supported for local development and tests.")
+
 if DB_ENGINE == "mysql":
+    if not DEBUG:
+        missing_db_settings = [
+            name for name in ("DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT")
+            if not os.getenv(name, "").strip()
+        ]
+        if missing_db_settings:
+            raise ImproperlyConfigured(
+                "Production MySQL/TiDB configuration is incomplete. Missing: " + ", ".join(missing_db_settings)
+            )
     db_options = {"charset": "utf8mb4"}
     if env_bool("DB_SSL", True):
         ssl_options = {}
@@ -113,6 +128,8 @@ SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", not DEBUG)
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax" if DEBUG else "None")
 if not DEBUG and CSRF_COOKIE_SAMESITE.lower() == "none" and not CSRF_COOKIE_SECURE:
     raise ImproperlyConfigured("CSRF_COOKIE_SAMESITE=None requires CSRF_COOKIE_SECURE=true.")
+if not DEBUG and (not SESSION_COOKIE_SECURE or not CSRF_COOKIE_SECURE):
+    raise ImproperlyConfigured("Production requires SESSION_COOKIE_SECURE=true and CSRF_COOKIE_SECURE=true.")
 if not DEBUG and SESSION_COOKIE_SAMESITE.lower() == "none" and not SESSION_COOKIE_SECURE:
     raise ImproperlyConfigured("SESSION_COOKIE_SAMESITE=None requires SESSION_COOKIE_SECURE=true.")
 SECURE_CONTENT_TYPE_NOSNIFF = True
