@@ -132,3 +132,23 @@ export async function changePasswordApi(input: { currentPassword: string; newPas
 }
 
 export const apiRequest = request;
+
+export type AccountNotificationPreferences = {
+  order_updates: boolean;
+  stock_updates: boolean;
+  promotions: boolean;
+  weekly_summary: boolean;
+};
+
+export async function fetchAccountNotificationPreferences(): Promise<AccountNotificationPreferences> {
+  return request<AccountNotificationPreferences>("/auth/notification-preferences/");
+}
+
+export async function updateAccountNotificationPreferences(
+  updates: Partial<AccountNotificationPreferences>,
+): Promise<AccountNotificationPreferences> {
+  return request<AccountNotificationPreferences>("/auth/notification-preferences/", {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}
