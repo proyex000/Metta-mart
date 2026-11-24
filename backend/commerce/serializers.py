@@ -1,5 +1,9 @@
+import base64
+import binascii
 import hashlib
 import json
+from io import BytesIO
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from PIL import Image, UnidentifiedImageError
@@ -12,9 +16,16 @@ from .models import InventoryMovement, Order, OrderItem, Product
 from .order_policy import cancel_stale_orders, enforce_order_limits
 
 
+MAX_PRODUCT_IMAGE_DATA_URL_LENGTH = 380_000
+MAX_PRODUCT_IMAGE_BYTES = 285_000
+
+
 class ProductSerializer(serializers.ModelSerializer):
     stock_note = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=80)
-    image = serializers.ImageField(required=False, write_only=True)
+    image = serializers.CharField(
+        required=False, write_only=True, allow_blank=True, allow_null=True,
+        max_length=MAX_PRODUCT_IMAGE_DATA_URL_LENGTH,
+    )
     remove_image = serializers.BooleanField(write_only=True, required=False, default=False)
     image_url = serializers.SerializerMethodField(read_only=True)
 
@@ -26,24 +37,40 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         if not obj.image:
             return None
+        # New product photos are data URLs stored directly in TiDB. Keep legacy
+        # upload paths readable while old media files are still available.
+        if obj.image.startswith("data:image/"):
+            return obj.image
+        legacy_url = f"{settings.MEDIA_URL}{str(obj.image).lstrip('/')}"
         request = self.context.get("request")
-        url = obj.image.url
-        return request.build_absolute_uri(url) if request else url
+        return request.build_absolute_uri(legacy_url) if request else legacy_url
 
     def validate_image(self, value):
-        if value.size > 5 * 1024 * 1024:
-            raise serializers.ValidationError("Ukuran gambar maksimal 5 MB.")
+        if value in (None, ""):
+            return value
         try:
-            with Image.open(value) as image:
-                if image.format not in ("JPEG", "PNG", "WEBP"):
-                    raise serializers.ValidationError("Format gambar harus JPG, PNG, atau WEBP.")
+            header, encoded = value.split(",", 1)
+            mime_types = {
+                "data:image/jpeg;base64": "JPEG",
+                "data:image/png;base64": "PNG",
+                "data:image/webp;base64": "WEBP",
+            }
+            expected_format = mime_types.get(header)
+            if not expected_format:
+                raise serializers.ValidationError("Format gambar harus JPG, PNG, atau WEBP dalam format Base64.")
+            raw = base64.b64decode(encoded, validate=True)
+            if not raw or len(raw) > MAX_PRODUCT_IMAGE_BYTES:
+                raise serializers.ValidationError("Ukuran gambar setelah kompresi maksimal 285 KB.")
+            with Image.open(BytesIO(raw)) as image:
+                if image.format != expected_format:
+                    raise serializers.ValidationError("Format data gambar tidak sesuai dengan isinya.")
                 if image.width > 4000 or image.height > 4000:
                     raise serializers.ValidationError("Resolusi gambar maksimal 4000 × 4000 piksel.")
                 image.verify()
-        except (UnidentifiedImageError, OSError, ValueError):
-            raise serializers.ValidationError("File yang diunggah bukan gambar yang valid.")
-        finally:
-            value.seek(0)
+        except serializers.ValidationError:
+            raise
+        except (ValueError, binascii.Error, UnidentifiedImageError, OSError, Image.DecompressionBombError):
+            raise serializers.ValidationError("Data gambar tidak valid atau rusak.")
         return value
 
     def validate(self, attrs):
@@ -53,22 +80,17 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("stock_note", None)
-        validated_data.pop("remove_image", None)
+        remove_image = validated_data.pop("remove_image", False)
+        if remove_image:
+            validated_data["image"] = None
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         validated_data.pop("stock_note", None)
         remove_image = validated_data.pop("remove_image", False)
-        old_image = instance.image
-        old_name = old_image.name if old_image else ""
-        updated = super().update(instance, validated_data)
-        new_name = updated.image.name if updated.image else ""
-        if old_name and (remove_image or old_name != new_name):
-            old_image.storage.delete(old_name)
         if remove_image and not validated_data.get("image"):
-            updated.image = None
-            updated.save(update_fields=["image"])
-        return updated
+            validated_data["image"] = None
+        return super().update(instance, validated_data)
 
     def validate_price(self, value):
         if value < 0:
