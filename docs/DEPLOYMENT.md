@@ -17,7 +17,7 @@ Required:
 
 Production startup fails when DEBUG is false and the secret is still the development placeholder/too short, or allowed hosts are empty or contain `*`.
 
-For a same-domain deployment, proxy `/api/` and `/media/` to Django and all other paths to the built frontend. For separate frontend/backend origins, explicitly set CORS and CSRF trusted origins.
+For a same-domain deployment, proxy `/api/` to Django and all other paths to the built frontend. For separate frontend/backend origins, explicitly set CORS and CSRF trusted origins. Production defaults use `SameSite=None; Secure` for session and CSRF cookies so credentialed cross-origin API requests can send cookies. Set the frontend origin in both `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS`. Browsers or privacy settings may still block third-party cookies; if login does not persist in the deployed browser, use a same-site custom domain or proxy `/api/` through the frontend origin rather than weakening cookie security.
 
 ## 2. Build and start
 
@@ -37,7 +37,7 @@ python manage.py collectstatic --noinput
 gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
-Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. Uploaded product images need persistent storage and a backup policy; do not rely on ephemeral container filesystems.
+Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. Product uploads require a persistent disk. On Hostless, attach a persistent disk mounted at `/data`, then set `MEDIA_ROOT=/data/media` and `MEDIA_SERVE_ENABLED=true`. The app serves only `/media/product_images/` from that directory; directory listing is disabled. This Django media endpoint is intended for this small, low-traffic school catalog. For larger traffic or stronger media delivery guarantees, move product images to S3-compatible object storage/CDN. Back up uploaded media separately from the database; a persistent disk is not itself a backup.
 
 ## 3. HTTPS and proxy headers
 
@@ -49,7 +49,7 @@ Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HT
 
 - Order policy defaults to 5 active orders per account. Set 0 for no active-order cap.
 - Automatic cancellation is disabled by default. Configure `auto_cancel_unpaid_after_hours` in Admin → Pengaturan → Kebijakan Pesanan.
-- Schedule `python manage.py cancel_stale_orders` with cron/system scheduler at a suitable interval (for example every 10 minutes). The command is idempotent; new checkout requests also check stale orders for that account.
+- Automatic cancellation is disabled by default. Leave `auto_cancel_unpaid_after_hours=0` unless the host has a scheduled-task facility configured. If enabled, schedule `python manage.py cancel_stale_orders` every 10 minutes (or an interval approved by the operator). Without that scheduled task, only the account making a new checkout gets stale-order cleanup; the system does not guarantee global expiry in the background. The command is idempotent.
 - Paid orders and payment submissions waiting for admin verification are excluded from automatic cancellation.
 - GoSend fallback: if Nominatim cannot resolve the destination or is temporarily unavailable, the order can still be placed as `ongkir menunggu admin`. The admin must set the fee in the order detail before accepting; the customer receives the final amount notification. No payment can be submitted until the fee is set.
 - Nominatim remains a best-effort public geocoder without an uptime guarantee. The 1.1-second request slot is reserved through a database row lock, so Gunicorn workers sharing the same MySQL/TiDB database share the rate limit. The default geocode result cache is process-local, so separate workers may repeat a lookup after a cache miss, but they still serialize the external requests. Keep the manual-fee fallback enabled; do not use public geocoding for bulk lookups. For manually priced deliveries, the admin must verify the address is reachable before accepting the order.
@@ -72,6 +72,10 @@ Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HT
 - [ ] Manual GoSend fee path tested end-to-end
 - [ ] Scheduled stale-order command installed and tested
 - [ ] Health endpoint and log collection monitored
-- [ ] Product media persistence and restore tested
+- [ ] Host persistent disk mounted at `/data`; `MEDIA_ROOT=/data/media` and `MEDIA_SERVE_ENABLED=true` configured
+- [ ] Upload, view, replace, and remove a product image after a backend restart
+- [ ] Product media backup and restore tested
+- [ ] Cross-origin login survives a full browser reload; if third-party cookies are blocked, configure a same-site custom domain or frontend API proxy
+- [ ] Scheduled stale-order task installed and tested if automatic cancellation is enabled
 
 This checklist does not replace the school's approval of its student-data retention and privacy policy.
