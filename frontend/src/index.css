@@ -1383,8 +1383,8 @@ td b {
   content: "";
   position: absolute;
   top: 0;
-  left: 4px;
-  right: 4px;
+  left: 20px;
+  right: 30px;
   height: 1px;
   background: var(--line);
 }
