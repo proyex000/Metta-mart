@@ -1,6 +1,5 @@
+import base64
 import io
-import os
-import tempfile
 from unittest import mock
 from PIL import Image
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -47,17 +46,71 @@ class CommerceApiTests(TestCase):
         self.assertEqual(len(data), 3)
         self.assertTrue(all(row["payment_info"]["account_number"] == "123" for row in data))
 
-    def test_product_media_can_be_served_from_configured_persistent_root(self):
-        with tempfile.TemporaryDirectory() as media_root:
-            image_dir = os.path.join(media_root, "product_images")
-            os.makedirs(image_dir)
-            image_path = os.path.join(image_dir, "catalog-test.png")
-            with open(image_path, "wb") as image_file:
-                image_file.write(b"persistent-image-content")
-            with override_settings(MEDIA_ROOT=media_root, MEDIA_SERVE_ENABLED=True, DEBUG=False):
-                response = self.client.get("/media/product_images/catalog-test.png")
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(b"".join(response.streaming_content), b"persistent-image-content")
+    def make_product_image_data(self, color=(40, 120, 80)):
+        image_buffer = io.BytesIO()
+        Image.new("RGB", (24, 24), color).save(image_buffer, format="JPEG", quality=85)
+        encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+
+    def test_product_image_is_saved_as_base64_text_and_returned_by_api(self):
+        self.client.force_authenticate(user=self.admin)
+        image_data = self.make_product_image_data()
+        response = self.client.post("/api/products/", {
+            "name": "Foto Produk",
+            "category": "buku",
+            "price": 5000,
+            "stock": 2,
+            "image": image_data,
+        }, format="json")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["image_url"], image_data)
+        product = Product.objects.get(pk=response.data["id"])
+        self.assertEqual(product.image, image_data)
+        self.assertIsInstance(product.image, str)
+
+    def test_product_image_can_be_replaced_and_removed_without_filesystem_storage(self):
+        self.client.force_authenticate(user=self.admin)
+        first_image = self.make_product_image_data((40, 120, 80))
+        second_image = self.make_product_image_data((120, 60, 40))
+        product = Product.objects.create(name="Foto", category="buku", price=1000, stock=0, image=first_image)
+
+        replaced = self.client.patch(f"/api/products/{product.id}/", {"image": second_image}, format="json")
+        self.assertEqual(replaced.status_code, 200, replaced.data)
+        product.refresh_from_db()
+        self.assertEqual(product.image, second_image)
+        self.assertEqual(replaced.data["image_url"], second_image)
+
+        removed = self.client.patch(f"/api/products/{product.id}/", {"remove_image": True}, format="json")
+        self.assertEqual(removed.status_code, 200, removed.data)
+        product.refresh_from_db()
+        self.assertIsNone(product.image)
+        self.assertIsNone(removed.data["image_url"])
+
+    def test_product_image_rejects_invalid_or_unsupported_data_urls(self):
+        self.client.force_authenticate(user=self.admin)
+        for invalid_image in (
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            "data:image/jpeg;base64,not-valid-base64!",
+            "https://example.invalid/product.jpg",
+        ):
+            response = self.client.post("/api/products/", {
+                "name": "Gambar Tidak Valid",
+                "category": "buku",
+                "price": 1000,
+                "stock": 0,
+                "image": invalid_image,
+            }, format="json")
+            self.assertEqual(response.status_code, 400, invalid_image[:40])
+
+    def test_legacy_product_image_paths_keep_their_media_url(self):
+        product = Product.objects.create(
+            name="Foto Lama", category="buku", price=1000, stock=0,
+            image="product_images/legacy.jpg",
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get(f"/api/products/{product.id}/")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["image_url"], f"http://testserver/media/product_images/legacy.jpg")
 
     def test_product_creation_rolls_back_if_initial_stock_movement_fails(self):
         self.client.force_authenticate(user=self.admin)
