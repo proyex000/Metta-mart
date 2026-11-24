@@ -43,7 +43,7 @@ Set `STATIC_ROOT` in your host configuration or serve static assets through the 
 
 Terminate TLS at Nginx or your platform. The supplied Nginx example redirects HTTP to HTTPS and sends the forwarded protocol header. Only enable `SECURE_PROXY_SSL_HEADER_ENABLED=true` when the trusted reverse proxy overwrites inbound `X-Forwarded-Proto` values. Set `SECURE_SSL_REDIRECT=true` after HTTPS is working end-to-end. Enable HSTS only after confirming every relevant subdomain supports HTTPS; begin with `SECURE_HSTS_SECONDS=300`, then increase deliberately.
 
-Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HTTPS (the example file keeps these false for local HTTP development, and explicit false values override Django defaults). Keep `SESSION_COOKIE_SAMESITE=Lax` and `CSRF_COOKIE_SAMESITE=Lax` unless the hosting architecture requires a documented alternative.
+Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HTTPS (the example file keeps these false for local HTTP development, and explicit false values override Django defaults). For separate frontend/backend sites, use `SESSION_COOKIE_SAMESITE=None` and `CSRF_COOKIE_SAMESITE=None`; for same-site deployments, `Lax` is preferable. The application defaults production cookies to `None`, and refuses to start if `None` is combined with an insecure cookie.
 
 ## 4. Order operations
 
@@ -76,6 +76,6 @@ Set `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true` for production HT
 - [ ] Upload, view, replace, and remove a product image after a backend restart
 - [ ] Product media backup and restore tested
 - [ ] Cross-origin login survives a full browser reload; if third-party cookies are blocked, configure a same-site custom domain or frontend API proxy
-- [ ] Scheduled stale-order task installed and tested if automatic cancellation is enabled
+- [ ] Scheduled stale-order task installed and tested if automatic cancellation is enabled (otherwise keep the setting at 0)
 
 This checklist does not replace the school's approval of its student-data retention and privacy policy.
