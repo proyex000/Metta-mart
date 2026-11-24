@@ -13,7 +13,6 @@ export type CommerceOrder = {
   customer_name: string;
   customer_email: string;
   beneficiary_name: string | null;
-  beneficiary_email: string;
   status: "pending" | "accepted" | "ready_for_pickup" | "completed" | "cancelled";
   payment_method: "cash" | "bank_transfer" | "qris";
   payment_status: "unpaid" | "pending_verification" | "paid" | "failed" | "refunded";
