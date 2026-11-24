@@ -15,6 +15,7 @@ function orderStatus(order: CommerceOrder) {
     pending: "Menunggu konfirmasi",
     accepted: "Diproses",
     ready_for_pickup: order.delivery_method === "gosend" ? "Siap diantar" : "Siap diambil",
+    delivering: "Sedang diantar",
     completed: "Selesai",
     cancelled: "Dibatalkan",
   })[order.status];

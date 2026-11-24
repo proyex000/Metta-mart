@@ -55,6 +55,7 @@ class Order(models.Model):
         PENDING = "pending", "Menunggu konfirmasi"
         ACCEPTED = "accepted", "Diproses"
         READY = "ready_for_pickup", "Siap diambil"
+        DELIVERING = "delivering", "Sedang diantar"
         COMPLETED = "completed", "Selesai"
         CANCELLED = "cancelled", "Dibatalkan"
 
@@ -101,6 +102,7 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
     ready_at = models.DateTimeField(null=True, blank=True)
+    delivering_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
 

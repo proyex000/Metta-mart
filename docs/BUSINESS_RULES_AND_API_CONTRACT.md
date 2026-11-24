@@ -18,7 +18,8 @@ This document records the confirmed operating decisions for the school cooperati
 2. Admin-configured operating hours govern when physical pickup is possible, not when an order can be submitted.
 3. After checkout, the order enters the appropriate pending state. Admin reviews/accepts it and prepares it.
 4. Only Admin can transition an order to `ready_for_pickup`.
-5. The buyer may collect the order at any time within the cooperative's configured operating hours after it is ready.
+5. For GoSend orders, Admin must explicitly move the order from `ready_for_pickup` to `delivering` when the parcel is handed to the courier; Admin confirms `completed` only after delivery is confirmed.
+6. The buyer may collect a pickup order at any time within the cooperative's configured operating hours after it is ready.
 6. Do not require the buyer to choose a pickup date, time slot, or appointment.
 7. Do not mark an order completed automatically at opening time, after payment, or after a timeout. Admin must confirm physical handover.
 8. Record handover actor and timestamp. A short order number or pickup code may be used to locate and verify the order.
@@ -68,7 +69,7 @@ Validation:
 - Explain the selected method's actual next step: cash at cooperative; transfer to official account; QRIS using official QRIS.
 - Show payment state and order state separately.
 - Show pickup instructions and cooperative operating hours.
-- Show the order state and cooperative operating hours clearly; distinguish pickup readiness from GoSend courier handover.
+- Show the order state and cooperative operating hours clearly; distinguish `Siap Diantar` from `Sedang Diantar` and final delivery confirmation.
 - For GoSend, collect recipient, phone, and address; show the server-calculated fee as an estimate, not an official GoSend quote.
 - Explain that staff books GoSend manually and that there is no live tracking.
 - Show pickup availability only when the order is ready and the cooperative is open.
@@ -142,7 +143,9 @@ Suggested endpoint groups (names are illustrative; align with existing API):
 - `GET/PATCH /api/admin/users/<id>/` — Admin views and updates account name/active status; roles and login identifiers remain protected.
 - `POST /api/admin/orders/{id}/accept/`
 - `POST /api/admin/orders/{id}/ready/`
-- `POST /api/admin/orders/{id}/complete-pickup/`
+- `POST /api/admin/orders/{id}/start-delivery/` — GoSend only; records courier handover and delivery start.
+- `POST /api/admin/orders/{id}/complete-delivery/` — GoSend only; Admin confirms the recipient has received the order.
+- `POST /api/admin/orders/{id}/complete-pickup/` — pickup only.
 - `POST /api/admin/orders/{id}/cancel/`
 - `POST /api/orders/{id}/payment-proof/` — optional proof/reference submission.
 - `POST /api/admin/payments/{id}/verify/` and `/reject/`
@@ -155,7 +158,8 @@ Order:
 - `pending_payment` → `pending_confirmation` or `processing`, according to payment policy.
 - `pending_confirmation` → `processing` or `cancelled`.
 - `processing` → `ready_for_pickup` or `cancelled`.
-- `ready_for_pickup` → `completed` only after Admin confirms handover; cancellation requires explicit policy and stock handling.
+- Pickup: `ready_for_pickup` → `completed` only after Admin confirms handover.
+- GoSend: `ready_for_pickup` → `delivering` when Admin hands the parcel to the courier → `completed` when Admin confirms delivery. Orders in `delivering` cannot be cancelled through the normal cancellation flow.
 - `completed` is terminal; corrections use auditable reversal/refund records.
 
 Payment:
@@ -181,6 +185,7 @@ The exact use of `pending_confirmation` versus `processing` should be consistent
 - Paid does not imply completed; ready does not imply paid.
 - Checkout remains blocked when all payment methods are disabled.
 - Pickup and GoSend are distinct fulfillment methods; GoSend must never be represented as automatically booked or tracked.
+- A GoSend order must expose separate `ready_for_pickup` (customer label: `Siap Diantar`), `delivering` (`Sedang Diantar`), and `completed` (`Selesai`) states.
 
 ## 9. Explicitly unresolved policy (do not invent)
 

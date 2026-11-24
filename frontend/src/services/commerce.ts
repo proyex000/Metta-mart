@@ -13,7 +13,7 @@ export type CommerceOrder = {
   customer_name: string;
   customer_email: string;
   beneficiary_name: string | null;
-  status: "pending" | "accepted" | "ready_for_pickup" | "completed" | "cancelled";
+  status: "pending" | "accepted" | "ready_for_pickup" | "delivering" | "completed" | "cancelled";
   payment_method: "cash" | "bank_transfer" | "qris";
   payment_status: "unpaid" | "pending_verification" | "paid" | "failed" | "refunded";
   payment_sender_name: string;
@@ -38,6 +38,7 @@ export type CommerceOrder = {
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
+  delivering_at: string | null;
   completed_at: string | null;
   cancelled_at: string | null;
 };
@@ -72,7 +73,7 @@ export function adminSetDeliveryFee(code: string, delivery_fee: number) {
   });
 }
 
-export function adminOrderAction(code: string, action: "accept" | "ready" | "complete-pickup" | "cancel") {
+export function adminOrderAction(code: string, action: "accept" | "ready" | "start-delivery" | "complete-delivery" | "complete-pickup" | "cancel") {
   return apiRequest<CommerceOrder>(`/admin/orders/${encodeURIComponent(code)}/${action}/`, { method: "POST", body: JSON.stringify({}) });
 }
 export function adminPaymentAction(code: string, action: "verify" | "reject", note = "") {

@@ -312,6 +312,7 @@ export function Dashboard() {
     pending: "Menunggu Konfirmasi",
     accepted: "Diproses",
     ready_for_pickup: "Siap Diambil",
+    delivering: "Sedang Diantar",
     completed: "Selesai",
     cancelled: "Dibatalkan",
   };
@@ -693,7 +694,7 @@ export function Stock() {
 }
 
 function adminOrderStatus(status: CommerceOrder["status"], method: CommerceOrder["delivery_method"] = "pickup") {
-  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: method === "gosend" ? "Siap Diantar" : "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: method === "gosend" ? "Siap Diantar" : "Siap Diambil", delivering: "Sedang Diantar", completed: "Selesai", cancelled: "Dibatalkan" })[status];
 }
 function deliveryLabel(method: CommerceOrder["delivery_method"]) {
   return method === "gosend" ? "GoSend" : "Ambil di koperasi";
@@ -723,7 +724,7 @@ export function Orders() {
   const [working, setWorking] = useState(false);
   const [deliveryFeeInput, setDeliveryFeeInput] = useState("0");
   const [paymentActionNote, setPaymentActionNote] = useState("");
-  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Siap Diantar", "Sedang Diantar", "Selesai", "Dibatalkan"];
   const reload = async () => { const data = await fetchOrders(); setItems(data); };
   useEffect(() => {
     reload().catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
@@ -731,7 +732,7 @@ export function Orders() {
   const shown = items.filter((order) => {
     const date = new Date(order.created_at).toLocaleDateString("en-CA");
     const needle = query.trim().toLowerCase();
-    return (tab === "Semua" || adminOrderStatus(order.status) === tab)
+    return (tab === "Semua" || adminOrderStatus(order.status, order.delivery_method) === tab)
       && (!needle || order.code.toLowerCase().includes(needle) || order.customer_name.toLowerCase().includes(needle) || (order.beneficiary_name || "").toLowerCase().includes(needle))
       && (paymentFilter === "all" || order.payment_status === paymentFilter)
       && (methodFilter === "all" || order.payment_method === methodFilter)
@@ -758,7 +759,7 @@ export function Orders() {
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  const act = async (action: "accept" | "ready" | "complete-pickup" | "cancel") => {
+  const act = async (action: "accept" | "ready" | "start-delivery" | "complete-delivery" | "complete-pickup" | "cancel") => {
     if (!selected || working) return;
     setWorking(true); setError("");
     try {
@@ -900,7 +901,10 @@ export function Orders() {
             <div className="form-row">
               {selected.status === "pending" && (selected.delivery_method !== "gosend" || selected.delivery_fee_confirmed) && <button className="primary" disabled={working} onClick={() => act("accept")}>Terima Pesanan</button>}
               {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>{selected.delivery_method === "gosend" ? "Tandai Siap Diantar" : "Tandai Siap Diambil"}</button>}
-              {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>{selected.delivery_method === "gosend" ? "Konfirmasi Pengantaran" : "Konfirmasi Pengambilan"}</button>}
+              {selected.status === "ready_for_pickup" && (selected.delivery_method === "gosend"
+                ? <button className="primary" disabled={working} onClick={() => act("start-delivery")}>Mulai Pengantaran</button>
+                : <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>Konfirmasi Pengambilan</button>)}
+              {selected.status === "delivering" && <button className="primary" disabled={working} onClick={() => act("complete-delivery")}>Konfirmasi Sudah Diterima</button>}
               {["pending", "accepted", "ready_for_pickup"].includes(selected.status) && !["paid", "pending_verification"].includes(selected.payment_status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
             </div>
             <button className="primary wide" onClick={() => setSelected(null)}>Tutup Detail</button>
