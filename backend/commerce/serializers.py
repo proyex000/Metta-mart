@@ -102,7 +102,6 @@ def cancel_block_reason(order):
 class OrderReadSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_email = serializers.SerializerMethodField()
-    beneficiary_email = serializers.SerializerMethodField()
     can_cancel = serializers.SerializerMethodField()
     payment_info = serializers.SerializerMethodField()
 
@@ -127,9 +126,6 @@ class OrderReadSerializer(serializers.ModelSerializer):
     def get_customer_email(self, obj):
         return "" if obj.sales_channel == "pos" else (obj.customer.email or "")
 
-    def get_beneficiary_email(self, obj):
-        return obj.beneficiary.email or "" if obj.beneficiary_id else ""
-
     beneficiary_name = serializers.CharField(source="beneficiary.full_name", read_only=True, allow_null=True)
     change_due = serializers.SerializerMethodField()
 
@@ -140,7 +136,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "customer_email", "beneficiary_name", "beneficiary_email", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_fee_confirmed", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "can_cancel", "payment_info", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "customer_email", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_fee_confirmed", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "can_cancel", "payment_info", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
