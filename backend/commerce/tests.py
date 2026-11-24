@@ -25,6 +25,32 @@ class CommerceApiTests(TestCase):
             "items": [{"product_id": self.product.id, "quantity": 2}],
         }, format="json", HTTP_IDEMPOTENCY_KEY=f"test-order-{Order.objects.count() + 1:08d}")
 
+    def test_qris_image_is_excluded_from_order_lists_and_included_in_order_detail(self):
+        qris_image = "data:image/png;base64,QUJDRA=="
+        StoreSetting.objects.create(key="payment_instructions", value={
+            "bank_name": "BCA",
+            "account_name": "MettaMart",
+            "account_number": "123",
+            "qris_image": qris_image,
+        })
+        self.client.force_authenticate(user=self.student)
+        created = self.create_order("qris")
+        code = created.data["code"]
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(f"/api/admin/orders/{code}/accept/", {}, format="json")
+
+        self.client.force_authenticate(user=self.student)
+        listed = self.client.get("/api/orders/")
+        self.assertIsNone(next(row for row in listed.data if row["code"] == code)["payment_info"])
+
+        detail = self.client.get(f"/api/orders/{code}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["payment_info"]["qris_image"], qris_image)
+
+        self.client.force_authenticate(user=self.admin)
+        admin_list = self.client.get("/api/admin/orders/")
+        self.assertIsNone(next(row for row in admin_list.data if row["code"] == code)["payment_info"])
+
     def test_order_payment_instructions_are_loaded_once_for_a_list(self):
         StoreSetting.objects.create(
             key="payment_instructions",
