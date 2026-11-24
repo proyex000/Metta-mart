@@ -1,49 +1,74 @@
-# Metta-Mart Backend — Phase 1
+# Metta-Mart Backend
 
-Backend API menggunakan Django 6.1, Django REST Framework, session cookie HttpOnly, CSRF, dan mysqlclient untuk koneksi MySQL/TiDB.
+Metta-Mart uses a Django REST Framework API with session-cookie authentication, CSRF protection, MySQL/TiDB in production, and SQLite for local development only.
 
-## Persiapan Windows
+## Local development (Windows)
 
-1. Buka PowerShell di folder `backend`.
-2. Buat virtual environment: `py -m venv .venv`
-3. Aktifkan: `.venv\\Scripts\\Activate.ps1`
-4. Install: `py -m pip install -r requirements.txt`
-5. Salin konfigurasi: `Copy-Item .env.example .env`
-6. Buat secret key baru dan isi `DJANGO_SECRET_KEY` di `.env`.
-7. Untuk pengembangan lokal, SQLite aktif secara default.
-8. Terapkan migrasi: `py manage.py migrate`
-9. Buat admin pertama: `py manage.py createsuperuser`
-10. Jalankan: `py manage.py runserver 8000`
-11. Jalankan tes: `py manage.py test`
+1. Open PowerShell in `backend/`.
+2. Create a virtual environment: `py -m venv .venv`.
+3. Activate it: `.venv\Scripts\Activate.ps1`.
+4. Install dependencies: `py -m pip install -r requirements.txt`.
+5. Copy `.env.example` to `.env`; keep the local-development defaults for local HTTP.
+6. Apply migrations: `py manage.py migrate`.
+7. Create the first admin account: `py manage.py createsuperuser`.
+8. Start Django: `py manage.py runserver 8000`.
+9. Run backend tests: `py manage.py test`.
 
-## Endpoint
+The `.env.example` file is for local development only. Do not deploy it unchanged.
 
-- `GET /api/auth/csrf/` — menyiapkan cookie CSRF.
-- `POST /api/auth/login/` — login dengan `identifier` dan `password`.
-- `POST /api/auth/logout/` — logout.
-- `GET /api/auth/me/` — sesi pengguna aktif.
-- `POST /api/auth/register/` — registrasi mandiri hanya untuk role student dan parent.
-- `GET/POST /api/admin/users/` — daftar/buat akun, khusus admin.
-- `GET/PATCH /api/admin/users/<id>/` — lihat/perbarui nama dan status aktif akun, khusus admin.
-- `GET/PATCH /api/admin/users/<id>/` — lihat/perbarui nama dan status aktif akun, khusus admin.
-- `GET /api/admin/audit-logs/` — audit log, khusus admin.
-- `GET/POST /api/admin/settings/` — baca/buat pengaturan global, khusus admin.
-- `GET/PATCH /api/admin/settings/<key>/` — baca/perbarui satu pengaturan, khusus admin.
+## Production configuration
 
-Siswa menggunakan NISN 10 digit sebagai identifier. Orang tua menggunakan email. Admin dan kasir dibuat oleh admin, bukan melalui registrasi publik. Relasi akun orang tua dan siswa dikelola admin melalui `ParentStudentLink` dan endpoint `/api/admin/parent-student-links/`. Registrasi mandiri memeriksa format NISN 10 digit, tetapi belum membuktikan kepemilikan NISN; kebijakan persetujuan/verifikasi sekolah masih perlu ditetapkan.
+Production must set:
+- `DJANGO_DEBUG=false`.
+- A unique `DJANGO_SECRET_KEY` of at least 50 characters.
+- Explicit `DJANGO_ALLOWED_HOSTS` (no wildcard).
+- `DB_ENGINE=mysql`, database name/user/password/host/port, and `DB_SSL=true` for managed TiDB/MySQL.
+- Exact HTTPS values for `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS`.
+- `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true`. For separate Vercel and Hostless sites, set both SameSite values to `None`.
 
-## Checkout safety
+The app refuses unsafe production defaults, missing required production database values, and SQLite in production. Run `python manage.py check --deploy` and `python manage.py makemigrations --check --dry-run` before release.
 
-`POST /api/orders/` dan `POST /api/admin/pos/checkout/` wajib menerima header `Idempotency-Key` sepanjang 8–64 karakter. Frontend membuat satu kunci untuk satu percobaan checkout dan menggunakan kembali kunci tersebut saat permintaan yang sama dicoba ulang.
+## Main API endpoints
 
-## Frontend
+### Authentication and accounts
+- `GET /api/health/` — public application/database health.
+- `GET /api/auth/csrf/` — prepare CSRF cookie/token.
+- `POST /api/auth/login/`, `POST /api/auth/logout/`, `GET /api/auth/me/`.
+- `PATCH /api/auth/me/` — update own profile.
+- `POST /api/auth/change-password/` — change own password with current-password confirmation.
+- `POST /api/auth/register/` — self-registration for student and parent accounts.
+- `GET/POST /api/admin/users/`; `GET/PATCH /api/admin/users/<id>/` — admin account management.
+- `GET /api/parent/children/` and `GET/POST/DELETE /api/admin/parent-student-links/` — relationship records. They are not used to place parent orders for students.
 
-Frontend harus memakai `credentials: "include"`, meminta `/api/auth/csrf/` sebelum POST/PATCH/DELETE, dan mengirim token CSRF di header `X-CSRFToken`. Isi `CORS_ALLOWED_ORIGINS` dan `DJANGO_CSRF_TRUSTED_ORIGINS` sesuai origin frontend. Untuk frontend dan API yang benar-benar beda site, set kedua cookie SameSite ke `None` dan Secure ke `true`; konfigurasi reverse proxy satu-site lebih disarankan karena kebijakan third-party cookie browser dapat membatasi cookie lintas-site.
+### Catalogue and inventory
+- `GET/POST /api/products/`; `GET/PATCH/DELETE /api/products/<id>/`.
+- `GET /api/admin/inventory-movements/`.
+- Product image data is sent as a Base64 data URL after browser-side JPEG compression. The database stores the image data in the product row; no persistent media volume is required for new images.
 
-## Database
+### Orders, payments, and POS
+- `GET/POST /api/orders/`; `GET /api/orders/<code>/`.
+- `POST /api/orders/<code>/cancel/`; `POST /api/orders/<code>/payment-submission/`.
+- `POST /api/delivery/quote/` — best-effort GoSend estimate, not an official quote.
+- `GET /api/admin/orders/`.
+- `POST /api/admin/orders/<code>/<action>/` — accept, ready, complete-pickup, or cancel.
+- `POST /api/admin/orders/<code>/payment/<action>/` — verify/reject manual payment. Rejection requires a reason.
+- `POST /api/admin/orders/<code>/delivery-fee/` — set a manual fee when an estimated quote is unavailable.
+- `POST /api/admin/pos/checkout/` — admin POS checkout.
+- `GET /api/admin/dashboard/`; `GET /api/admin/reports/summary/`.
 
-SQLite hanya untuk pengembangan lokal dan smoke test. Untuk deployment, set `DB_ENGINE=mysql` dan isi kredensial TiDB/MySQL di environment. Jangan commit file `.env`, database, atau credential.
+### Settings and notifications
+- `GET/PATCH /api/storefront/settings/` — public-safe settings read; admin-only write.
+- `GET/POST /api/notifications/`; `POST /api/notifications/<id>/read/`.
+- `GET /api/admin/audit-logs/` — backend audit history; the Admin UI is excluded from this release.
 
-## Batas Phase 1
+## Checkout integrity
 
-Phase ini menyediakan fondasi identitas, sesi, role, audit, dan pengaturan global. POS, stok, katalog persisten, checkout, pembayaran, dan pengiriman dibangun pada phase berikutnya. Jangan menganggap endpoint yang belum dibuat sebagai integrasi siap produksi.
+Online and POS checkout require an `Idempotency-Key` header of 8–64 characters. The frontend reuses a key when retrying the same submission. The backend recalculates prices and stock from database records and commits order/items/stock movements atomically.
+
+For GoSend, external address geocoding is performed before the order/stock transaction starts. If address lookup is unavailable, the order may be created with an unconfirmed manual delivery fee; Admin must set that fee before accepting or collecting payment.
+
+## Data and backup
+
+Back up MySQL/TiDB before migrations and on a scheduled basis. Product photo data, QRIS images, and store logo data are stored in database text fields/settings and must be included in the same database backup. Test restoration into a separate database. Never restore directly over production without a recovery plan.
+
+The backend test suite runs against MySQL in CI. SQLite is intended for local development only.
