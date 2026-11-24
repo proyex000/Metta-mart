@@ -1388,6 +1388,12 @@ td b {
   height: 1px;
   background: var(--line);
 }
+
+/* Keep the admin divider unchanged; raise only parent and student dividers. */
+.role-shell--parent .role-account::before,
+.role-shell--student .role-account::before {
+  top: 6px;
+}
 .role-avatar {
   width: 35px;
   height: 35px;
