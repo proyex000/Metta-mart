@@ -1382,9 +1382,9 @@ td b {
 .role-account::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 20px;
-  right: 30px;
+  top: 12px;
+  left: 4px;
+  right: 4px;
   height: 1px;
   background: var(--line);
 }
