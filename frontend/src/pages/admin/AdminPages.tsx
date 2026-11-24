@@ -628,7 +628,7 @@ export function Stock() {
                       setError("");
                     }}
                   />
-                  <small className="product-image-field__hint">Maksimal 5 MB. Gunakan foto yang jelas dan tidak buram.</small>
+                  <small className="product-image-field__hint">Maksimal 5 MB. Foto dikompres otomatis menjadi JPG 640 px sebelum disimpan.</small>
                   {imageFile && <span className="product-image-field__filename" title={imageFile.name}>{imageFile.name}</span>}
                   {editing !== "new" && editing.image_url && !imageFile && (
                     <label className="product-image-field__remove">
