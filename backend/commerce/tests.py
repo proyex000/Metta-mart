@@ -634,7 +634,12 @@ class DeliveryTests(TestCase):
         order = Order.objects.get(code=code)
         order.payment_status = "paid"
         order.save()
-        self.assertEqual(self.client.post(f"/api/admin/orders/{code}/complete-pickup/").status_code, 200)
+        started = self.client.post(f"/api/admin/orders/{code}/start-delivery/")
+        self.assertEqual(started.status_code, 200, started.data)
+        self.assertEqual(started.data["status"], Order.Status.DELIVERING)
+        completed = self.client.post(f"/api/admin/orders/{code}/complete-delivery/")
+        self.assertEqual(completed.status_code, 200, completed.data)
+        self.assertEqual(completed.data["status"], Order.Status.COMPLETED)
         report = self.client.get("/api/admin/reports/summary/")
         self.assertEqual(report.data["today"]["revenue"], 10000)
         notice = self.student.notifications.filter(kind="order", title="Pesanan sudah diantar").exists()
