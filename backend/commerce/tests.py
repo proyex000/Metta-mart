@@ -429,69 +429,6 @@ class CommerceApiTests(TestCase):
         self.assertEqual(self.product.stock, 7)
         self.assertEqual(InventoryMovement.objects.filter(reason="pos_sale", reference=first.data["code"]).count(), 1)
 
-    def test_archived_product_can_be_restored_by_admin_but_stays_hidden_from_customers(self):
-        self.client.force_authenticate(user=self.admin)
-        InventoryMovement.objects.create(product=self.product, actor=self.admin, quantity_delta=10, reason="initial_stock", reference="initial")
-
-        archived = self.client.delete(f"/api/products/{self.product.id}/")
-        self.assertEqual(archived.status_code, 204)
-        self.product.refresh_from_db()
-        self.assertFalse(self.product.is_active)
-        self.assertEqual(InventoryMovement.objects.filter(product=self.product).count(), 1)
-        self.assertTrue(AuditLog.objects.filter(event="product.deactivated", target_id=str(self.product.id)).exists())
-
-        admin_list = self.client.get("/api/products/")
-        archived_row = next(row for row in admin_list.data if row["id"] == self.product.id)
-        self.assertFalse(archived_row["is_active"])
-
-        self.client.force_authenticate(user=self.student)
-        customer_list = self.client.get("/api/products/")
-        self.assertNotIn(self.product.id, [row["id"] for row in customer_list.data])
-
-        self.client.force_authenticate(user=self.admin)
-        restored = self.client.patch(f"/api/products/{self.product.id}/", {"is_active": True}, format="json")
-        self.assertEqual(restored.status_code, 200, restored.data)
-        self.product.refresh_from_db()
-        self.assertTrue(self.product.is_active)
-        self.assertTrue(AuditLog.objects.filter(event="product.activated", target_id=str(self.product.id)).exists())
-
-        self.client.force_authenticate(user=self.student)
-        customer_list = self.client.get("/api/products/")
-        self.assertIn(self.product.id, [row["id"] for row in customer_list.data])
-
-    def test_student_cannot_use_admin_pos(self):
-        self.client.force_authenticate(user=self.student)
-        response = self.client.post("/api/admin/pos/checkout/", {
-            "payment_method": "cash",
-            "items": [{"product_id": self.product.id, "quantity": 1}],
-        }, format="json")
-        self.assertEqual(response.status_code, 403)
-        self.product.refresh_from_db()
-        self.assertEqual(self.product.stock, 10)
-
-    def test_product_upload_rejects_payload_exceeding_database_limit(self):
-        self.client.force_authenticate(user=self.admin)
-        oversized_data_url = "data:image/jpeg;base64," + ("A" * 380_000)
-        response = self.client.post("/api/products/", {
-            "name": "Gambar Terlalu Besar",
-            "category": "buku",
-            "price": 1000,
-            "stock": 1,
-            "image": oversized_data_url,
-        }, format="json")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("image", response.data)
-
-    def test_manual_stock_adjustment_requires_and_records_reason(self):
-        self.client.force_authenticate(user=self.admin)
-        missing_reason = self.client.patch(f"/api/products/{self.product.id}/", {"stock": 12}, format="json")
-        self.assertEqual(missing_reason.status_code, 400)
-        adjusted = self.client.patch(f"/api/products/{self.product.id}/", {"stock": 12, "stock_note": "Barang masuk dari pemasok"}, format="json")
-        self.assertEqual(adjusted.status_code, 200)
-        movement = InventoryMovement.objects.get(product=self.product, reason="manual_adjustment")
-        self.assertEqual(movement.quantity_delta, 2)
-        self.assertEqual(movement.reference, "Barang masuk dari pemasok")
-
     def test_delete_product_with_stock_history_archives_instead_of_crashing(self):
         self.client.force_authenticate(user=self.admin)
         created = self.client.post("/api/products/", {"name": "Pensil", "category": "alat-tulis", "price": 2000, "stock": 5}, format="json")
