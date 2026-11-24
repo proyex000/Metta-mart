@@ -5,8 +5,8 @@ from PIL import Image
 from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
-from core.models import StoreSetting
-from .models import InventoryMovement, Order, Product
+from core.models import Notification, StoreSetting
+from .models import InventoryMovement, Order, PaymentEvent, Product
 from .serializers import OrderReadSerializer
 
 
