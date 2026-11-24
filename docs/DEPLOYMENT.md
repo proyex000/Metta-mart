@@ -1,6 +1,6 @@
 # MettaMart deployment guide
 
-This guide assumes the frontend is built with Vite and served by Nginx, while Django runs behind Gunicorn. Use a separate production database (MySQL/TiDB) and persistent storage for uploaded media.
+This guide covers the split deployment used by this project: the Vite frontend is deployed on Vercel and the Django API on Hostless. The backend uses Gunicorn, a production MySQL/TiDB database, and persistent storage for uploaded product media. If the hosting providers change, adapt the platform-specific steps below.
 
 ## 1. Production environment
 
@@ -17,7 +17,7 @@ Required:
 
 Production startup fails when DEBUG is false and the secret is still the development placeholder/too short, or allowed hosts are empty or contain `*`.
 
-For a same-domain deployment, proxy `/api/` to Django and all other paths to the built frontend. For separate frontend/backend origins, explicitly set CORS and CSRF trusted origins. Production defaults use `SameSite=None; Secure` for session and CSRF cookies so credentialed cross-origin API requests can send cookies. Set the frontend origin in both `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS`. Browsers or privacy settings may still block third-party cookies; if login does not persist in the deployed browser, use a same-site custom domain or proxy `/api/` through the frontend origin rather than weakening cookie security.
+For the current split deployment, set Vercel environment variable `VITE_API_BASE_URL` to `https://<hostless-backend-domain>/api`. On Hostless, set `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the exact HTTPS Vercel frontend origin. Production defaults use `SameSite=None; Secure` for session and CSRF cookies so credentialed cross-origin API requests can send cookies. Browsers or privacy settings may still block third-party cookies; if login does not persist in the deployed browser, use a same-site custom domain or proxy `/api/` through the frontend origin rather than weakening cookie security. For a same-domain deployment, proxy `/api/` to Django and use `SameSite=Lax`.
 
 ## 2. Build and start
 
