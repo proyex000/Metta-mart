@@ -3,6 +3,7 @@ import json
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.db.models import F, Sum, Count
+from django.db.models.functions import TruncDate, TruncHour, TruncMonth, TruncWeek
 from datetime import datetime, timedelta
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -360,50 +361,91 @@ class AdminSalesReportView(APIView):
 
     def get(self, request):
         today = timezone.localdate()
-        month_start = today.replace(day=1)
+        period = str(request.query_params.get("period", "7d"))
+        start = end = None
+        bucket = "day"
+        if period == "1d":
+            start = end = today
+            bucket = "hour"
+        elif period == "7d":
+            start, end, bucket = today - timedelta(days=6), today, "day"
+        elif period == "1m":
+            start, end, bucket = today - timedelta(days=29), today, "day"
+        elif period == "3m":
+            start, end, bucket = today - timedelta(days=89), today, "week"
+        elif period == "1y":
+            start, end, bucket = today - timedelta(days=364), today, "month"
+        elif period == "custom":
+            try:
+                start = datetime.strptime(request.query_params.get("from", ""), "%Y-%m-%d").date()
+                end = datetime.strptime(request.query_params.get("to", ""), "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                raise ValidationError({"date_range": "Tanggal awal dan akhir wajib diisi dengan format yang valid."})
+            if start > end:
+                raise ValidationError({"date_range": "Tanggal awal tidak boleh melewati tanggal akhir."})
+            span = (end - start).days + 1
+            bucket = "day" if span <= 31 else "week" if span <= 120 else "month"
+        else:
+            raise ValidationError({"period": "Periode laporan tidak dikenal."})
+
         paid_orders = Order.objects.filter(
             status=Order.Status.COMPLETED,
             payment_status=Order.PaymentStatus.PAID,
             completed_at__isnull=False,
         )
-        today_orders = paid_orders.filter(completed_at__date=today)
-        month_orders = paid_orders.filter(completed_at__date__gte=month_start, completed_at__date__lte=today)
-        today_summary = today_orders.aggregate(total=Sum(NET_REVENUE), count=Count("id"))
-        month_summary = month_orders.aggregate(total=Sum(NET_REVENUE), count=Count("id"))
-        daily_rows = paid_orders.filter(
-            completed_at__date__gte=today - timedelta(days=6),
-            completed_at__date__lte=today,
-        ).values("completed_at__date").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("completed_at__date")
-        daily_by_date = {row["completed_at__date"].isoformat(): row for row in daily_rows}
-        daily = []
-        for offset in range(6, -1, -1):
-            day = today - timedelta(days=offset)
-            row = daily_by_date.get(day.isoformat(), {})
-            daily.append({
-                "date": day.isoformat(),
-                "total": row.get("total") or 0,
-                "orders": row.get("count") or 0,
-            })
+        today_summary = paid_orders.filter(completed_at__date=today).aggregate(total=Sum(NET_REVENUE), count=Count("id"))
+        month_start = today.replace(day=1)
+        month_summary = paid_orders.filter(completed_at__date__gte=month_start, completed_at__date__lte=today).aggregate(total=Sum(NET_REVENUE), count=Count("id"))
+        scoped_orders = paid_orders.filter(completed_at__date__gte=start, completed_at__date__lte=end)
+
+        if bucket == "hour":
+            grouped = scoped_orders.annotate(bucket=TruncHour("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+            values = {timezone.localtime(row["bucket"]).hour: row for row in grouped}
+            daily = [{"date": f"{start.isoformat()}T{hour:02d}", "label": f"{hour:02d}.00", "total": values.get(hour, {}).get("total") or 0, "orders": values.get(hour, {}).get("count") or 0} for hour in range(24)]
+        elif bucket == "day":
+            grouped = scoped_orders.annotate(bucket=TruncDate("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+            values = {row["bucket"].isoformat(): row for row in grouped}
+            daily = []
+            day = start
+            while day <= end:
+                row = values.get(day.isoformat(), {})
+                daily.append({"date": day.isoformat(), "label": day.strftime("%d %b"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
+                day += timedelta(days=1)
+        elif bucket == "week":
+            grouped = scoped_orders.annotate(bucket=TruncWeek("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+            values = {row["bucket"].date().isoformat(): row for row in grouped}
+            week = start - timedelta(days=start.weekday())
+            daily = []
+            while week <= end:
+                row = values.get(week.isoformat(), {})
+                daily.append({"date": week.isoformat(), "label": week.strftime("%d %b"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
+                week += timedelta(days=7)
+        else:
+            grouped = scoped_orders.annotate(bucket=TruncMonth("completed_at")).values("bucket").annotate(total=Sum(NET_REVENUE), count=Count("id")).order_by("bucket")
+            values = {row["bucket"].date().replace(day=1).isoformat(): row for row in grouped}
+            month = start.replace(day=1)
+            daily = []
+            while month <= end:
+                row = values.get(month.isoformat(), {})
+                daily.append({"date": month.isoformat(), "label": month.strftime("%b %y"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
+                month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+
         top_products = list(
             OrderItem.objects.filter(
                 order__status=Order.Status.COMPLETED,
                 order__payment_status=Order.PaymentStatus.PAID,
-                order__completed_at__date__gte=month_start,
-                order__completed_at__date__lte=today,
+                order__completed_at__date__gte=start,
+                order__completed_at__date__lte=end,
             ).values("product_name").annotate(
                 quantity=Sum("quantity"), revenue=Sum("line_total")
-            ).order_by("-revenue")[:5]
+            ).order_by("-quantity", "-revenue")[:5]
         )
         month_total = month_summary["total"] or 0
         month_count = month_summary["count"] or 0
         return Response({
-            "period": {"from": month_start.isoformat(), "to": today.isoformat()},
+            "period": {"from": start.isoformat(), "to": end.isoformat(), "type": period},
             "today": {"revenue": today_summary["total"] or 0, "orders": today_summary["count"] or 0},
-            "month": {
-                "revenue": month_total,
-                "orders": month_count,
-                "average_order": round(month_total / month_count) if month_count else 0,
-            },
+            "month": {"revenue": month_total, "orders": month_count, "average_order": round(month_total / month_count) if month_count else 0},
             "daily": daily,
             "top_products": top_products,
         })
