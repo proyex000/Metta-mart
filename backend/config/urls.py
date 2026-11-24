@@ -12,8 +12,8 @@ urlpatterns = [
 ]
 
 def media_view(request, path):
-    # Product images are public catalog assets. Keep this route limited to that folder,
-    # disable directory listings, and store files on a persistent mounted volume.
+    # Backwards compatibility for legacy file-path images only. New uploads are stored in the database.
+    # Keep this route limited to product images and disable directory listings.
     if not settings.DEBUG and not settings.MEDIA_SERVE_ENABLED:
         raise Http404
     if not path.startswith("product_images/"):
