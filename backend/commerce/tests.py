@@ -367,6 +367,15 @@ class CommerceApiTests(TestCase):
 
     def test_admin_can_broadcast_announcement_to_students_and_parents_only(self):
         from core.models import Notification
+        # Announcement delivery follows each account's promotion preference.
+        StoreSetting.objects.create(
+            key=f"user_notification_preferences_{self.student.pk}",
+            value={"order_updates": True, "stock_updates": True, "promotions": True, "weekly_summary": False},
+        )
+        StoreSetting.objects.create(
+            key=f"user_notification_preferences_{self.other_student.pk}",
+            value={"order_updates": True, "stock_updates": True, "promotions": True, "weekly_summary": False},
+        )
         self.client.force_authenticate(user=self.admin)
         response = self.client.post("/api/notifications/", {"title": "Info koperasi", "message": "Jam buka berubah."}, format="json")
         self.assertEqual(response.status_code, 201)
