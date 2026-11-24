@@ -722,6 +722,7 @@ export function Orders() {
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const [deliveryFeeInput, setDeliveryFeeInput] = useState("0");
+  const [paymentActionNote, setPaymentActionNote] = useState("");
   const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Selesai", "Dibatalkan"];
   const reload = async () => { const data = await fetchOrders(); setItems(data); };
   useEffect(() => {
@@ -789,10 +790,15 @@ export function Orders() {
   };
   const verify = async (action: "verify" | "reject") => {
     if (!selected || working) return;
+    if (action === "reject" && paymentActionNote.trim().length < 3) {
+      setError("Isi alasan penolakan minimal 3 karakter.");
+      return;
+    }
     setWorking(true); setError("");
     try {
-      const updated = await adminPaymentAction(selected.code, action);
+      const updated = await adminPaymentAction(selected.code, action, paymentActionNote.trim());
       setSelected(updated);
+      setPaymentActionNote("");
       setItems((current) => current.map((item) => item.code === updated.code ? updated : item));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Status pembayaran gagal diperbarui.");
@@ -847,7 +853,7 @@ export function Orders() {
         </div>
         {loading ? <p>Memuat pesanan...</p> : (
           <div className="desktop-table"><table><thead><tr><th>No</th><th>Kode Pesanan</th><th>Tanggal</th><th>Pelanggan</th><th>Total</th><th>Pengambilan</th><th>Status</th><th>Aksi</th></tr></thead>
-            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{order.delivery_method === "gosend" && !order.delivery_fee_confirmed ? "Ongkir belum diatur" : money(order.total)}</b></td><td><span className={`delivery-badge delivery-badge--${order.delivery_method}`}>{deliveryLabel(order.delivery_method)}</span></td><td><Status>{adminOrderStatus(order.status, order.delivery_method)}</Status></td><td><button className="primary small" onClick={() => { setDeliveryFeeInput(String(order.delivery_fee ?? 0)); setSelected(order); }}>Detail</button></td></tr>)}</tbody>
+            <tbody>{shown.map((order, index) => <tr key={order.code}><td>{index + 1}</td><td><b>{order.code}</b></td><td>{new Date(order.created_at).toLocaleString("id-ID")}</td><td>{order.customer_name}</td><td><b>{order.delivery_method === "gosend" && !order.delivery_fee_confirmed ? "Ongkir belum diatur" : money(order.total)}</b></td><td><span className={`delivery-badge delivery-badge--${order.delivery_method}`}>{deliveryLabel(order.delivery_method)}</span></td><td><Status>{adminOrderStatus(order.status, order.delivery_method)}</Status></td><td><button className="primary small" onClick={() => { setDeliveryFeeInput(String(order.delivery_fee ?? 0)); setPaymentActionNote(""); setSelected(order); }}>Detail</button></td></tr>)}</tbody>
           </table></div>
         )}
         {!loading && !shown.length && <p className="table-foot">Tidak ada pesanan pada filter ini.</p>}
@@ -883,12 +889,19 @@ export function Orders() {
             {selected.items.map((item) => <p key={item.product_id}><span>{item.product_name} × {item.quantity}</span><b>{money(item.line_total)}</b></p>)}
             {selected.delivery_method === "gosend" && <p><span>Ongkir GoSend</span><b>{money(selected.delivery_fee)}</b></p>}
             {selected.note && <p><span>Catatan</span><b>{selected.note}</b></p>}
-            {selected.payment_status === "pending_verification" && <div className="form-row"><button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button><button className="secondary" disabled={working} onClick={() => verify("reject")}>Tolak Pembayaran</button></div>}
+            {selected.payment_status === "pending_verification" && <>
+              <label>Catatan verifikasi / alasan penolakan<textarea value={paymentActionNote} onChange={(event) => setPaymentActionNote(event.target.value)} maxLength={500} placeholder="Untuk penolakan, jelaskan bagian yang perlu diperbaiki pelanggan." /></label>
+              <div className="form-row">
+                <button className="primary" disabled={working} onClick={() => verify("verify")}>Verifikasi Pembayaran</button>
+                <button className="secondary" disabled={working || paymentActionNote.trim().length < 3} onClick={() => verify("reject")}>Tolak Pembayaran</button>
+              </div>
+              <small className="table-foot">Alasan wajib diisi saat menolak pembayaran dan akan dikirimkan kepada pelanggan.</small>
+            </>}
             <div className="form-row">
               {selected.status === "pending" && (selected.delivery_method !== "gosend" || selected.delivery_fee_confirmed) && <button className="primary" disabled={working} onClick={() => act("accept")}>Terima Pesanan</button>}
               {selected.status === "accepted" && <button className="primary" disabled={working} onClick={() => act("ready")}>{selected.delivery_method === "gosend" ? "Tandai Siap Diantar" : "Tandai Siap Diambil"}</button>}
               {selected.status === "ready_for_pickup" && <button className="primary" disabled={working} onClick={() => act("complete-pickup")}>{selected.delivery_method === "gosend" ? "Konfirmasi Pengantaran" : "Konfirmasi Pengambilan"}</button>}
-              {["pending", "accepted"].includes(selected.status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
+              {["pending", "accepted", "ready_for_pickup"].includes(selected.status) && !["paid", "pending_verification"].includes(selected.payment_status) && <button className="secondary" disabled={working} onClick={() => act("cancel")}>Batalkan Pesanan</button>}
             </div>
             <button className="primary wide" onClick={() => setSelected(null)}>Tutup Detail</button>
           </div>
