@@ -1211,8 +1211,8 @@ export function POS() {
                 </div>
               </article>
             ))}
-            {!activeProducts.length && <p className="table-foot">Belum ada produk aktif.</p>}
-            {!!activeProducts.length && !visibleProducts.length && <p className="table-foot">Tidak ada produk yang cocok dengan “{search.trim()}”.</p>}
+            {!products.length && <p className="table-foot">Belum ada produk aktif.</p>}
+            {!!products.length && !visibleProducts.length && <p className="table-foot">Tidak ada produk yang cocok dengan “{search.trim()}”.</p>}
           </div>
         </section>
         <section className="panel table-panel pos-summary">
