@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { ChangePasswordForm } from "../../components/ChangePasswordForm";
+import { Brand } from "../../components/ui";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
 import type { Product } from "../../types";
@@ -132,26 +133,6 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     >
       {iconPaths[name]}
     </svg>
-  );
-}
-
-function Brand({ compact = false }: { compact?: boolean }) {
-  const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
-
-  useEffect(() => {
-    const syncLogo = () => setLogo(localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
-    window.addEventListener("mettamart-logo-updated", syncLogo);
-    return () => window.removeEventListener("mettamart-logo-updated", syncLogo);
-  }, []);
-
-  return (
-    <div className={`brand ${compact ? "brand--compact" : ""}`}>
-      <img
-        className="brand__image"
-        src={logo}
-        alt="Logo MettaMart"
-      />
-    </div>
   );
 }
 
@@ -1261,7 +1242,10 @@ export function Settings() {
   const [qrisImage, setQrisImage] = useState("");
   const [qrisError, setQrisError] = useState("");
   useEffect(() => {
-    fetchStorefrontSettings().then((settings) => setQrisImage(settings.payment_instructions?.qris_image ?? "")).catch(() => undefined);
+    fetchStorefrontSettings().then((settings) => {
+      setQrisImage(settings.payment_instructions?.qris_image ?? "");
+      setLogo(settings.store_profile.logo || "/assets/mettamart-logo.png");
+    }).catch(() => undefined);
   }, []);
   // Perkecil gambar QRIS di browser (maks. 900px) agar ringan dan tetap tajam, lalu simpan ke server saat "Simpan".
   const handleQrisUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1301,7 +1285,7 @@ export function Settings() {
   };
   const [saved, setSaved] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState("");
-  const [logo, setLogo] = useState(() => localStorage.getItem("mettamart-store-logo") || "/assets/mettamart-logo.png");
+  const [logo, setLogo] = useState("/assets/mettamart-logo.png");
   const [logoMessage, setLogoMessage] = useState("");
   const [logoError, setLogoError] = useState("");
   const handleLogoUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1320,29 +1304,34 @@ export function Settings() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       if (typeof reader.result !== "string") {
         setLogoError("File logo tidak dapat dibaca.");
         return;
       }
       try {
-        localStorage.setItem("mettamart-store-logo", reader.result);
+        await updateStorefrontSettings({ store_profile: { logo: reader.result } });
         setLogo(reader.result);
-        window.dispatchEvent(new Event("mettamart-logo-updated"));
-        setLogoMessage("Logo berhasil diperbarui di browser ini.");
-      } catch {
-        setLogoError("Logo gagal disimpan. Coba gambar yang ukurannya lebih kecil.");
+        window.dispatchEvent(new CustomEvent("mettamart-logo-updated", { detail: reader.result }));
+        setLogoMessage("Logo berhasil diperbarui di seluruh halaman dan disimpan di server.");
+      } catch (reason) {
+        setLogoError(reason instanceof Error ? reason.message : "Logo gagal disimpan ke server.");
       }
     };
     reader.onerror = () => setLogoError("File logo tidak dapat dibaca.");
     reader.readAsDataURL(file);
   };
-  const resetLogo = () => {
-    localStorage.removeItem("mettamart-store-logo");
-    setLogo("/assets/mettamart-logo.png");
-    window.dispatchEvent(new Event("mettamart-logo-updated"));
-    setLogoMessage("Logo bawaan MettaMart dipulihkan.");
+  const resetLogo = async () => {
     setLogoError("");
+    setLogoMessage("");
+    try {
+      await updateStorefrontSettings({ store_profile: { logo: "" } });
+      setLogo("/assets/mettamart-logo.png");
+      window.dispatchEvent(new CustomEvent("mettamart-logo-updated", { detail: "" }));
+      setLogoMessage("Logo bawaan MettaMart dipulihkan di seluruh halaman.");
+    } catch (reason) {
+      setLogoError(reason instanceof Error ? reason.message : "Logo bawaan gagal dipulihkan.");
+    }
   };
   const update = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -1545,7 +1534,7 @@ export function Settings() {
             <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleLogoUpload} />
           </label>
           <button type="button" className="logo-upload__reset" onClick={resetLogo}>Pulihkan logo bawaan</button>
-          <small>Format PNG, JPG, WebP atau GIF. Maksimal 1,5 MB. Tersimpan di browser ini.</small>
+          <small>Format PNG, JPG, WebP atau GIF. Maksimal 1,5 MB. Tersimpan di server dan berlaku untuk semua pengguna.</small>
           {logoMessage && <small className="logo-upload__success" role="status">{logoMessage}</small>}
           {logoError && <small className="logo-upload__error" role="alert">{logoError}</small>}
         </div>
