@@ -67,7 +67,7 @@ class StorefrontSettingsView(APIView):
 
     @transaction.atomic
     def patch(self, request):
-        if request.user.role != "admin":
+        if getattr(request.user, "role", None) != "admin":
             return Response({"detail": "Hanya admin yang dapat mengubah pengaturan koperasi."}, status=status.HTTP_403_FORBIDDEN)
         unknown = set(request.data.keys()) - set(DEFAULT_STORE_SETTINGS.keys())
         if unknown:
