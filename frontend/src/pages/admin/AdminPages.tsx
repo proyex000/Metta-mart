@@ -1031,11 +1031,11 @@ export function Reports() {
     : value >= 1_000 ? `Rp${(value / 1_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} rb` : money(value);
 
   const periodOptions = [
-    { value: "1d", label: "1 Hari" },
-    { value: "7d", label: "7 Hari" },
-    { value: "1m", label: "1 Bulan" },
-    { value: "3m", label: "3 Bulan" },
-    { value: "1y", label: "1 Tahun" },
+    { value: "1d", label: "1 Hari Terakhir" },
+    { value: "7d", label: "7 Hari Terakhir" },
+    { value: "1m", label: "1 Bulan Terakhir" },
+    { value: "3m", label: "3 Bulan Terakhir" },
+    { value: "1y", label: "1 Tahun Terakhir" },
     { value: "custom", label: "Rentang Tanggal" },
   ];
 
