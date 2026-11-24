@@ -114,8 +114,13 @@ class OrderReadSerializer(serializers.ModelSerializer):
             return None
         if obj.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED, Order.PaymentStatus.PENDING):
             return None
-        setting = StoreSetting.objects.filter(key="payment_instructions").first()
-        data = setting.value if setting and isinstance(setting.value, dict) else {}
+        # List serializers share their context, so fetch this store-wide setting once
+        # per response instead of issuing one database query for every order.
+        cache_key = "_payment_instructions_cache"
+        if cache_key not in self.context:
+            setting = StoreSetting.objects.filter(key="payment_instructions").first()
+            self.context[cache_key] = setting.value if setting and isinstance(setting.value, dict) else {}
+        data = self.context[cache_key]
         if obj.payment_method == Order.PaymentMethod.BANK_TRANSFER:
             return {"bank_name": data.get("bank_name", ""), "account_name": data.get("account_name", ""), "account_number": data.get("account_number", ""), "qris_image": ""}
         return {"bank_name": "", "account_name": "", "account_number": "", "qris_image": data.get("qris_image", "")}
