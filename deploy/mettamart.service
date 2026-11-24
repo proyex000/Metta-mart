@@ -1,0 +1,15 @@
+[Unit]
+Description=MettaMart Django API
+After=network.target
+
+[Service]
+User=mettamart
+Group=www-data
+WorkingDirectory=/var/www/mettamart/backend
+EnvironmentFile=/etc/mettamart/mettamart.env
+ExecStart=/var/www/mettamart/venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

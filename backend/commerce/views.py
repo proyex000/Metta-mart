@@ -14,6 +14,7 @@ from .delivery import quote_delivery, store_is_open
 from .models import InventoryMovement, Order, OrderItem, PaymentEvent, Product
 from .permissions import IsAdminRole as CommerceAdminOnly
 from .serializers import InventoryMovementSerializer, cancel_block_reason, OrderCreateSerializer, OrderReadSerializer, ProductSerializer
+from core.pagination import OptionalPaginationMixin
 
 
 def notify_user(user, title, message, kind="info", target_code=""):
@@ -50,7 +51,7 @@ def cancel_order(order, actor, now):
     order.status, order.cancelled_at = Order.Status.CANCELLED, now
 
 
-class ProductListCreateView(generics.ListCreateAPIView):
+class ProductListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView):
     serializer_class = ProductSerializer
 
     @transaction.atomic
@@ -108,7 +109,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.delete()
 
 
-class OrderListCreateView(generics.ListCreateAPIView):
+class OrderListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView):
     def get_queryset(self):
         qs = Order.objects.select_related("customer").prefetch_related("items")
         if self.request.user.role != "admin":
@@ -140,7 +141,12 @@ class DeliveryQuoteView(APIView):
         if request.user.role not in ("student", "parent"):
             return Response({"detail": "Estimasi ongkir hanya tersedia untuk siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
         quote = quote_delivery(str(request.data.get("address", "")))
-        return Response({"distance_km": str(quote["distance_km"]), "fee": quote["fee"]})
+        return Response({
+            "distance_km": str(quote["distance_km"]) if quote.get("distance_km") is not None else None,
+            "fee": quote["fee"],
+            "manual_review": bool(quote.get("manual_review", False)),
+            "message": quote.get("message", ""),
+        })
 
 
 class OrderCancelView(APIView):
@@ -171,7 +177,7 @@ class OrderDetailView(generics.RetrieveAPIView):
         return qs if self.request.user.role == "admin" else qs.filter(customer=self.request.user)
 
 
-class AdminOrderListView(generics.ListAPIView):
+class AdminOrderListView(OptionalPaginationMixin, generics.ListAPIView):
     permission_classes = [CommerceAdminOnly]
     queryset = Order.objects.select_related("customer").prefetch_related("items")
     serializer_class = OrderReadSerializer
@@ -187,6 +193,8 @@ class AdminOrderActionView(APIView):
             return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
         now = timezone.now()
         if action == "accept" and order.status == Order.Status.PENDING:
+            if order.delivery_method == Order.DeliveryMethod.GOSEND and not order.delivery_fee_confirmed:
+                raise ValidationError({"delivery_fee": "Tetapkan ongkir manual terlebih dahulu sebelum mengonfirmasi pesanan."})
             order.status, order.accepted_at = Order.Status.ACCEPTED, now
         elif action == "ready" and order.status == Order.Status.ACCEPTED:
             order.status, order.ready_at = Order.Status.READY, now
@@ -220,6 +228,57 @@ class AdminOrderActionView(APIView):
             messages["complete-pickup"] = ("Pesanan sudah diantar", f"Pesanan {order.code} telah diserahkan ke kurir GoSend / diterima penerima.")
         title, message = messages[action]
         notify_user(order.customer, title, message, kind="order", target_code=order.code)
+        return Response(OrderReadSerializer(order).data)
+
+
+class AdminDeliveryFeeActionView(APIView):
+    permission_classes = [CommerceAdminOnly]
+
+    @transaction.atomic
+    def post(self, request, code):
+        order = Order.objects.select_for_update().filter(code=code).first()
+        if not order:
+            return Response({"detail": "Pesanan tidak ditemukan."}, status=404)
+        if order.delivery_method != Order.DeliveryMethod.GOSEND:
+            raise ValidationError({"delivery_fee": "Ongkir manual hanya berlaku untuk pesanan GoSend."})
+        if order.status != Order.Status.PENDING or order.payment_status != Order.PaymentStatus.UNPAID:
+            raise ValidationError({"delivery_fee": "Ongkir hanya dapat ditetapkan sebelum pesanan dikonfirmasi dan dibayar."})
+        if order.delivery_fee_confirmed:
+            raise ValidationError({"delivery_fee": "Ongkir pesanan ini sudah ditetapkan."})
+        value = request.data.get("delivery_fee")
+        if isinstance(value, bool):
+            raise ValidationError({"delivery_fee": "Ongkir harus berupa bilangan bulat Rp0–1.000.000."})
+        try:
+            fee = int(value)
+        except (TypeError, ValueError):
+            raise ValidationError({"delivery_fee": "Ongkir harus berupa bilangan bulat Rp0–1.000.000."})
+        if fee < 0 or fee > 1_000_000 or str(fee) != str(value).strip():
+            raise ValidationError({"delivery_fee": "Ongkir harus berupa bilangan bulat Rp0–1.000.000."})
+
+        order.delivery_fee = fee
+        order.total = order.subtotal + fee
+        order.delivery_fee_confirmed = True
+        order.save(update_fields=["delivery_fee", "total", "delivery_fee_confirmed", "updated_at"])
+        PaymentEvent.objects.create(
+            order=order,
+            actor=request.user,
+            event="delivery_fee_set",
+            note=f"Ongkir manual ditetapkan sebesar Rp{fee}.",
+        )
+        AuditLog.objects.create(
+            actor=request.user,
+            event="delivery.fee_set",
+            target_type="order",
+            target_id=str(order.pk),
+            metadata={"code": order.code, "delivery_fee": fee, "total": order.total},
+        )
+        notify_user(
+            order.customer,
+            "Ongkir pesanan telah ditetapkan",
+            f"Ongkir pesanan {order.code} sebesar Rp{fee:,}. Total akhir yang harus dibayar Rp{order.total:,}. Silakan lanjutkan setelah menerima informasi ini.",
+            kind="order",
+            target_code=order.code,
+        )
         return Response(OrderReadSerializer(order).data)
 
 
@@ -261,6 +320,8 @@ class PaymentSubmissionView(APIView):
             raise ValidationError({"payment": "Pembayaran tunai dikonfirmasi admin saat penyerahan."})
         if order.status not in (Order.Status.ACCEPTED, Order.Status.READY):
             raise ValidationError({"payment": "Pembayaran baru dapat dilakukan setelah pesanan dikonfirmasi admin."})
+        if order.delivery_method == Order.DeliveryMethod.GOSEND and not order.delivery_fee_confirmed:
+            raise ValidationError({"payment": "Ongkir masih menunggu penetapan admin. Tunggu notifikasi total akhir sebelum membayar."})
         if order.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED):
             raise ValidationError({"payment": "Status pembayaran tidak dapat diubah."})
         sender_name = str(request.data.get("sender_name", "")).strip()[:120]
@@ -287,9 +348,10 @@ class PaymentSubmissionView(APIView):
         return Response(OrderReadSerializer(order).data)
 
 
-class AdminInventoryMovementListView(generics.ListAPIView):
+class AdminInventoryMovementListView(OptionalPaginationMixin, generics.ListAPIView):
+    default_limit = 200
     permission_classes = [CommerceAdminOnly]
-    queryset = InventoryMovement.objects.select_related("product", "actor").all()
+    queryset = InventoryMovement.objects.select_related("product", "actor").all().order_by("-created_at")
     serializer_class = InventoryMovementSerializer
 
 

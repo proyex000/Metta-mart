@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 from .delivery import operating_hours_text, quote_delivery, store_is_open
 from core.models import StoreSetting
 from .models import InventoryMovement, Order, OrderItem, Product
+from .order_policy import cancel_stale_orders, enforce_order_limits
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -129,7 +130,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "can_cancel", "payment_info", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
+        fields = ("id", "code", "customer_name", "beneficiary_name", "sales_channel", "status", "payment_method", "payment_status", "payment_sender_name", "payment_source", "payment_account_last4", "note", "subtotal", "total", "cash_received", "change_due", "delivery_method", "delivery_fee", "delivery_fee_confirmed", "delivery_distance_km", "delivery_address", "delivery_recipient", "delivery_phone", "can_cancel", "payment_info", "items", "created_at", "accepted_at", "ready_at", "completed_at", "cancelled_at")
 
 
 class OrderCreateSerializer(serializers.Serializer):
@@ -196,7 +197,8 @@ class OrderCreateSerializer(serializers.Serializer):
         key = validated_data.pop("_idempotency_key", "")
         self.idempotent_replay = False
         request = self.context["request"]
-        fingerprint = hashlib.sha256(json.dumps(validated_data, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+        fingerprint_data = {name: value for name, value in validated_data.items() if not name.startswith("_")}
+        fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
         if key:
             type(request.user).objects.select_for_update().get(pk=request.user.pk)
             existing = Order.objects.filter(idempotency_key=key).first()
@@ -205,6 +207,9 @@ class OrderCreateSerializer(serializers.Serializer):
                     raise ValidationError({"idempotency_key": "Kunci ini sudah digunakan untuk pesanan lain."})
                 self.idempotent_replay = True
                 return existing
+        # Cleanup only this account on checkout; the scheduled command handles all accounts.
+        cancel_stale_orders(customer=request.user)
+        enforce_order_limits(request.user)
         products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=[r["product_id"] for r in rows], is_active=True).order_by("id")}
         if len(products) != len(rows):
             raise ValidationError({"items": "Satu atau lebih produk tidak tersedia."})
@@ -220,7 +225,8 @@ class OrderCreateSerializer(serializers.Serializer):
             delivery = {
                 "delivery_method": Order.DeliveryMethod.GOSEND,
                 "delivery_fee": quote["fee"],
-                "delivery_distance_km": quote["distance_km"],
+                "delivery_fee_confirmed": not quote.get("manual_review", False),
+                "delivery_distance_km": quote.get("distance_km"),
                 "delivery_address": validated_data["delivery_address"],
                 "delivery_recipient": validated_data["delivery_recipient"],
                 "delivery_phone": validated_data["delivery_phone"],
