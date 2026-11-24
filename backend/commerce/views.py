@@ -105,8 +105,6 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                 instance.is_active = False
                 instance.save(update_fields=["is_active", "updated_at"])
             return
-        if instance.image:
-            instance.image.delete(save=False)
         instance.delete()
 
 
