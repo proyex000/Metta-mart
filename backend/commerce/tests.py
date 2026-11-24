@@ -5,7 +5,7 @@ from PIL import Image
 from django.test import TestCase
 from rest_framework.test import APIClient
 from accounts.models import User
-from core.models import Notification, StoreSetting
+from core.models import AuditLog, Notification, StoreSetting
 from .models import InventoryMovement, Order, PaymentEvent, Product
 from .serializers import OrderReadSerializer
 
@@ -429,14 +429,35 @@ class CommerceApiTests(TestCase):
         self.assertEqual(self.product.stock, 7)
         self.assertEqual(InventoryMovement.objects.filter(reason="pos_sale", reference=first.data["code"]).count(), 1)
 
-    def test_delete_product_with_inventory_history_archives_instead_of_raising_500(self):
+    def test_archived_product_can_be_restored_by_admin_but_stays_hidden_from_customers(self):
         self.client.force_authenticate(user=self.admin)
         InventoryMovement.objects.create(product=self.product, actor=self.admin, quantity_delta=10, reason="initial_stock", reference="initial")
-        response = self.client.delete(f"/api/products/{self.product.id}/")
-        self.assertEqual(response.status_code, 204)
+
+        archived = self.client.delete(f"/api/products/{self.product.id}/")
+        self.assertEqual(archived.status_code, 204)
         self.product.refresh_from_db()
         self.assertFalse(self.product.is_active)
         self.assertEqual(InventoryMovement.objects.filter(product=self.product).count(), 1)
+        self.assertTrue(AuditLog.objects.filter(event="product.deactivated", target_id=str(self.product.id)).exists())
+
+        admin_list = self.client.get("/api/products/")
+        archived_row = next(row for row in admin_list.data if row["id"] == self.product.id)
+        self.assertFalse(archived_row["is_active"])
+
+        self.client.force_authenticate(user=self.student)
+        customer_list = self.client.get("/api/products/")
+        self.assertNotIn(self.product.id, [row["id"] for row in customer_list.data])
+
+        self.client.force_authenticate(user=self.admin)
+        restored = self.client.patch(f"/api/products/{self.product.id}/", {"is_active": True}, format="json")
+        self.assertEqual(restored.status_code, 200, restored.data)
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.is_active)
+        self.assertTrue(AuditLog.objects.filter(event="product.activated", target_id=str(self.product.id)).exists())
+
+        self.client.force_authenticate(user=self.student)
+        customer_list = self.client.get("/api/products/")
+        self.assertIn(self.product.id, [row["id"] for row in customer_list.data])
 
     def test_student_cannot_use_admin_pos(self):
         self.client.force_authenticate(user=self.student)
