@@ -33,7 +33,7 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
     return order.payment_status === "paid" && order.status === "completed" && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
   }).reduce((total, order) => total + order.total, 0);
   const latestOrder = orders[0];
-  const statusText = latestOrder ? ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: latestOrder.delivery_method === "gosend" ? "Siap Diantar" : "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" }[latestOrder.status]) : "";
+  const statusText = latestOrder ? ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: latestOrder.delivery_method === "gosend" ? "Siap Diantar" : "Siap Diambil", delivering: "Sedang Diantar", completed: "Selesai", cancelled: "Dibatalkan" }[latestOrder.status]) : "";
   return (
     <>
       <PageTitle title={`Halo, ${session?.name || "Pengguna"}!`} subtitle={role === "parent" ? "Belanja kebutuhan sekolah dan pantau pesanan akun Anda." : "Temukan kebutuhan sekolah di koperasi."} />
@@ -457,7 +457,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
 }
 
 function orderStatusText(status: CommerceOrder["status"], method: CommerceOrder["delivery_method"] = "pickup") {
-  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: method === "gosend" ? "Siap Diantar" : "Siap Diambil", completed: "Selesai", cancelled: "Dibatalkan" })[status];
+  return ({ pending: "Menunggu Konfirmasi", accepted: "Diproses", ready_for_pickup: method === "gosend" ? "Siap Diantar" : "Siap Diambil", delivering: "Sedang Diantar", completed: "Selesai", cancelled: "Dibatalkan" })[status];
 }
 function paymentStatusText(status: CommerceOrder["payment_status"]) {
   return ({ unpaid: "Belum Dibayar", pending_verification: "Menunggu Verifikasi", paid: "Lunas", failed: "Perlu Konfirmasi Ulang", refunded: "Dikembalikan" })[status];
@@ -472,7 +472,7 @@ export function ShopOrders({ role }: { role: Exclude<Role, "admin"> }) {
     fetchOrders().then(setItems).catch((reason) => setError(reason instanceof Error ? reason.message : "Pesanan gagal dimuat.")).finally(() => setLoading(false));
   }, []);
   const shown = tab === "Semua" ? items : items.filter((order) => orderStatusText(order.status, order.delivery_method) === tab);
-  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Siap Diantar", "Selesai", "Dibatalkan"];
+  const tabs = ["Semua", "Menunggu Konfirmasi", "Diproses", "Siap Diambil", "Siap Diantar", "Sedang Diantar", "Selesai", "Dibatalkan"];
   return (
     <>
       <PageTitle title={role === "student" ? "Pesanan Saya" : "Pesanan"} subtitle="Pantau status pesanan dan pengambilan." />
