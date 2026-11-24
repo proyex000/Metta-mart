@@ -7,6 +7,22 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AlterField(
+            model_name="order",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Menunggu konfirmasi"),
+                    ("accepted", "Diproses"),
+                    ("ready_for_pickup", "Siap diambil"),
+                    ("delivering", "Sedang diantar"),
+                    ("completed", "Selesai"),
+                    ("cancelled", "Dibatalkan"),
+                ],
+                default="pending",
+                max_length=24,
+            ),
+        ),
         migrations.AddField(
             model_name="order",
             name="delivering_at",
