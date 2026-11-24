@@ -47,22 +47,22 @@ DEFAULT_STORE_SETTINGS = {
     "payment_methods": {"cash": True, "bank_transfer": True, "qris": True},
     "payment_instructions": {"bank_name": "", "account_name": "", "account_number": "", "qris_image": ""},
     "pickup_instructions": {"message": "Pengambilan dilakukan di koperasi sekolah saat jam operasional setelah pesanan berstatus Siap Diambil."},
-    "store_profile": {"name": "MettaMart", "description": "Koperasi sekolah", "address": "", "email": "", "phone": ""},
+    "store_profile": {"name": "MettaMart", "description": "Koperasi sekolah", "address": "", "email": "", "phone": "", "logo": ""},
     "notification_preferences": {"order_alerts": True, "low_stock_alerts": True, "announcements_enabled": True},
     "delivery_settings": DEFAULT_DELIVERY_SETTINGS,
     "order_policy": {"max_active_orders_per_account": 5, "auto_cancel_unpaid_after_hours": 0},
 }
 
 
-class StorefrontSettingsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+LOGO_IMAGE_PATTERN = re.compile(r"^data:image/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$")
+LOGO_IMAGE_MAX_CHARS = 2_100_000  # ~1.5 MB file setelah di-encode base64
 
     def get(self, request):
         saved = {item.key: item.value for item in StoreSetting.objects.filter(key__in=DEFAULT_STORE_SETTINGS)}
         # Gabungkan dengan nilai bawaan dan buang kolom usang (mis. qris_note) dari data lama.
         data = {key: {**value, **{k: v for k, v in (saved.get(key) or {}).items() if k in value}} for key, value in DEFAULT_STORE_SETTINGS.items()}
-        if request.user.role != "admin":
-            data.pop("payment_instructions", None)  # rekening/QRIS hanya tampil di detail pesanan setelah dikonfirmasi
+class StorefrontSettingsView(APIView):
+    permission_classes = [permissions.AllowAny]
         return Response(data)
 
     @transaction.atomic
@@ -103,11 +103,14 @@ class StorefrontSettingsView(APIView):
                     raise ValidationError({key: "Gambar QRIS harus berformat PNG, JPG, atau WebP dengan ukuran maksimal sekitar 700 KB."})
             if key == "pickup_instructions" and not isinstance(merged["message"], str):
                 raise ValidationError({key: "Instruksi pengambilan harus berupa teks."})
+        if getattr(request.user, "role", None) != "admin":
+            data.pop("payment_instructions", None)  # rekening/QRIS hanya tampil di detail pesanan setelah dikonfirmasi
             if key == "store_profile":
-                if any(not isinstance(merged[field], str) for field in ("name", "description", "address", "email", "phone")):
-                    raise ValidationError({key: "Informasi koperasi harus berupa teks."})
                 if not merged["name"].strip() or len(merged["name"]) > 120:
                     raise ValidationError({key: "Nama koperasi wajib diisi dan maksimal 120 karakter."})
+                logo = merged["logo"]
+                if logo and (not LOGO_IMAGE_PATTERN.match(logo) or len(logo) > LOGO_IMAGE_MAX_CHARS):
+                    raise ValidationError({key: "Logo harus berupa PNG, JPG, WebP, atau GIF dengan ukuran maksimal 1,5 MB."})
             if key == "delivery_settings":
                 if not isinstance(merged["enabled"], bool):
                     raise ValidationError({key: "Status pengiriman harus berupa boolean."})
