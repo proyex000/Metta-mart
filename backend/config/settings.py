@@ -75,6 +75,8 @@ if DB_ENGINE == "mysql":
             raise ImproperlyConfigured(
                 "Production MySQL/TiDB configuration is incomplete. Missing: " + ", ".join(missing_db_settings)
             )
+        if not env_bool("DB_SSL", True):
+            raise ImproperlyConfigured("Production requires DB_SSL=true for encrypted MySQL/TiDB connections.")
     db_options = {"charset": "utf8mb4"}
     if env_bool("DB_SSL", True):
         ssl_options = {}
@@ -120,6 +122,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:8443")
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:8443")
+if not DEBUG:
+    if not CORS_ALLOWED_ORIGINS or not CSRF_TRUSTED_ORIGINS:
+        raise ImproperlyConfigured("Production requires explicit CORS_ALLOWED_ORIGINS and DJANGO_CSRF_TRUSTED_ORIGINS.")
+    if "*" in CORS_ALLOWED_ORIGINS or "*" in CSRF_TRUSTED_ORIGINS:
+        raise ImproperlyConfigured("Production CORS and CSRF origins must be explicit; wildcards are not allowed.")
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", not DEBUG)
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax" if DEBUG else "None")
