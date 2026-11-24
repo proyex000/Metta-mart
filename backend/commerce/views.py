@@ -112,7 +112,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class OrderListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView):
     def get_queryset(self):
-        qs = Order.objects.select_related("customer").prefetch_related("items")
+        qs = Order.objects.select_related("customer", "beneficiary").prefetch_related("items")
         if self.request.user.role != "admin":
             qs = qs.filter(customer=self.request.user)
         return qs
@@ -174,13 +174,13 @@ class OrderDetailView(generics.RetrieveAPIView):
     lookup_field = "code"
 
     def get_queryset(self):
-        qs = Order.objects.select_related("customer").prefetch_related("items")
+        qs = Order.objects.select_related("customer", "beneficiary").prefetch_related("items")
         return qs if self.request.user.role == "admin" else qs.filter(customer=self.request.user)
 
 
 class AdminOrderListView(OptionalPaginationMixin, generics.ListAPIView):
     permission_classes = [CommerceAdminOnly]
-    queryset = Order.objects.select_related("customer").prefetch_related("items")
+    queryset = Order.objects.select_related("customer", "beneficiary").prefetch_related("items")
     serializer_class = OrderReadSerializer
 
 
