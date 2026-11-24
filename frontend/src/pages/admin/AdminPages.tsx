@@ -388,7 +388,7 @@ const emptyProductForm: ProductForm = {
   stock: "",
   stockNote: "",
 };
-type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis" | "Nonaktif";
+type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
 
 export function Stock() {
   const items = useProducts();
@@ -414,7 +414,7 @@ export function Stock() {
         p.name.toLowerCase().includes(needle) ||
         categoryLabel(p.category).toLowerCase().includes(needle)) &&
       (category === ALL_CATEGORIES || p.category === category) &&
-      (stockFilter === "Nonaktif" ? !p.is_active : p.is_active && (stockFilter === "Semua Stok" || stockLabel(p.stock) === stockFilter))
+      (stockFilter === "Semua Stok" || stockLabel(p.stock) === stockFilter)
     );
   });
   const openNew = () => {
@@ -504,7 +504,6 @@ export function Stock() {
             <option>Tersedia</option>
             <option>Hampir Habis</option>
             <option>Habis</option>
-            <option>Nonaktif</option>
           </select>
           <button className="primary" onClick={openNew}>
             <Icon name="plus" size={16} /> Tambah Produk
@@ -540,7 +539,7 @@ export function Stock() {
                   <td>{money(p.price)}</td>
                   <td className={p.stock < 10 ? "danger" : ""}>{p.stock}</td>
                   <td>
-                    <Status>{p.is_active ? stockLabel(p.stock) : "Nonaktif"}</Status>
+                    <Status>{stockLabel(p.stock)}</Status>
                   </td>
                   <td>
                     <button
@@ -550,31 +549,18 @@ export function Stock() {
                     >
                       <Icon name="edit" size={15} />
                     </button>
-                    {p.is_active ? (
-                      <button
-                        className="icon-button"
-                        aria-label={`Hapus atau nonaktifkan ${p.name}`}
-                        onClick={async () => {
-                          if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, produk akan diarsipkan dan dapat diaktifkan kembali.`)) {
-                            try { await productService.remove(p.id); }
-                            catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
-                          }
-                        }}
-                      >
-                        <Icon name="trash" size={15} />
-                      </button>
-                    ) : (
-                      <button
-                        className="secondary small"
-                        aria-label={`Aktifkan kembali ${p.name}`}
-                        onClick={async () => {
-                          try { await productService.setActive(p.id, true); }
-                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal diaktifkan kembali."); }
-                        }}
-                      >
-                        Aktifkan
-                      </button>
-                    )}
+                    <button
+                      className="icon-button"
+                      aria-label={`Hapus ${p.name}`}
+                      onClick={async () => {
+                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, sistem akan menonaktifkannya agar catatan lama tetap aman.`)) {
+                          try { await productService.remove(p.id); }
+                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
+                        }
+                      }}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1176,13 +1162,12 @@ export function POS() {
       setSettingsReady(true);
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
   }, []);
-  const selected = products.filter((product) => product.is_active && (counts[product.id] || 0) > 0);
+  const selected = products.filter((product) => (counts[product.id] || 0) > 0);
   const total = selected.reduce((sum, product) => sum + product.price * counts[product.id], 0);
   const keyword = search.trim().toLowerCase();
-  const activeProducts = products.filter((product) => product.is_active);
-  const visibleProducts = keyword ? activeProducts.filter((product) => product.name.toLowerCase().includes(keyword)) : activeProducts;
+  const visibleProducts = keyword ? products.filter((product) => product.name.toLowerCase().includes(keyword)) : products;
   const change = (id: number, delta: number) => {
-    const product = products.find((item) => item.id === id && item.is_active);
+    const product = products.find((item) => item.id === id);
     if (!product) return;
     setCounts((current) => ({ ...current, [id]: Math.min(product.stock, Math.max(0, (current[id] || 0) + delta)) }));
     setReceipt(null);
