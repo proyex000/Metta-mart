@@ -3,7 +3,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { ChangePasswordForm } from "../../components/ChangePasswordForm";
 import { Brand } from "../../components/ui";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
-import { productService, refreshProducts, stockLabel, useProducts } from "../../services/products";
+import { productService, refreshProducts, stockLabel, useProductLoadState, useProducts } from "../../services/products";
 import type { Product } from "../../types";
 import { adminOrderAction, adminPaymentAction, adminSetDeliveryFee, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchInventoryMovements, fetchOrders, type AdminDashboardSummary, type InventoryMovementRow, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
@@ -392,6 +392,7 @@ type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
 
 export function Stock() {
   const items = useProducts();
+  const productLoad = useProductLoadState();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
   const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
@@ -508,6 +509,8 @@ export function Stock() {
             <Icon name="plus" size={16} /> Tambah Produk
           </button>
         </div>
+        {productLoad.loading && !items.length && <p className="table-foot">Memuat katalog produk...</p>}
+        {productLoad.error && <div className="auth-error" role="alert"><p>{productLoad.error}</p><button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba Muat Ulang Katalog</button></div>}
         <div className="desktop-table">
           <table>
             <thead>
@@ -1124,9 +1127,11 @@ export function Reports() {
 }
 export function POS() {
   const products = useProducts();
+  const productLoad = useProductLoadState();
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer" | "qris">("cash");
-  const [enabled, setEnabled] = useState({ cash: true, bank_transfer: true, qris: true });
+  const [enabled, setEnabled] = useState({ cash: false, bank_transfer: false, qris: false });
+  const [settingsReady, setSettingsReady] = useState(false);
   const [note, setNote] = useState("");
   const [cashReceived, setCashReceived] = useState("");
   const [working, setWorking] = useState(false);
@@ -1141,6 +1146,7 @@ export function POS() {
         const first = (["cash", "bank_transfer", "qris"] as const).find((method) => settings.payment_methods[method]);
         if (first) setPaymentMethod(first);
       }
+      setSettingsReady(true);
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Pengaturan pembayaran gagal dimuat."));
   }, []);
   const selected = products.filter((product) => (counts[product.id] || 0) > 0);
@@ -1180,6 +1186,8 @@ export function POS() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama produk..." aria-label="Cari produk" />
           </label>
           <div className="pos-product-list">
+            {productLoad.loading && !products.length && <p className="table-foot">Memuat katalog produk...</p>}
+            {productLoad.error && <p className="auth-error" role="alert">{productLoad.error} <button type="button" className="secondary small" onClick={() => refreshProducts().catch(() => undefined)}>Coba lagi</button></p>}
             {visibleProducts.map((product) => (
               <article key={product.id} className={counts[product.id] ? "is-selected" : ""}>
                 <div><b>{product.name}</b><small>{money(product.price)} · Stok {product.stock}</small></div>
@@ -1209,7 +1217,8 @@ export function POS() {
             </>}
             <label>Catatan (opsional)<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="Catatan transaksi" /></label>
           </div>
-          <button className="primary wide" disabled={!selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout}>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
+          {!settingsReady && <p className="payment-unavailable" role="alert">Pengaturan metode pembayaran belum berhasil dimuat. {error || "Tunggu sebentar atau muat ulang halaman."}</p>}
+          <button className="primary wide" disabled={!settingsReady || productLoad.loading || !!productLoad.error || !selected.length || !total || working || !enabled[paymentMethod] || (paymentMethod === "cash" && (!cashReceived || Number(cashReceived) < total))} onClick={checkout>{working ? "Menyimpan transaksi..." : "Selesaikan & Simpan Transaksi"}</button>
           <p className="pos-summary__hint">Catat transaksi langsung saat pembelian di koperasi. Pastikan pembayaran telah diterima sebelum transaksi diselesaikan.</p>
         </section>
       </div>
