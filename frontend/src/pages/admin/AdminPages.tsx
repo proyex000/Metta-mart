@@ -854,6 +854,7 @@ export function Orders() {
         <Modal title={`Detail ${selected.code}`} close={() => setSelected(null)}>
           <div className="admin-order-detail">
             <p><span>Pelanggan</span><b>{selected.customer_name}</b></p>
+            {selected.customer_email && <p><span>Email Pelanggan</span><b><a href={`mailto:${selected.customer_email}`}>{selected.customer_email}</a></b></p>}
             {selected.beneficiary_name && <p><span>Untuk Siswa</span><b>{selected.beneficiary_name}</b></p>}
             <p><span>Tanggal</span><b>{new Date(selected.created_at).toLocaleString("id-ID")}</b></p>
             <p><span>{selected.delivery_method === "gosend" && !selected.delivery_fee_confirmed ? "Subtotal sementara" : "Total"}</span><b>{money(selected.total)}</b></p>
