@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AuditLogListView, NotificationListView, NotificationReadView, StoreSettingDetailView, StoreSettingListCreateView, StorefrontSettingsView
+from .views import AuditLogListView, NotificationListView, NotificationReadView, StoreSettingDetailView, StoreSettingListCreateView, StorefrontSettingsView, MyNotificationPreferencesView
 
 urlpatterns = [
     path("storefront/settings/", StorefrontSettingsView.as_view(), name="storefront-settings"),
