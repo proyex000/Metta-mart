@@ -1072,7 +1072,7 @@ export function Reports() {
               <button className="primary small" type="button" disabled={!chartFrom || !chartTo || chartFrom > chartTo} onClick={() => setChartAppliedRange({ from: chartFrom, to: chartTo })}>Terapkan</button>
             </div>
           )}
-          {chartLoading ? <p className="table-foot">Memuat grafik...</p> : chartRows.every((day) => day.total === 0) ? (
+          {chartPeriod === "custom" && !chartAppliedRange ? <p className="table-foot">Pilih tanggal awal dan akhir, lalu tekan Terapkan.</p> : chartLoading ? <p className="table-foot">Memuat grafik...</p> : chartRows.every((day) => day.total === 0) ? (
             <p className="table-foot">Belum ada penjualan pada periode ini.</p>
           ) : (
             <div className="report-chart">
@@ -1104,7 +1104,7 @@ export function Reports() {
               <button className="primary small" type="button" disabled={!productFrom || !productTo || productFrom > productTo} onClick={() => setProductAppliedRange({ from: productFrom, to: productTo })}>Terapkan</button>
             </div>
           )}
-          {productLoading ? <p className="table-foot">Memuat produk terlaris...</p> : productReport?.top_products.length ? (
+          {productPeriod === "custom" && !productAppliedRange ? <p className="table-foot">Pilih tanggal awal dan akhir, lalu tekan Terapkan.</p> : productLoading ? <p className="table-foot">Memuat produk terlaris...</p> : productReport?.top_products.length ? (
             <div className="top-products-list">
               {productReport.top_products.map((product) => (
                 <div key={product.product_name}>
