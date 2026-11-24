@@ -210,9 +210,20 @@ class AdminOrderActionView(APIView):
             order.status, order.accepted_at = Order.Status.ACCEPTED, now
         elif action == "ready" and order.status == Order.Status.ACCEPTED:
             order.status, order.ready_at = Order.Status.READY, now
-        elif action == "complete-pickup" and order.status == Order.Status.READY:
+        elif action == "start-delivery" and order.delivery_method == Order.DeliveryMethod.GOSEND and order.status == Order.Status.READY:
             if not pickup_is_open(now):
-                raise ValidationError({"pickup": "Pengambilan/pengantaran hanya dapat dikonfirmasi pada hari dan jam operasional koperasi. Atur jam operasional terlebih dahulu."})
+                raise ValidationError({"delivery": "Penyerahan pesanan ke kurir hanya dapat dilakukan pada jam operasional koperasi."})
+            if order.payment_method != Order.PaymentMethod.CASH and order.payment_status != Order.PaymentStatus.PAID:
+                raise ValidationError({"payment_status": "Pembayaran transfer/QRIS harus diverifikasi sebelum pesanan diserahkan ke kurir."})
+            order.status, order.delivering_at = Order.Status.DELIVERING, now
+        elif action == "complete-delivery" and order.delivery_method == Order.DeliveryMethod.GOSEND and order.status == Order.Status.DELIVERING:
+            order.status, order.completed_at = Order.Status.COMPLETED, now
+            if order.payment_method == Order.PaymentMethod.CASH and order.payment_status == Order.PaymentStatus.UNPAID:
+                order.payment_status = Order.PaymentStatus.PAID
+                PaymentEvent.objects.create(order=order, actor=request.user, event="cash_collected", note="Tunai diterima saat pengantaran GoSend dikonfirmasi.")
+        elif action == "complete-pickup" and order.delivery_method == Order.DeliveryMethod.PICKUP and order.status == Order.Status.READY:
+            if not pickup_is_open(now):
+                raise ValidationError({"pickup": "Pengambilan hanya dapat dikonfirmasi pada hari dan jam operasional koperasi. Atur jam operasional terlebih dahulu."})
             if order.payment_method != Order.PaymentMethod.CASH and order.payment_status != Order.PaymentStatus.PAID:
                 raise ValidationError({"payment_status": "Pembayaran transfer/QRIS harus diverifikasi sebelum barang diserahkan."})
             order.status, order.completed_at = Order.Status.COMPLETED, now
@@ -232,12 +243,13 @@ class AdminOrderActionView(APIView):
         messages = {
             "accept": ("Pesanan sedang diproses", f"Pesanan {order.code} telah dikonfirmasi koperasi."),
             "ready": ("Pesanan siap diambil", f"Pesanan {order.code} sudah siap. Silakan ambil saat jam operasional."),
+            "start-delivery": ("Pesanan sedang diantar", f"Pesanan {order.code} telah diserahkan kepada kurir GoSend dan sedang diantar ke alamat Anda."),
+            "complete-delivery": ("Pesanan sudah diantar", f"Pesanan {order.code} telah diterima dan pengantaran dikonfirmasi Admin."),
             "complete-pickup": ("Pengambilan selesai", f"Pesanan {order.code} telah diserahkan."),
             "cancel": ("Pesanan dibatalkan", f"Pesanan {order.code} dibatalkan dan stok dikembalikan."),
         }
         if order.delivery_method == Order.DeliveryMethod.GOSEND:
-            messages["ready"] = ("Pesanan siap diantar", f"Pesanan {order.code} sudah siap dan akan segera diantar via GoSend ke alamat Anda.")
-            messages["complete-pickup"] = ("Pesanan sudah diantar", f"Pesanan {order.code} telah diserahkan ke kurir GoSend / diterima penerima.")
+            messages["ready"] = ("Pesanan siap diantar", f"Pesanan {order.code} sudah siap dan menunggu diserahkan kepada kurir GoSend.")
         title, message = messages[action]
         notify_user(order.customer, title, message, kind="order", target_code=order.code)
         return Response(OrderReadSerializer(order).data)
