@@ -982,80 +982,145 @@ export function Notifications() {
 }
 
 export function Reports() {
-  const [report, setReport] = useState<AdminSalesReport | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [chartReport, setChartReport] = useState<AdminSalesReport | null>(null);
+  const [productReport, setProductReport] = useState<AdminSalesReport | null>(null);
+  const [chartPeriod, setChartPeriod] = useState("7d");
+  const [productPeriod, setProductPeriod] = useState("1m");
+  const [chartFrom, setChartFrom] = useState("");
+  const [chartTo, setChartTo] = useState("");
+  const [productFrom, setProductFrom] = useState("");
+  const [productTo, setProductTo] = useState("");
+  const [chartAppliedRange, setChartAppliedRange] = useState<{ from: string; to: string } | null>(null);
+  const [productAppliedRange, setProductAppliedRange] = useState<{ from: string; to: string } | null>(null);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [productLoading, setProductLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchAdminSalesReport()
-      .then(setReport)
-      .catch((reason) => setError(reason instanceof Error ? reason.message : "Laporan gagal dimuat."))
-      .finally(() => setLoading(false));
-  }, []);
+    if (chartPeriod === "custom" && !chartAppliedRange) return;
+    setChartLoading(true);
+    fetchAdminSalesReport({
+      period: chartPeriod,
+      ...(chartPeriod === "custom" && chartAppliedRange ? chartAppliedRange : {}),
+    }).then(setChartReport)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Grafik penjualan gagal dimuat."))
+      .finally(() => setChartLoading(false));
+  }, [chartPeriod, chartAppliedRange]);
 
-  const maxDailyRevenue = Math.max(1, ...(report?.daily.map((day) => day.total) ?? [0]));
-  const periodLabel = report
-    ? `${new Date(`${report.period.from}T00:00:00`).toLocaleDateString("id-ID")} – ${new Date(`${report.period.to}T00:00:00`).toLocaleDateString("id-ID")}`
-    : "";
+  useEffect(() => {
+    if (productPeriod === "custom" && !productAppliedRange) return;
+    setProductLoading(true);
+    fetchAdminSalesReport({
+      period: productPeriod,
+      ...(productPeriod === "custom" && productAppliedRange ? productAppliedRange : {}),
+    }).then(setProductReport)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "Produk terlaris gagal dimuat."))
+      .finally(() => setProductLoading(false));
+  }, [productPeriod, productAppliedRange]);
+
+  const chartRows = chartReport?.daily ?? [];
+  const maxRevenue = Math.max(0, ...chartRows.map((item) => item.total));
+  const rawStep = maxRevenue > 0 ? maxRevenue / 5 : 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const normalizedStep = rawStep / magnitude;
+  const niceStep = (normalizedStep <= 1 ? 1 : normalizedStep <= 2 ? 2 : normalizedStep <= 5 ? 5 : 10) * magnitude;
+  const axisMax = Math.max(niceStep, niceStep * 5);
+  const axisLabels = Array.from({ length: 6 }, (_, index) => axisMax - niceStep * index);
+  const formatAxisMoney = (value: number) => value >= 1_000_000
+    ? `Rp${(value / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`
+    : value >= 1_000 ? `Rp${(value / 1_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} rb` : money(value);
+
+  const periodOptions = [
+    { value: "1d", label: "1 Hari" },
+    { value: "7d", label: "7 Hari" },
+    { value: "1m", label: "1 Bulan" },
+    { value: "3m", label: "3 Bulan" },
+    { value: "1y", label: "1 Tahun" },
+    { value: "custom", label: "Rentang Tanggal" },
+  ];
 
   return (
     <>
       <Header title="Laporan" subtitle="Ringkasan penjualan dari pesanan yang sudah selesai dan pembayarannya lunas." />
-      {loading && <div className="panel"><p>Memuat laporan dari server...</p></div>}
       {error && <p className="auth-error" role="alert">{error}</p>}
-      {report && (
-        <>
-          <section className="report-summary">
-            <article>
-              <span className="mini-icon"><Icon name="chart" /></span>
-              <div><small>Penjualan Hari Ini</small><strong>{money(report.today.revenue)}</strong><em>{report.today.orders} transaksi selesai</em></div>
-            </article>
-            <article>
-              <span className="mini-icon"><Icon name="bag" /></span>
-              <div><small>Penjualan Bulan Ini</small><strong>{money(report.month.revenue)}</strong><em>{report.month.orders} transaksi lunas</em></div>
-            </article>
-            <article>
-              <span className="mini-icon"><Icon name="bag" /></span>
-              <div><small>Rata-rata Transaksi Bulan Ini</small><strong>{money(report.month.average_order)}</strong><em>Per transaksi selesai</em></div>
-            </article>
-          </section>
-          <section className="report-grid">
-            <article className="panel">
-              <div className="panel__title"><h2>Penjualan 7 Hari Terakhir</h2><small>{periodLabel}</small></div>
-              {report.daily.every((day) => day.total === 0) ? (
-                <p className="table-foot">Belum ada penjualan selesai dalam 7 hari terakhir.</p>
-              ) : (
-                <div className="bar-chart">
-                  {report.daily.map((day) => (
-                    <div key={day.date} title={`${money(day.total)} · ${day.orders} transaksi`}>
-                      <i style={{ height: `${Math.max(4, day.total / maxDailyRevenue * 100)}%` }} />
-                      <small>{new Date(`${day.date}T00:00:00`).toLocaleDateString("id-ID", { weekday: "short" })}</small>
-                    </div>
-                  ))}
+      <section className="report-summary">
+        <article>
+          <span className="mini-icon"><Icon name="chart" /></span>
+          <div><small>Penjualan Hari Ini</small><strong>{money(chartReport?.today.revenue ?? 0)}</strong><em>{chartReport?.today.orders ?? 0} transaksi selesai</em></div>
+        </article>
+        <article>
+          <span className="mini-icon"><Icon name="bag" /></span>
+          <div><small>Penjualan Bulan Ini</small><strong>{money(chartReport?.month.revenue ?? 0)}</strong><em>{chartReport?.month.orders ?? 0} transaksi lunas</em></div>
+        </article>
+        <article>
+          <span className="mini-icon"><Icon name="bag" /></span>
+          <div><small>Rata-rata Transaksi Bulan Ini</small><strong>{money(chartReport?.month.average_order ?? 0)}</strong><em>Per transaksi selesai</em></div>
+        </article>
+      </section>
+      <section className="report-grid">
+        <article className="panel report-chart-panel">
+          <div className="panel__title">
+            <h2>Grafik Penjualan</h2>
+            <select aria-label="Periode grafik penjualan" value={chartPeriod} onChange={(event) => { setChartPeriod(event.target.value); setChartAppliedRange(null); }}>
+              {periodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+          {chartPeriod === "custom" && (
+            <div className="report-range">
+              <label>Dari tanggal<input type="date" value={chartFrom} max={chartTo || undefined} onChange={(event) => setChartFrom(event.target.value)} /></label>
+              <label>Sampai tanggal<input type="date" value={chartTo} min={chartFrom || undefined} onChange={(event) => setChartTo(event.target.value)} /></label>
+              <button className="primary small" type="button" disabled={!chartFrom || !chartTo || chartFrom > chartTo} onClick={() => setChartAppliedRange({ from: chartFrom, to: chartTo })}>Terapkan</button>
+            </div>
+          )}
+          {chartPeriod === "custom" && !chartAppliedRange ? <p className="table-foot">Pilih tanggal awal dan akhir, lalu tekan Terapkan.</p> : chartLoading ? <p className="table-foot">Memuat grafik...</p> : chartRows.every((day) => day.total === 0) ? (
+            <p className="table-foot">Belum ada penjualan pada periode ini.</p>
+          ) : (
+            <div className="report-chart">
+              <div className="report-y-axis">{axisLabels.map((value, index) => <span key={index}>{formatAxisMoney(value)}</span>)}</div>
+              <div className="report-bars">
+                <div className="report-grid-lines" aria-hidden="true">{axisLabels.map((value, index) => <i key={index} />)}</div>
+                {chartRows.map((day) => (
+                  <div className="report-bar-item" key={day.date} title={`${day.label}: ${money(day.total)} · ${day.orders} transaksi`}>
+                    <i style={{ height: `${Math.max(1, day.total / axisMax * 100)}%` }} />
+                    <small>{day.label}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {chartReport && <p className="table-foot">Periode: {new Date(`${chartReport.period.from}T00:00:00`).toLocaleDateString("id-ID")} – {new Date(`${chartReport.period.to}T00:00:00`).toLocaleDateString("id-ID")}</p>}
+        </article>
+        <article className="panel report-products-panel">
+          <div className="panel__title">
+            <h2>Produk Terlaris</h2>
+            <select aria-label="Periode produk terlaris" value={productPeriod} onChange={(event) => { setProductPeriod(event.target.value); setProductAppliedRange(null); }}>
+              {periodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+          {productPeriod === "custom" && (
+            <div className="report-range report-range--products">
+              <label>Dari tanggal<input type="date" value={productFrom} max={productTo || undefined} onChange={(event) => setProductFrom(event.target.value)} /></label>
+              <label>Sampai tanggal<input type="date" value={productTo} min={productFrom || undefined} onChange={(event) => setProductTo(event.target.value)} /></label>
+              <button className="primary small" type="button" disabled={!productFrom || !productTo || productFrom > productTo} onClick={() => setProductAppliedRange({ from: productFrom, to: productTo })}>Terapkan</button>
+            </div>
+          )}
+          {productPeriod === "custom" && !productAppliedRange ? <p className="table-foot">Pilih tanggal awal dan akhir, lalu tekan Terapkan.</p> : productLoading ? <p className="table-foot">Memuat produk terlaris...</p> : productReport?.top_products.length ? (
+            <div className="top-products-list">
+              {productReport.top_products.map((product) => (
+                <div key={product.product_name}>
+                  <span><b>{product.product_name}</b><small>{product.quantity} unit terjual</small></span>
+                  <strong>{money(product.revenue)}</strong>
                 </div>
-              )}
-            </article>
-            <article className="panel">
-              <div className="panel__title"><h2>Produk Terlaris Bulan Ini</h2></div>
-              {report.top_products.length ? (
-                <div className="top-products-list">
-                  {report.top_products.map((product) => (
-                    <div key={product.product_name}>
-                      <span><b>{product.product_name}</b><small>{product.quantity} unit terjual</small></span>
-                      <strong>{money(product.revenue)}</strong>
-                    </div>
-                  ))}
-                </div>
-              ) : <p className="table-foot">Belum ada produk terjual pada periode ini.</p>}
-            </article>
-          </section>
-          <p className="table-foot">Laporan hanya menghitung pesanan yang sudah dikonfirmasi selesai dan berstatus lunas. Pesanan dibatalkan atau belum diambil tidak dihitung sebagai penjualan.</p>
-        </>
-      )}
+              ))}
+            </div>
+          ) : <p className="table-foot">Belum ada produk terjual pada periode ini.</p>}
+          {productReport && <p className="table-foot">Periode: {new Date(`${productReport.period.from}T00:00:00`).toLocaleDateString("id-ID")} – {new Date(`${productReport.period.to}T00:00:00`).toLocaleDateString("id-ID")}</p>}
+        </article>
+      </section>
+      <p className="table-foot">Laporan hanya menghitung pesanan yang sudah dikonfirmasi selesai dan berstatus lunas. Nilai penjualan tidak memasukkan ongkir GoSend.</p>
     </>
   );
 }
-
 export function POS() {
   const products = useProducts();
   const [counts, setCounts] = useState<Record<number, number>>({});
