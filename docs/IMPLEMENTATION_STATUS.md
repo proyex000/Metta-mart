@@ -8,7 +8,7 @@ This document describes the current implementation in the deploy-readiness branc
 - Student and parent accounts can browse the catalogue, place independent orders, view their own orders, and receive in-app notifications.
 - Parents order for their own account. There is no parent-to-student beneficiary flow in the current checkout.
 - Authenticated users can change their own password after confirming the current password. Password reset is not included.
-- Online ordering is available at any time; physical pickup and POS operations use configured operating hours.
+- Online ordering is available at any time; physical pickup uses configured operating hours. POS remains Admin-only and is not restricted by the operating-hours gate in this release.
 - Buyers can choose pickup or GoSend when delivery is enabled. GoSend distance and fees are estimates; staff books the courier manually.
 
 ## Implemented modules
