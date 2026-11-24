@@ -453,13 +453,17 @@ class AdminSalesReportView(APIView):
                     daily.append({"date": month.isoformat(), "label": month.strftime("%b %y"), "total": row.get("total") or 0, "orders": row.get("count") or 0})
                     month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
 
+        product_orders = Order.objects.filter(
+            status=Order.Status.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+            completed_at__isnull=False,
+        )
+        if period == "1d":
+            product_orders = product_orders.filter(completed_at__gte=now - timedelta(hours=24), completed_at__lte=now)
+        else:
+            product_orders = product_orders.filter(completed_at__date__gte=start, completed_at__date__lte=end)
         top_products = list(
-            OrderItem.objects.filter(
-                order__status=Order.Status.COMPLETED,
-                order__payment_status=Order.PaymentStatus.PAID,
-                order__completed_at__date__gte=start,
-                order__completed_at__date__lte=end,
-            ).values("product_name").annotate(
+            OrderItem.objects.filter(order__in=product_orders).values("product_name").annotate(
                 quantity=Sum("quantity"), revenue=Sum("line_total")
             ).order_by("-quantity", "-revenue")[:5]
         )
