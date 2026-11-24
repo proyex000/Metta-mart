@@ -131,7 +131,9 @@ class OrderReadSerializer(serializers.ModelSerializer):
         return cancel_block_reason(obj) is None
 
     def get_payment_info(self, obj):
-        """Rekening/QRIS tujuan bayar: hanya tampil di detail pesanan setelah dikonfirmasi admin dan sebelum lunas."""
+        """Rekening/QRIS only belongs on the customer's order-detail response, never in list payloads."""
+        if not self.context.get("include_payment_info", False):
+            return None
         if obj.payment_method == Order.PaymentMethod.CASH or obj.status not in (Order.Status.ACCEPTED, Order.Status.READY):
             return None
         if obj.payment_status not in (Order.PaymentStatus.UNPAID, Order.PaymentStatus.FAILED, Order.PaymentStatus.PENDING):
