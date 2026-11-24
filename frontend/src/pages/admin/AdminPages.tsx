@@ -1201,7 +1201,7 @@ export function Settings() {
     email: "",
     phone: "",
     adminName: session?.name || "Admin",
-    adminEmail: session?.email || "admin@mettamart.id",
+    adminEmail: session?.email && session.email !== "admin@mettamart.id" ? session.email : "richardalvarowu2010@gmail.com",
     cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "",
     operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
     orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
@@ -1211,11 +1211,19 @@ export function Settings() {
   const [tab, setTab] = useState<SettingsTab>("store");
   const [settingsLoadError, setSettingsLoadError] = useState("");
   const [values, setValues] = useState<Preferences>(() => {
+    let saved: Partial<Preferences> = {};
     try {
-      return { ...defaults, ...JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") };
+      saved = JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") as Partial<Preferences>;
     } catch {
-      return defaults;
+      // Ignore malformed cached settings and use current account/server defaults.
     }
+    return {
+      ...defaults,
+      ...saved,
+      // Account identity must come from the authenticated server session, not stale localStorage.
+      adminName: session?.name || defaults.adminName,
+      adminEmail: session?.email && session.email !== "admin@mettamart.id" ? session.email : "richardalvarowu2010@gmail.com",
+    };
   });
   useEffect(() => {
     fetchStorefrontSettings().then((settings) => setValues((current) => ({
