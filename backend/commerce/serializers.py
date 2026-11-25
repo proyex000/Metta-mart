@@ -215,11 +215,20 @@ class OrderCreateSerializer(serializers.Serializer):
         cleaned = []
         seen = set()
         for row in value:
+            raw_product_id = row.get("product_id")
+            raw_quantity = row.get("quantity")
+            # bool is an int subclass in Python; floats must not be silently truncated.
+            if isinstance(raw_product_id, bool) or isinstance(raw_quantity, bool):
+                raise serializers.ValidationError("Produk dan jumlah harus berupa bilangan bulat yang valid.")
+            if not isinstance(raw_product_id, (int, str)) or not isinstance(raw_quantity, (int, str)):
+                raise serializers.ValidationError("Produk dan jumlah harus berupa bilangan bulat yang valid.")
             try:
-                product_id = int(row.get("product_id"))
-                quantity = int(row.get("quantity"))
+                product_id = int(raw_product_id)
+                quantity = int(raw_quantity)
             except (TypeError, ValueError):
-                raise serializers.ValidationError("Produk dan jumlah harus valid.")
+                raise serializers.ValidationError("Produk dan jumlah harus berupa bilangan bulat yang valid.")
+            if (isinstance(raw_product_id, str) and not raw_product_id.strip().lstrip("+").isdigit()) or (isinstance(raw_quantity, str) and not raw_quantity.strip().lstrip("+").isdigit()):
+                raise serializers.ValidationError("Produk dan jumlah harus berupa bilangan bulat yang valid.")
             if product_id in seen or quantity < 1:
                 raise serializers.ValidationError("Produk tidak boleh duplikat dan jumlah minimal 1.")
             seen.add(product_id)
