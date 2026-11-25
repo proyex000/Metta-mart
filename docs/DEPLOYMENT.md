@@ -40,7 +40,7 @@ Browsers or privacy settings may block third-party cookies even when the server 
 Frontend (from `frontend/`):
 
 ```sh
-npm ci
+pnpm install --frozen-lockfile
 npm run typecheck
 npm run build
 ```
