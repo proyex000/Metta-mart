@@ -421,6 +421,22 @@ class CommerceApiTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
 
+    def test_pos_checkout_rejects_fractional_quantity_and_cash_amount(self):
+        self.client.force_authenticate(user=self.admin)
+        fractional_quantity = self.client.post("/api/admin/pos/checkout/", {
+            "payment_method": "cash", "cash_received": 20000,
+            "items": [{"product_id": self.product.id, "quantity": 1.5}],
+        }, format="json", HTTP_IDEMPOTENCY_KEY="pos-fraction-qty-001")
+        self.assertEqual(fractional_quantity.status_code, 400)
+        self.assertEqual(Order.objects.count(), 0)
+
+        boolean_cash = self.client.post("/api/admin/pos/checkout/", {
+            "payment_method": "cash", "cash_received": True,
+            "items": [{"product_id": self.product.id, "quantity": 1}],
+        }, format="json", HTTP_IDEMPOTENCY_KEY="pos-bool-cash-001")
+        self.assertEqual(boolean_cash.status_code, 400)
+        self.assertEqual(Order.objects.count(), 0)
+
     def test_pos_checkout_rejects_missing_idempotency_key(self):
         self.client.force_authenticate(user=self.admin)
         response = self.client.post("/api/admin/pos/checkout/", {
