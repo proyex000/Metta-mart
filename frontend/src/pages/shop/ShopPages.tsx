@@ -638,10 +638,11 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
           const steps = [
             { title: "Pesanan diterima", detail: "Pesanan berhasil dibuat." },
             { title: "Diproses", detail: order.accepted_at ? "Pesanan dikonfirmasi admin." : "Menunggu konfirmasi admin." },
-            { title: isGosend ? "Siap diantar" : "Siap diambil", detail: order.ready_at ? (isGosend ? "Pesanan siap untuk pengantaran." : "Pesanan siap diambil di koperasi.") : (isGosend ? "Menunggu pesanan disiapkan." : "Menunggu pesanan disiapkan.") },
+            { title: isGosend ? "Siap diantar" : "Siap diambil", detail: order.ready_at ? (isGosend ? "Pesanan siap untuk diserahkan kepada kurir." : "Pesanan siap diambil di koperasi.") : "Menunggu pesanan disiapkan." },
+            ...(isGosend ? [{ title: "Sedang diantar", detail: order.status === "delivering" || order.status === "completed" ? "Kurir sedang mengantarkan pesanan ke alamat penerima." : "Menunggu kurir mulai mengantarkan pesanan." }] : []),
             { title: isGosend ? "Pengantaran selesai" : "Pengambilan selesai", detail: order.completed_at ? "Pesanan telah selesai." : (isGosend ? "Menunggu pesanan diterima." : "Menunggu pesanan diambil.") },
           ];
-          const activeStep = order.status === "pending" ? 0 : order.status === "accepted" ? 1 : order.status === "ready_for_pickup" ? 2 : order.status === "delivering" ? 3 : order.status === "completed" ? 3 : -1;
+          const activeStep = order.status === "pending" ? 0 : order.status === "accepted" ? 1 : order.status === "ready_for_pickup" ? 2 : order.status === "delivering" ? (isGosend ? 3 : 2) : order.status === "completed" ? (isGosend ? 4 : 3) : -1;
           return (
             <div className={`timeline order-timeline ${order.status === "cancelled" ? "order-timeline--cancelled" : ""}`} aria-label="Progres pesanan">
               {steps.map((step, index) => {
