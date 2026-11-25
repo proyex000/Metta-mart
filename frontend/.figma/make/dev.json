@@ -5,10 +5,10 @@
   // `.figma/make/` are always watched regardless of these lists.
   //
   // Only list files that affect the toolchain or dependency tree here.
-  // This project uses npm; package-lock.json is the authoritative lockfile.
+  // This project uses pnpm; pnpm-lock.yaml is the authoritative lockfile.
   "installOn": [
     "package.json",
-    "package-lock.json"
+    "pnpm-lock.yaml"
   ],
   // Files whose changes trigger only a dev server restart (no install).
   "restartOn": []
