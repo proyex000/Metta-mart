@@ -626,9 +626,20 @@ class AdminPOSCheckoutView(APIView):
         seen = set()
         for row in rows:
             try:
-                product_id, quantity = int(row.get("product_id")), int(row.get("quantity"))
-            except (AttributeError, TypeError, ValueError):
+                raw_product_id, raw_quantity = row.get("product_id"), row.get("quantity")
+            except AttributeError:
                 raise ValidationError({"items": "Produk dan jumlah harus valid."})
+            # Reject booleans and floats instead of accepting Python's lossy int conversion.
+            if isinstance(raw_product_id, bool) or isinstance(raw_quantity, bool):
+                raise ValidationError({"items": "Produk dan jumlah harus berupa bilangan bulat yang valid."})
+            if not isinstance(raw_product_id, (int, str)) or not isinstance(raw_quantity, (int, str)):
+                raise ValidationError({"items": "Produk dan jumlah harus berupa bilangan bulat yang valid."})
+            try:
+                product_id, quantity = int(raw_product_id), int(raw_quantity)
+            except (TypeError, ValueError):
+                raise ValidationError({"items": "Produk dan jumlah harus berupa bilangan bulat yang valid."})
+            if (isinstance(raw_product_id, str) and not raw_product_id.strip().lstrip("+").isdigit()) or (isinstance(raw_quantity, str) and not raw_quantity.strip().lstrip("+").isdigit()):
+                raise ValidationError({"items": "Produk dan jumlah harus berupa bilangan bulat yang valid."})
             if product_id in seen or quantity < 1:
                 raise ValidationError({"items": "Produk tidak boleh duplikat dan jumlah minimal 1."})
             seen.add(product_id)
