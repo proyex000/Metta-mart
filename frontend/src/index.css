@@ -1631,23 +1631,14 @@ td b {
   background: #fff0ed;
   border-radius: 10px;
 }
-.demo-warning {
+.role-choice-note {
   margin-top: 18px;
   display: block;
   color: #8997a3;
   font-size: 11px;
   text-align: center;
 }
-.demo-account {
-  margin-top: 18px;
-  padding: 10px 12px;
-  display: grid;
-  gap: 3px;
-  color: #708292;
-  background: #f7f9fa;
-  border-radius: 7px;
-  font-size: 12px;
-}
+
 .auth-error,
 .auth-success {
   margin-bottom: 14px;

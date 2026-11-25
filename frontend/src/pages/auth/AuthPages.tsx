@@ -37,7 +37,7 @@ export function RoleChooser() {
             </Link>
           ))}
         </div>
-        <small className="demo-warning">Akun admin dibuat oleh administrator koperasi.</small>
+        <small className="role-choice-note">Akun admin dibuat oleh administrator koperasi.</small>
       </div>
     </div>
   );
