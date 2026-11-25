@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -129,6 +130,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:8443")
 CORS_ALLOW_CREDENTIALS = True
+# POS and online checkout send this custom header to enforce idempotent submissions.
+# Keep django-cors-headers defaults and explicitly allow the application header.
+CORS_ALLOW_HEADERS = (*default_headers, "idempotency-key")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:8443")
 if not DEBUG:
     if not CORS_ALLOWED_ORIGINS or not CSRF_TRUSTED_ORIGINS:
