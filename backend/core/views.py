@@ -143,6 +143,33 @@ class NotificationListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        # Parent digests are generated lazily on first notification-page visit after
+        # seven days, avoiding a separate paid scheduler/cron dependency.
+        if request.user.role == "parent":
+            preference_key = account_notification_preferences_key(request.user)
+            saved = StoreSetting.objects.filter(key=preference_key).only("value").first()
+            preferences = saved.value if saved and isinstance(saved.value, dict) else {}
+            if preferences.get("weekly_summary", True):
+                from datetime import timedelta
+                from django.db.models import Sum
+                from commerce.models import Order
+                since = timezone.now() - timedelta(days=7)
+                has_recent_digest = Notification.objects.filter(
+                    recipient=request.user,
+                    kind="weekly_summary",
+                    created_at__gte=since,
+                ).exists()
+                if not has_recent_digest:
+                    recent_orders = Order.objects.filter(customer=request.user, created_at__gte=since)
+                    order_count = recent_orders.count()
+                    if order_count:
+                        paid_total = recent_orders.filter(payment_status="paid").aggregate(total=Sum("total"))["total"] or 0
+                        Notification.objects.create(
+                            recipient=request.user,
+                            title="Ringkasan mingguan pesanan",
+                            message=f"7 hari terakhir: {order_count} pesanan, dengan total pembayaran lunas Rp{paid_total:,}.",
+                            kind="weekly_summary",
+                        )
         rows = Notification.objects.filter(recipient=request.user)[:100]
         return Response([{
             "id": row.id,
@@ -167,12 +194,22 @@ class NotificationListView(APIView):
             return Response({"detail": "Judul (1–180 karakter) dan pesan (1–500 karakter) wajib diisi."}, status=status.HTTP_400_BAD_REQUEST)
         from django.contrib.auth import get_user_model
         User = get_user_model()
-        recipients = User.objects.filter(is_active=True, role__in=("student", "parent"))
-        Notification.objects.bulk_create([
-            Notification(recipient=user, title=title, message=message, kind=kind)
-            for user in recipients
-        ])
-        return Response({"sent_to": recipients.count()}, status=status.HTTP_201_CREATED)
+        recipients = list(User.objects.filter(is_active=True, role__in=("student", "parent")).only("id"))
+        preference_keys = [f"user_notification_preferences_{user.pk}" for user in recipients]
+        saved_preferences = {
+            item.key: item.value
+            for item in StoreSetting.objects.filter(key__in=preference_keys)
+        }
+        notifications = []
+        for user in recipients:
+            values = saved_preferences.get(f"user_notification_preferences_{user.pk}")
+            if not isinstance(values, dict):
+                values = {}
+            if values.get("promotions", False):
+                notifications.append(Notification(recipient=user, title=title, message=message, kind=kind))
+        if notifications:
+            Notification.objects.bulk_create(notifications)
+        return Response({"sent_to": len(notifications)}, status=status.HTTP_201_CREATED)
 
 class NotificationReadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -185,3 +222,68 @@ class NotificationReadView(APIView):
             row.read_at = timezone.now()
             row.save(update_fields=["read_at"])
         return Response({"id": row.id, "is_read": True})
+
+
+DEFAULT_ACCOUNT_NOTIFICATION_PREFERENCES = {
+    "order_updates": True,
+    "stock_updates": True,
+    "promotions": False,
+    "weekly_summary": True,
+}
+
+
+def account_notification_preferences_key(user):
+    return f"user_notification_preferences_{user.pk}"
+
+
+class MyNotificationPreferencesView(APIView):
+    """Read/update notification preferences for the authenticated student or parent only."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _ensure_supported_role(self, request):
+        if request.user.role not in ("student", "parent"):
+            return Response({"detail": "Preferensi ini hanya tersedia untuk akun siswa dan orang tua."}, status=status.HTTP_403_FORBIDDEN)
+        return None
+
+    def get(self, request):
+        denied = self._ensure_supported_role(request)
+        if denied:
+            return denied
+        defaults = {**DEFAULT_ACCOUNT_NOTIFICATION_PREFERENCES}
+        if request.user.role == "student":
+            defaults["weekly_summary"] = False
+        saved = StoreSetting.objects.filter(key=account_notification_preferences_key(request.user)).first()
+        return Response({**defaults, **(saved.value if saved and isinstance(saved.value, dict) else {})})
+
+    @transaction.atomic
+    def patch(self, request):
+        denied = self._ensure_supported_role(request)
+        if denied:
+            return denied
+        allowed = set(DEFAULT_ACCOUNT_NOTIFICATION_PREFERENCES)
+        if request.user.role == "student":
+            allowed.remove("weekly_summary")
+        unknown = set(request.data.keys()) - allowed
+        if unknown:
+            raise ValidationError({"preferences": "Terdapat preferensi notifikasi yang tidak dikenal."})
+        if any(not isinstance(value, bool) for value in request.data.values()):
+            raise ValidationError({"preferences": "Semua preferensi harus bernilai true atau false."})
+        key = account_notification_preferences_key(request.user)
+        existing = StoreSetting.objects.filter(key=key).first()
+        defaults = {**DEFAULT_ACCOUNT_NOTIFICATION_PREFERENCES}
+        if request.user.role == "student":
+            defaults["weekly_summary"] = False
+        current = {**defaults, **(existing.value if existing and isinstance(existing.value, dict) else {})}
+        updated = {**current, **request.data}
+        StoreSetting.objects.update_or_create(
+            key=key,
+            defaults={"value": updated, "updated_by": request.user},
+        )
+        AuditLog.objects.create(
+            actor=request.user,
+            event="user.notification_preferences_updated",
+            target_type="user",
+            target_id=str(request.user.pk),
+            metadata={"keys": sorted(request.data.keys())},
+        )
+        return Response(updated)

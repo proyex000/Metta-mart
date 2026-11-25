@@ -32,3 +32,7 @@
 .shop-settings-profile-form .shop-settings-field input { width: 100%; min-height: 38px; padding: 8px 10px; color: #31485b; background: #fff; border: 1px solid #dfe6ea; border-radius: 7px; font: inherit; font-size: 14px; }
 .shop-settings-save-button { justify-self: start; margin-top: 10px; padding: 10px 15px; color: #fff; background: var(--red); border: 0; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .shop-settings-profile-form .shop-settings-note { margin-top: 8px; }
+
+.shop-settings-preferences-status { margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.shop-settings-preferences-error { margin-top: 10px; color: #c62828; font-size: 12px; line-height: 1.5; }
+.shop-settings-toggle-row input:disabled { cursor: wait; opacity: .6; }

@@ -198,3 +198,47 @@ class AuthApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.student.refresh_from_db()
         self.assertTrue(self.student.check_password("TestPassword!2026"))
+
+
+    def test_student_can_read_and_update_only_own_notification_preferences(self):
+        parent = User.objects.create_user(
+            identifier="parent-preferences@example.test",
+            password="TestPassword!2026",
+            full_name="Parent Preferences",
+            email="parent-preferences@example.test",
+            role=User.Role.PARENT,
+        )
+        self.client.force_authenticate(user=self.student)
+        initial = self.client.get("/api/auth/notification-preferences/")
+        self.assertEqual(initial.status_code, 200)
+        self.assertTrue(initial.data["order_updates"])
+        self.assertTrue(initial.data["stock_updates"])
+        self.assertFalse(initial.data["promotions"])
+        self.assertFalse(initial.data["weekly_summary"])
+
+        updated = self.client.patch("/api/auth/notification-preferences/", {
+            "order_updates": False,
+            "promotions": True,
+        }, format="json")
+        self.assertEqual(updated.status_code, 200, updated.data)
+        self.assertFalse(updated.data["order_updates"])
+        self.assertTrue(updated.data["promotions"])
+
+        self.client.force_authenticate(user=parent)
+        parent_preferences = self.client.get("/api/auth/notification-preferences/")
+        self.assertEqual(parent_preferences.status_code, 200)
+        self.assertTrue(parent_preferences.data["order_updates"])
+        self.assertFalse(parent_preferences.data["promotions"])
+        self.assertTrue(parent_preferences.data["weekly_summary"])
+
+    def test_student_cannot_update_parent_only_weekly_summary(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.patch("/api/auth/notification-preferences/", {
+            "weekly_summary": False,
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_admin_cannot_use_customer_notification_preferences(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get("/api/auth/notification-preferences/")
+        self.assertEqual(response.status_code, 403)

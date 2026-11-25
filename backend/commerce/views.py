@@ -18,8 +18,48 @@ from .serializers import InventoryMovementSerializer, cancel_block_reason, Order
 from core.pagination import OptionalPaginationMixin
 
 
+def account_notification_enabled(user, preference, default=True):
+    key = f"user_notification_preferences_{user.pk}"
+    saved = StoreSetting.objects.filter(key=key).only("value").first()
+    values = saved.value if saved and isinstance(saved.value, dict) else {}
+    return values.get(preference, default)
+
+
 def notify_user(user, title, message, kind="info", target_code=""):
+    preference = {
+        "order": "order_updates",
+        "payment": "order_updates",
+        "stock": "stock_updates",
+        "announcement": "promotions",
+        "promotion": "promotions",
+    }.get(kind)
+    if preference and user.role in ("student", "parent"):
+        default = preference != "promotions"
+        if not account_notification_enabled(user, preference, default):
+            return
     Notification.objects.create(recipient=user, title=title, message=message, kind=kind, target_code=target_code)
+
+
+def notify_customers(title, message, kind="stock"):
+    User = get_user_model()
+    recipients = list(User.objects.filter(is_active=True, role__in=("student", "parent")).only("id", "role"))
+    keys = [f"user_notification_preferences_{user.pk}" for user in recipients]
+    saved = {
+        item.key: item.value
+        for item in StoreSetting.objects.filter(key__in=keys)
+    }
+    preference = "stock_updates" if kind == "stock" else "promotions"
+    default = preference != "promotions"
+    notifications = []
+    for user in recipients:
+        values = saved.get(f"user_notification_preferences_{user.pk}")
+        if not isinstance(values, dict):
+            values = {}
+        if values.get(preference, default):
+            notifications.append(Notification(recipient=user, title=title, message=message, kind=kind))
+    if notifications:
+        Notification.objects.bulk_create(notifications)
+    return len(notifications)
 
 
 def notify_admins(title, message, kind="order", target_code=""):
@@ -61,6 +101,8 @@ class ProductListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView)
         product = serializer.save()
         if product.stock:
             InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=product.stock, reason="initial_stock", reference=note)
+        if product.is_active and product.stock > 0:
+            notify_customers("Produk baru tersedia", f"{product.name} sekarang tersedia di katalog MettaMart.", kind="stock")
         if product.stock < 10:
             preferences = StoreSetting.objects.filter(key="notification_preferences").first()
             if not preferences or not isinstance(preferences.value, dict) or preferences.value.get("low_stock_alerts", True):
@@ -93,6 +135,8 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
         delta = product.stock - previous_stock
         if delta:
             InventoryMovement.objects.create(product=product, actor=self.request.user, quantity_delta=delta, reason="manual_adjustment", reference=note)
+            if previous_stock <= 0 and product.stock > 0 and product.is_active:
+                notify_customers("Stok tersedia kembali", f"{product.name} sekarang tersedia kembali di MettaMart.", kind="stock")
             if previous_stock >= 10 and product.stock < 10:
                 preferences = StoreSetting.objects.filter(key="notification_preferences").first()
                 if not preferences or not isinstance(preferences.value, dict) or preferences.value.get("low_stock_alerts", True):

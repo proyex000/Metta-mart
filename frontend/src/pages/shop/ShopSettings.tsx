@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Icon, PageTitle } from "../../components/ui";
 import { ChangePasswordForm } from "../../components/ChangePasswordForm";
 import { useAuth } from "../../hooks/useAuth";
+import { getNotificationPreferences, saveNotificationPreferences } from "../../services/auth";
+import type { AccountNotificationPreferences } from "../../services/api";
 import type { Role } from "../../types";
 import "./ShopSettings.css";
 
@@ -14,7 +16,42 @@ export function ShopSettings({ role }: { role: ShopRole }) {
   const [profileEmail, setProfileEmail] = useState(session?.email || "");
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [preferences, setPreferences] = useState<AccountNotificationPreferences | null>(null);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesError, setPreferencesError] = useState("");
+  const [preferencesSaved, setPreferencesSaved] = useState(false);
   const isParent = role === "parent";
+
+  useEffect(() => {
+    let active = true;
+    getNotificationPreferences()
+      .then((value) => { if (active) setPreferences(value); })
+      .catch((reason) => {
+        if (active) setPreferencesError(reason instanceof Error ? reason.message : "Preferensi notifikasi gagal dimuat.");
+      })
+      .finally(() => { if (active) setPreferencesLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const updatePreference = async (key: keyof AccountNotificationPreferences, checked: boolean) => {
+    if (!preferences || preferencesSaving) return;
+    const previous = preferences;
+    setPreferences({ ...previous, [key]: checked });
+    setPreferencesSaving(true);
+    setPreferencesError("");
+    setPreferencesSaved(false);
+    try {
+      const updated = await saveNotificationPreferences({ [key]: checked });
+      setPreferences(updated);
+      setPreferencesSaved(true);
+    } catch (reason) {
+      setPreferences(previous);
+      setPreferencesError(reason instanceof Error ? reason.message : "Preferensi notifikasi gagal disimpan.");
+    } finally {
+      setPreferencesSaving(false);
+    }
+  };
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -85,6 +122,41 @@ export function ShopSettings({ role }: { role: ShopRole }) {
             {profileError && <p className="auth-error" role="alert">{profileError}</p>}
             {profileSaved && <p className="shop-settings-save-state" role="status">Profil berhasil diperbarui di server.</p>}
           </form>
+        </section>
+
+        <section className="shop-settings-card">
+          <div className="shop-settings-card-heading">
+            <span className="shop-settings-icon"><Icon name="bell" /></span>
+            <div>
+              <h2>Preferensi notifikasi</h2>
+              <p>Pilih informasi yang ingin Anda terima di akun ini.</p>
+            </div>
+          </div>
+          {preferencesLoading && <p className="shop-settings-preferences-status">Memuat preferensi notifikasi...</p>}
+          {!preferencesLoading && preferences && (
+            <>
+              <div className="shop-settings-toggle-row">
+                <div><strong>Update pesanan</strong><span>Perubahan status dan pembayaran pesanan Anda.</span></div>
+                <input aria-label="Notifikasi update pesanan" type="checkbox" checked={preferences.order_updates} disabled={preferencesSaving} onChange={(event) => void updatePreference("order_updates", event.target.checked)} />
+              </div>
+              <div className="shop-settings-toggle-row">
+                <div><strong>Informasi stok</strong><span>Produk baru dan produk yang tersedia kembali.</span></div>
+                <input aria-label="Notifikasi informasi stok" type="checkbox" checked={preferences.stock_updates} disabled={preferencesSaving} onChange={(event) => void updatePreference("stock_updates", event.target.checked)} />
+              </div>
+              <div className="shop-settings-toggle-row">
+                <div><strong>Promo dan informasi</strong><span>Pengumuman dan informasi promosi MettaMart.</span></div>
+                <input aria-label="Notifikasi promo" type="checkbox" checked={preferences.promotions} disabled={preferencesSaving} onChange={(event) => void updatePreference("promotions", event.target.checked)} />
+              </div>
+              {isParent && (
+                <div className="shop-settings-toggle-row">
+                  <div><strong>Ringkasan mingguan</strong><span>Ringkasan aktivitas pesanan akun Anda setiap minggu.</span></div>
+                  <input aria-label="Ringkasan mingguan" type="checkbox" checked={preferences.weekly_summary} disabled={preferencesSaving} onChange={(event) => void updatePreference("weekly_summary", event.target.checked)} />
+                </div>
+              )}
+              <p className="shop-settings-preferences-status" role="status">{preferencesSaving ? "Menyimpan perubahan..." : preferencesSaved ? "Preferensi tersimpan di akun Anda." : "Preferensi tersimpan di server dan berlaku di perangkat lain."}</p>
+            </>
+          )}
+          {preferencesError && <p className="shop-settings-preferences-error" role="alert">{preferencesError}</p>}
         </section>
 
         <section className="shop-settings-card shop-settings-security">
