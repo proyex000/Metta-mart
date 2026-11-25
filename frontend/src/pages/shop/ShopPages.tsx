@@ -579,7 +579,25 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
     fetchStorefrontSettings().then(setStore).catch(() => setStoreError("Info kontak koperasi gagal dimuat. Coba lagi beberapa saat."));
   };
   useEffect(() => {
-    fetchOrder(code).then(setOrder).catch((reason) => setError(reason instanceof Error ? reason.message : "Detail pesanan gagal dimuat.")).finally(() => setLoading(false));
+    let active = true;
+    const loadOrder = async (initial = false) => {
+      try {
+        const latestOrder = await fetchOrder(code);
+        if (active) setOrder(latestOrder);
+      } catch (reason) {
+        if (active && initial) setError(reason instanceof Error ? reason.message : "Detail pesanan gagal dimuat.");
+      } finally {
+        if (active && initial) setLoading(false);
+      }
+    };
+
+    void loadOrder(true);
+    // Keep the detail and tracking timeline synchronized with admin status changes.
+    const refreshTimer = window.setInterval(() => void loadOrder(), 10000);
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+    };
   }, [code]);
   const sendPayment = async () => {
     if (!senderName.trim() || !paymentSource.trim() || sendingPayment) return;
@@ -616,7 +634,29 @@ export function OrderDetail({ role }: { role: Exclude<Role, "admin"> }) {
         {isGosend
           ? <dl><dt>Metode</dt><dd>GoSend (diantar)</dd><dt>Penerima</dt><dd>{order.delivery_recipient} · {order.delivery_phone}</dd><dt>Alamat</dt><dd>{order.delivery_address}</dd><dt>Ketentuan</dt><dd>{order.delivery_fee_confirmed ? "Pesanan diantar pada jam operasional setelah pembayaran diverifikasi admin." : "Ongkir sedang ditetapkan admin. Total akhir akan dikirim melalui notifikasi sebelum pembayaran."}</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>
           : <dl><dt>Lokasi</dt><dd>Koperasi sekolah</dd><dt>Ketentuan</dt><dd>Ambil saat jam operasional setelah status Siap Diambil.</dd><dt>Status</dt><dd><Status>{status}</Status></dd><dt>Pembayaran</dt><dd>{paymentStatusText(order.payment_status)}</dd></dl>}
-        <div className="timeline"><b>Pesanan diterima</b><span>{order.accepted_at ? "Diproses" : "Menunggu konfirmasi admin"}</span><span>{order.ready_at ? (isGosend ? "Siap diantar" : "Siap diambil") : (isGosend ? "Belum siap diantar" : "Belum siap diambil")}</span><span>{order.completed_at ? (isGosend ? "Pengantaran selesai" : "Pengambilan selesai") : (isGosend ? "Menunggu pengantaran" : "Menunggu pengambilan")}</span></div>
+        {(() => {
+          const steps = [
+            { title: "Pesanan diterima", detail: "Pesanan berhasil dibuat." },
+            { title: "Diproses", detail: order.accepted_at ? "Pesanan dikonfirmasi admin." : "Menunggu konfirmasi admin." },
+            { title: isGosend ? "Siap diantar" : "Siap diambil", detail: order.ready_at ? (isGosend ? "Pesanan siap untuk pengantaran." : "Pesanan siap diambil di koperasi.") : (isGosend ? "Menunggu pesanan disiapkan." : "Menunggu pesanan disiapkan.") },
+            { title: isGosend ? "Pengantaran selesai" : "Pengambilan selesai", detail: order.completed_at ? "Pesanan telah selesai." : (isGosend ? "Menunggu pesanan diterima." : "Menunggu pesanan diambil.") },
+          ];
+          const activeStep = order.status === "pending" ? 0 : order.status === "accepted" ? 1 : order.status === "ready_for_pickup" ? 2 : order.status === "delivering" ? 3 : order.status === "completed" ? 3 : -1;
+          return (
+            <div className={`timeline order-timeline ${order.status === "cancelled" ? "order-timeline--cancelled" : ""}`} aria-label="Progres pesanan">
+              {steps.map((step, index) => {
+                const state = order.status === "cancelled" ? "upcoming" : index < activeStep || order.status === "completed" ? "complete" : index === activeStep ? "active" : "upcoming";
+                return (
+                  <div className={`order-timeline__step order-timeline__step--${state}`} key={step.title}>
+                    <span className="order-timeline__marker" aria-hidden="true">{state === "complete" ? "✓" : index + 1}</span>
+                    <div className="order-timeline__content"><b>{step.title}</b><small>{step.detail}</small></div>
+                  </div>
+                );
+              })}
+              {order.status === "cancelled" && <p className="order-timeline__notice">Pesanan dibatalkan.</p>}
+            </div>
+          );
+        })()}
         {order.payment_method !== "cash" && order.payment_status !== "paid" && order.status !== "cancelled" && (
           !order.payment_info ? (
             <section className="payment-section payment-waiting"><h2>Pembayaran</h2><p>Info {order.payment_method === "qris" ? "QRIS" : "rekening"} untuk pembayaran akan muncul di sini setelah admin mengonfirmasi pesanan Anda. Anda masih dapat membatalkan pesanan sebelum membayar.</p></section>
