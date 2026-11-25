@@ -4224,6 +4224,89 @@ td b {
   margin: 22px 0 22px 6px;
   font-size: 13px;
 }
+
+/* Tracking status pesanan siswa dan orang tua */
+.order-detail .order-timeline {
+  display: grid;
+  gap: 0;
+  margin: 22px 0;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+.order-detail .order-timeline__step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 66px;
+}
+.order-detail .order-timeline__step:not(:last-of-type)::after {
+  position: absolute;
+  top: 27px;
+  bottom: -1px;
+  left: 13px;
+  width: 2px;
+  background: #e2e8ec;
+  content: "";
+}
+.order-detail .order-timeline__marker {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #98a5af;
+  background: #f0f3f5;
+  border: 2px solid #e2e8ec;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+.order-detail .order-timeline__content {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 3px 0 18px;
+}
+.order-detail .order-timeline__content b {
+  color: #98a5af;
+  font-size: 13px;
+  font-weight: 600;
+}
+.order-detail .order-timeline__content small {
+  color: #98a5af;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.order-detail .order-timeline__step--complete .order-timeline__marker {
+  color: #fff;
+  background: #278365;
+  border-color: #278365;
+}
+.order-detail .order-timeline__step--complete:not(:last-of-type)::after {
+  background: #278365;
+}
+.order-detail .order-timeline__step--complete .order-timeline__content b {
+  color: #39715f;
+}
+.order-detail .order-timeline__step--active .order-timeline__marker {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+  box-shadow: 0 0 0 4px rgba(190, 65, 65, .12);
+}
+.order-detail .order-timeline__step--active .order-timeline__content b {
+  color: var(--red);
+  font-weight: 700;
+}
+.order-detail .order-timeline__notice {
+  margin: 0 0 0 40px;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .order-detail .payment-section {
   display: grid;
   gap: 12px;
