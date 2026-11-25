@@ -102,6 +102,7 @@ if DB_ENGINE == "mysql":
         "PORT": os.getenv("DB_PORT", "3306"),
         "OPTIONS": db_options,
         "CONN_MAX_AGE": 60,
+        "CONN_HEALTH_CHECKS": True,
     }}
 else:
     DATABASES = {"default": {
