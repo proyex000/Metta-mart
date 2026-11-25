@@ -641,7 +641,7 @@ class AdminPOSCheckoutView(APIView):
         }
         fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
         if idempotency_key:
-            type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            get_user_model().objects.select_for_update().get(pk=request.user.pk)
             existing = Order.objects.filter(idempotency_key=idempotency_key).first()
             if existing:
                 if existing.customer_id != request.user.pk or existing.request_fingerprint != fingerprint or existing.sales_channel != "pos":
