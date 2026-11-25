@@ -55,7 +55,7 @@ This document describes the current implementation in the deploy-readiness branc
 
 ### Notifications and settings
 - Notifications are persisted per recipient and can be marked read by that recipient.
-- Admin can broadcast announcements to student and parent accounts.
+- Admin can broadcast announcements to student and parent accounts. Announcements are on by default and reach every active student/parent account, except accounts that switched off promo notifications in their own settings.
 - Notifications are fetched when relevant pages load; realtime polling/push is not enabled.
 - Cooperative profile, payment methods/instructions, operating hours, pickup instructions, delivery estimate settings, and order policy persist in the database.
 - Logo and QRIS images are stored as Base64 text in settings and therefore count toward database storage.

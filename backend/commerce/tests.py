@@ -367,20 +367,26 @@ class CommerceApiTests(TestCase):
 
     def test_admin_can_broadcast_announcement_to_students_and_parents_only(self):
         from core.models import Notification
-        # Announcement delivery follows each account's promotion preference.
-        StoreSetting.objects.create(
-            key=f"user_notification_preferences_{self.student.pk}",
-            value={"order_updates": True, "stock_updates": True, "promotions": True, "weekly_summary": False},
-        )
-        StoreSetting.objects.create(
-            key=f"user_notification_preferences_{self.other_student.pk}",
-            value={"order_updates": True, "stock_updates": True, "promotions": True, "weekly_summary": False},
-        )
+        # Announcements reach every active student/parent by default; admins are never recipients.
         self.client.force_authenticate(user=self.admin)
         response = self.client.post("/api/notifications/", {"title": "Info koperasi", "message": "Jam buka berubah."}, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["sent_to"], 2)
         self.assertEqual(Notification.objects.filter(title="Info koperasi").count(), 2)
+        self.assertFalse(Notification.objects.filter(title="Info koperasi", recipient=self.admin).exists())
+
+    def test_announcement_skips_accounts_that_turned_promotions_off(self):
+        from core.models import Notification
+        StoreSetting.objects.create(
+            key=f"user_notification_preferences_{self.other_student.pk}",
+            value={"order_updates": True, "stock_updates": True, "promotions": False, "weekly_summary": False},
+        )
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post("/api/notifications/", {"title": "Info opt-out", "message": "Pengumuman."}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["sent_to"], 1)
+        self.assertTrue(Notification.objects.filter(title="Info opt-out", recipient=self.student).exists())
+        self.assertFalse(Notification.objects.filter(title="Info opt-out", recipient=self.other_student).exists())
 
     def test_parent_can_order_independently_without_student_link(self):
         parent = User.objects.create_user(identifier="parent@example.com", password="TestPassword!2026", full_name="Parent", role=User.Role.PARENT, email="parent@example.com")

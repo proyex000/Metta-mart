@@ -205,7 +205,7 @@ class NotificationListView(APIView):
             values = saved_preferences.get(f"user_notification_preferences_{user.pk}")
             if not isinstance(values, dict):
                 values = {}
-            if values.get("promotions", False):
+            if values.get("promotions", True):
                 notifications.append(Notification(recipient=user, title=title, message=message, kind=kind))
         if notifications:
             Notification.objects.bulk_create(notifications)
@@ -227,7 +227,7 @@ class NotificationReadView(APIView):
 DEFAULT_ACCOUNT_NOTIFICATION_PREFERENCES = {
     "order_updates": True,
     "stock_updates": True,
-    "promotions": False,
+    "promotions": True,
     "weekly_summary": True,
 }
 

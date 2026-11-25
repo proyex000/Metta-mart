@@ -34,8 +34,8 @@ def notify_user(user, title, message, kind="info", target_code=""):
         "promotion": "promotions",
     }.get(kind)
     if preference and user.role in ("student", "parent"):
-        default = preference != "promotions"
-        if not account_notification_enabled(user, preference, default):
+        # Every notification type, including announcements/promotions, is on unless the account turned it off.
+        if not account_notification_enabled(user, preference, True):
             return
     Notification.objects.create(recipient=user, title=title, message=message, kind=kind, target_code=target_code)
 
@@ -49,7 +49,7 @@ def notify_customers(title, message, kind="stock"):
         for item in StoreSetting.objects.filter(key__in=keys)
     }
     preference = "stock_updates" if kind == "stock" else "promotions"
-    default = preference != "promotions"
+    default = True
     notifications = []
     for user in recipients:
         values = saved.get(f"user_notification_preferences_{user.pk}")
