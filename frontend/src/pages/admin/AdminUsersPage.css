@@ -353,3 +353,53 @@
 @media (prefers-reduced-motion: reduce) {
   .admin-users-actions .admin-users-toggle { transition: none; }
 }
+
+
+.admin-users-password-pending {
+  display: block;
+  margin-top: 5px;
+  color: #9a641d;
+  font-size: 11px;
+  font-weight: 650;
+}
+.admin-users-actions .admin-users-reset {
+  border-color: var(--line);
+  white-space: nowrap;
+}
+.admin-users-password-result {
+  width: min(100%, 470px);
+}
+.admin-users-temp-password {
+  display: block;
+  margin: 18px 0 12px;
+  padding: 15px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--surface-muted, #f5f6f8);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: .035em;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.admin-users-copy-password { width: 100%; }
+.admin-users-copy-status {
+  margin-top: 9px !important;
+  color: #18734d !important;
+  font-size: 12px !important;
+}
+.admin-users-password-warning {
+  margin-top: 14px !important;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+}
+.password-required-card .password-change { margin-top: 22px; }
+.password-required-card > p { line-height: 1.6; }
+.password-required-card > .wide { margin-top: 14px; }
+@media (max-width: 700px) {
+  .admin-users-temp-password { font-size: 15px; padding: 13px 12px; }
+  .admin-users-list table { min-width: 760px; }
+}

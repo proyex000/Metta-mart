@@ -7,6 +7,7 @@ export type ManagedUser = {
   email: string;
   role: "admin" | "student" | "parent";
   is_active: boolean;
+  must_change_password: boolean;
   date_joined: string;
 };
 
@@ -31,5 +32,11 @@ export function updateManagedUser(id: number, input: { identifier?: string; full
   return apiRequest<ManagedUser>(`/admin/users/${id}/`, {
     method: "PATCH",
     body: JSON.stringify(input),
+  });
+}
+
+export function resetManagedUserPassword(id: number) {
+  return apiRequest<{ temporary_password: string; must_change_password: true }>(`/admin/users/${id}/reset-password/`, {
+    method: "POST",
   });
 }
