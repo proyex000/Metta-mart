@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import {
   clearSession,
+  changePassword as changePasswordService,
   login,
   register,
   restoreSession,
@@ -16,6 +17,7 @@ type AuthValue = {
   register: (input: { role: "student" | "parent"; identifier: string; fullName: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: { name: string; email: string }) => Promise<void>;
+  changePassword: (input: { currentPassword: string; newPassword: string }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -67,6 +69,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile: async (updates) => {
         const next = await updateProfile(updates);
         setSession(next);
+      },
+      changePassword: async (input) => {
+        await changePasswordService(input);
+        setSession((current) => current ? { ...current, mustChangePassword: false } : null);
       },
     }),
     [session, loading],
