@@ -5091,7 +5091,6 @@ a.order-submit {
     left: 0 !important;
     margin: 0 !important;
     box-shadow: none !important;
-    break-inside: avoid;
   }
 }
 
