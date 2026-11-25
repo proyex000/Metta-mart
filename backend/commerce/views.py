@@ -109,10 +109,9 @@ class ProductListCreateView(OptionalPaginationMixin, generics.ListCreateAPIView)
                 notify_admins("Stok produk menipis", f"{product.name} hanya tersisa {product.stock} unit.", kind="stock")
 
     def get_queryset(self):
-        qs = Product.objects.all()
-        if self.request.user.role != "admin":
-            qs = qs.filter(is_active=True)
-        return qs
+        # Archived products remain in the database for historical references,
+        # but must not appear in active product catalogs, including admin stock.
+        return Product.objects.filter(is_active=True)
 
     def get_permissions(self):
         return [CommerceAdminOnly()] if self.request.method == "POST" else [permissions.IsAuthenticated()]
