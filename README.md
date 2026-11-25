@@ -25,10 +25,10 @@ py manage.py createsuperuser
 py manage.py runserver 8000
 ```
 
-Frontend (from `frontend/`, Node.js 22):
+Frontend (from `frontend/`, Node.js 22 and pnpm 10.34.3):
 
 ```sh
-npm ci
+pnpm install --frozen-lockfile
 npm run dev
 ```
 
@@ -42,7 +42,7 @@ python manage.py test
 python manage.py makemigrations --check --dry-run
 
 # frontend/
-npm ci
+pnpm install --frozen-lockfile
 npm run typecheck
 npm run build
 ```
