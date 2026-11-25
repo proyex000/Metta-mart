@@ -48,8 +48,8 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "identifier", "full_name", "email", "role", "password", "is_active")
-        read_only_fields = ("id",)
+        fields = ("id", "identifier", "full_name", "email", "role", "password", "is_active", "must_change_password")
+        read_only_fields = ("id", "must_change_password")
 
     def validate_password(self, value):
         try:
@@ -80,8 +80,8 @@ class AdminCreateUserSerializer(serializers.ModelSerializer):
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "identifier", "full_name", "email", "role", "is_active", "date_joined")
-        read_only_fields = ("id", "email", "role", "date_joined")
+        fields = ("id", "identifier", "full_name", "email", "role", "is_active", "must_change_password", "date_joined")
+        read_only_fields = ("id", "email", "role", "must_change_password", "date_joined")
 
     def validate_identifier(self, value):
         if self.instance.role != User.Role.STUDENT:
