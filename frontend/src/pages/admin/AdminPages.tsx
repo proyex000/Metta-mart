@@ -283,6 +283,9 @@ export function Stock() {
   const [category, setCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
   const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [form, setForm] = useState<ProductForm>(emptyProductForm);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
@@ -352,6 +355,19 @@ export function Stock() {
       await reloadMovements();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Produk gagal disimpan.");
+    }
+  };
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleteLoading) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      await productService.remove(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (reason) {
+      setDeleteError(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi.");
+    } finally {
+      setDeleteLoading(false);
     }
   };
   return (
@@ -438,11 +454,9 @@ export function Stock() {
                     <button
                       className="icon-button"
                       aria-label={`Hapus ${p.name}`}
-                      onClick={async () => {
-                        if (window.confirm(`Hapus produk "${p.name}"? Jika produk memiliki riwayat stok atau transaksi, data produk akan tetap disimpan agar riwayat lama tidak rusak.`)) {
-                          try { await productService.remove(p.id); }
-                          catch (reason) { window.alert(reason instanceof Error ? reason.message : "Produk gagal dihapus. Periksa koneksi dan coba lagi."); }
-                        }
+                      onClick={() => {
+                        setDeleteError("");
+                        setDeleteTarget(p);
                       }}
                     >
                       <Icon name="trash" size={15} />
@@ -465,6 +479,32 @@ export function Stock() {
           {movements.slice(0, 20).map((movement) => <tr key={movement.id}><td>{new Date(movement.created_at).toLocaleString("id-ID")}</td><td>{movement.product_name}</td><td className={movement.quantity_delta < 0 ? "danger" : ""}>{movement.quantity_delta > 0 ? "+" : ""}{movement.quantity_delta}</td><td>{{ initial_stock: "Stok awal", manual_adjustment: "Penyesuaian", order_reserved: "Pesanan online", order_cancelled: "Pembatalan", pos_sale: "Penjualan POS" }[movement.reason]}</td><td>{movement.reference || "—"}</td><td>{movement.actor_name || "Sistem"}</td></tr>)}
         </tbody></table></div>}
       </section>
+      {deleteTarget && (
+        <Modal
+          title="Hapus Produk"
+          close={() => {
+            if (!deleteLoading) {
+              setDeleteTarget(null);
+              setDeleteError("");
+            }
+          }}
+        >
+          <div className="delete-confirm">
+            <span className="delete-confirm__icon"><Icon name="trash" size={22} /></span>
+            <p>Yakin ingin menghapus <strong>{deleteTarget.name}</strong> dari katalog?</p>
+            <div className="delete-confirm__note">
+              Produk yang memiliki riwayat stok atau transaksi akan tetap disimpan di sistem agar riwayat lama tidak rusak.
+            </div>
+            {deleteError && <p className="auth-error" role="alert">{deleteError}</p>}
+            <div className="delete-confirm__actions">
+              <button type="button" className="secondary-btn" disabled={deleteLoading} onClick={() => setDeleteTarget(null)}>Batal</button>
+              <button type="button" className="delete-confirm__submit" disabled={deleteLoading} onClick={() => void confirmDelete()}>
+                {deleteLoading ? "Menghapus..." : "Ya, Hapus Produk"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {editing && (
         <Modal title={editing === "new" ? "Tambah Produk" : "Ubah Produk"} close={() => setEditing(null)}>
           <form onSubmit={save} noValidate>
