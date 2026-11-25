@@ -81,11 +81,9 @@ if DB_ENGINE == "mysql":
     db_options = {"charset": "utf8mb4"}
     # TiDB Serverless requires encrypted transport. Always enable TLS for MySQL;
     # DB_SSL must never silently disable encryption for a deployed database.
-    ssl_options = {}
-    ca_file = os.getenv("DB_SSL_CA", "").strip()
-    if ca_file:
-        ssl_options["ca"] = ca_file
-    db_options["ssl"] = ssl_options
+    # Require TLS and verify the TiDB server certificate using the system CA bundle.
+    ca_file = os.getenv("DB_SSL_CA", "").strip() or "/etc/ssl/certs/ca-certificates.crt"
+    db_options["ssl"] = {"ca": ca_file}
     DATABASES = {"default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": os.getenv("DB_NAME", "mettamart"),
