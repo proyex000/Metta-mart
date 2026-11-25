@@ -1,6 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from .models import User
+from core.models import AuditLog
 
 class AuthApiTests(TestCase):
     def setUp(self):
