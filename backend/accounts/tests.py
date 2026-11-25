@@ -213,22 +213,22 @@ class AuthApiTests(TestCase):
         self.assertEqual(initial.status_code, 200)
         self.assertTrue(initial.data["order_updates"])
         self.assertTrue(initial.data["stock_updates"])
-        self.assertFalse(initial.data["promotions"])
+        self.assertTrue(initial.data["promotions"])
         self.assertFalse(initial.data["weekly_summary"])
 
         updated = self.client.patch("/api/auth/notification-preferences/", {
             "order_updates": False,
-            "promotions": True,
+            "promotions": False,
         }, format="json")
         self.assertEqual(updated.status_code, 200, updated.data)
         self.assertFalse(updated.data["order_updates"])
-        self.assertTrue(updated.data["promotions"])
+        self.assertFalse(updated.data["promotions"])
 
         self.client.force_authenticate(user=parent)
         parent_preferences = self.client.get("/api/auth/notification-preferences/")
         self.assertEqual(parent_preferences.status_code, 200)
         self.assertTrue(parent_preferences.data["order_updates"])
-        self.assertFalse(parent_preferences.data["promotions"])
+        self.assertTrue(parent_preferences.data["promotions"])
         self.assertTrue(parent_preferences.data["weekly_summary"])
 
     def test_student_cannot_update_parent_only_weekly_summary(self):

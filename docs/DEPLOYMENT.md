@@ -19,6 +19,8 @@ Required:
 
 Production startup fails closed if DEBUG is not explicitly disabled safely, the secret is missing/too short, allowed hosts are empty or contain `*`, SQLite is selected, database credentials are missing, database TLS is disabled, origins are missing/wildcarded, or session/CSRF cookies are not Secure.
 
+For the Vercel project, set **Root Directory** to `frontend`. `frontend/vercel.json` rewrites every path to `index.html`, which the single-page router needs so that reloading or opening a deep link such as `/admin/orders` does not return a 404, and it adds basic security headers.
+
 For the current split deployment, set Vercel environment variable `VITE_API_BASE_URL` to `https://<hostless-backend-domain>/api`. On Hostless, set `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the exact HTTPS Vercel frontend origin. For the current split deployment, explicitly set `SESSION_COOKIE_SAMESITE=None` and `CSRF_COOKIE_SAMESITE=None` together with both Secure flags. Browsers or privacy settings may still block third-party cookies; if login does not persist in the deployed browser, use a same-site custom domain or proxy `/api/` through the frontend origin rather than weakening cookie security. For a same-domain deployment, proxy `/api/` to Django and use `SameSite=Lax`.
 
 ## 2. Build and start
@@ -42,6 +44,16 @@ gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
 Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. For each new product photo, the browser resizes the longest side to at most 640 pixels, converts it to JPEG, and limits the Base64 data URL to 380,000 characters before sending it to Django. Django validates the encoded image and stores it in the product row. No Hostless persistent disk, Cloudinary account, or other media-storage service is required for new uploads. Existing legacy rows that contain file paths can still be served from `MEDIA_ROOT` when legacy media is available and `MEDIA_SERVE_ENABLED=true`; if those files were lost with an ephemeral filesystem, replace the photos from Admin → Kelola Stok.
+
+### Shared rate-limit counters (recommended with more than one worker)
+
+Login, registration, and password-change throttles (and the geocode cache) use Django's default cache, which is per-process memory. With three Gunicorn workers each worker counts separately, so the real limit is roughly three times the configured one and resets on restart. To share the counters through the production database, set `CACHE_DB_TABLE` (for example `mettamart_cache`) and run this once before starting the app:
+
+```sh
+python manage.py createcachetable
+```
+
+If `CACHE_DB_TABLE` is set but the table has not been created, throttled endpoints will fail, so create the table first. Leaving it unset keeps the per-process behaviour.
 
 ## 3. HTTPS and proxy headers
 

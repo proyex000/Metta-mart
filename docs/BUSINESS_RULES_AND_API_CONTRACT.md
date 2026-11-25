@@ -149,7 +149,7 @@ Suggested endpoint groups (names are illustrative; align with existing API):
 - `POST /api/admin/orders/{id}/cancel/`
 - `POST /api/orders/{id}/payment-proof/` — optional proof/reference submission.
 - `POST /api/admin/payments/{id}/verify/` and `/reject/`
-- `GET/PATCH /api/admin/settings/` — Admin-only settings management.
+- `GET/PATCH /api/storefront/settings/` — settings read; admin-only validated write.
 - `POST /api/admin/pos/checkout/` — Admin POS checkout.
 
 ## 7. State transition baseline
