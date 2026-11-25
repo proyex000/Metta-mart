@@ -1,74 +1,89 @@
 # Metta-Mart Backend
 
-Metta-Mart uses a Django REST Framework API with session-cookie authentication, CSRF protection, MySQL/TiDB in production, and SQLite for local development only.
+Django REST Framework API for the Metta-Mart school cooperative. Authentication uses Django sessions (HTTP-only cookies) with CSRF protection. Production database: MySQL-compatible TiDB. SQLite is supported for local development only.
 
-## Local development (Windows)
+## Local development (Windows PowerShell)
 
 1. Open PowerShell in `backend/`.
-2. Create a virtual environment: `py -m venv .venv`.
-3. Activate it: `.venv\Scripts\Activate.ps1`.
-4. Install dependencies: `py -m pip install -r requirements.txt`.
-5. Copy `.env.example` to `.env`; keep the local-development defaults for local HTTP.
-6. Apply migrations: `py manage.py migrate`.
-7. Create the first admin account: `py manage.py createsuperuser`.
-8. Start Django: `py manage.py runserver 8000`.
-9. Run backend tests: `py manage.py test`.
+2. Create and activate a virtual environment:
 
-The `.env.example` file is for local development only. Do not deploy it unchanged.
+   ```powershell
+   py -m venv .venv
+   .venv\Scripts\Activate.ps1
+   ```
+
+3. Install dependencies: `py -m pip install -r requirements.txt`.
+4. Copy `.env.example` to `.env`; retain its local-development values for local HTTP.
+5. Apply migrations: `py manage.py migrate`.
+6. Create the initial administrator: `py manage.py createsuperuser`.
+7. Start the API: `py manage.py runserver 8000`.
+8. Run tests: `py manage.py test`.
+
+Never deploy the local `.env.example` unchanged.
 
 ## Production configuration
 
-Production must set:
-- `DJANGO_DEBUG=false`.
-- A unique `DJANGO_SECRET_KEY` of at least 50 characters.
-- Explicit `DJANGO_ALLOWED_HOSTS` (no wildcard).
-- `DB_ENGINE=mysql`, database name/user/password/host/port, and `DB_SSL=true` for managed TiDB/MySQL.
-- Exact HTTPS values for `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS`.
-- `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true`. For separate Vercel and Hostless sites, set both SameSite values to `None`.
+Set environment variables in the hosting provider, not in committed files:
 
-The app refuses unsafe production defaults, missing required production database values, and SQLite in production. Run `python manage.py check --deploy` and `python manage.py makemigrations --check --dry-run` before release.
+- `DJANGO_DEBUG=false` and a unique `DJANGO_SECRET_KEY` (at least 50 characters).
+- Explicit `DJANGO_ALLOWED_HOSTS` hostnames; never use `*`.
+- Exact HTTPS origins in `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS`.
+- `DB_ENGINE=mysql`, database name/user/password/host/port, and `DB_SSL=true`.
+- `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true`.
+- For separate Vercel and Hostless sites, set both session and CSRF `SameSite=None`; both cookies must remain Secure.
 
-## Main API endpoints
+Production configuration guards reject unsafe settings, missing database credentials, SQLite, wildcard origins, and insecure cookies. Follow [the deployment guide](../docs/DEPLOYMENT.md) for the complete setup, proxy considerations, migrations, and backup procedure.
 
-### Authentication and accounts
-- `GET /api/health/` — public application/database health.
-- `GET /api/auth/csrf/` — prepare CSRF cookie/token.
-- `POST /api/auth/login/`, `POST /api/auth/logout/`, `GET /api/auth/me/`.
-- `PATCH /api/auth/me/` — update own profile.
-- `POST /api/auth/change-password/` — change own password with current-password confirmation.
-- `POST /api/auth/register/` — self-registration for student and parent accounts.
-- `GET/POST /api/admin/users/`; `GET/PATCH /api/admin/users/<id>/` — admin account management.
-- `GET /api/parent/children/` and `GET/POST/DELETE /api/admin/parent-student-links/` — relationship records. They are not used to place parent orders for students.
+## Application behaviour
+
+### Accounts and permissions
+
+- Student and parent accounts can self-register. Admin accounts are created/managed by administrators.
+- Student NISN is checked for the expected 10-digit format; it is not verified against an official school roster.
+- Parent login uses email, but email ownership verification is not implemented.
+- Users can edit their own profile and change their password after confirming the current password.
+- Admin can deactivate/reactivate accounts and perform an admin-assisted password reset. The temporary password is shown once and must be changed at next login.
+- Admin-only operations and record ownership are enforced by the backend.
+- Parent accounts place independent orders for themselves. The current checkout does not let a parent order on behalf of a student.
 
 ### Catalogue and inventory
-- `GET/POST /api/products/`; `GET/PATCH/DELETE /api/products/<id>/`.
-- `GET /api/admin/inventory-movements/`.
-- Product image data is sent as a Base64 data URL after browser-side JPEG compression. The database stores the image data in the product row; no persistent media volume is required for new images.
 
-### Orders, payments, and POS
-- `GET/POST /api/orders/`; `GET /api/orders/<code>/`.
-- `POST /api/orders/<code>/cancel/`; `POST /api/orders/<code>/payment-submission/`.
-- `POST /api/delivery/quote/` — best-effort GoSend estimate, not an official quote.
-- `GET /api/admin/orders/`.
-- `POST /api/admin/orders/<code>/<action>/` — accept, ready, complete-pickup, or cancel.
-- `POST /api/admin/orders/<code>/payment/<action>/` — verify/reject manual payment. Rejection requires a reason.
-- `POST /api/admin/orders/<code>/delivery-fee/` — set a manual fee when an estimated quote is unavailable.
-- `POST /api/admin/pos/checkout/` — admin POS checkout.
-- `GET /api/admin/dashboard/`; `GET /api/admin/reports/summary/`.
+- Product catalogue, categories, prices, availability, and stock are persisted in the database.
+- New product images are browser-compressed to JPEG and sent as Base64 data URLs. The image data is stored in the product row; new uploads do not require persistent media disk.
+- Logo and QRIS image data are also stored in database settings.
+- Stock adjustments/receipts require a reason and create inventory movement records.
+- Checkout and POS use server-side prices and stock validation. Checkout is idempotency-protected and updates stock transactionally.
+- Products with order/stock history are retained internally rather than physically deleted when historical references must be preserved.
 
-### Settings and notifications
-- `GET/PATCH /api/storefront/settings/` — public-safe settings read; admin-only write.
-- `GET/POST /api/notifications/`; `POST /api/notifications/<id>/read/`.
-- `GET /api/admin/audit-logs/` — backend audit history; the Admin UI is excluded from this release.
+### Orders, payments, delivery, and POS
+
+- Online orders support pickup or GoSend when enabled by cooperative settings.
+- GoSend address lookup and distance/fee calculation are best-effort estimates, not official courier quotes. Staff books the courier manually; no automated booking or live tracking is integrated.
+- If address lookup cannot provide a fee, Admin must set a manual fee before accepting the order or collecting payment.
+- Cash is recorded as paid when staff confirms receipt. Bank transfer and QRIS are manually verified by Admin. There is no payment gateway, automatic settlement check, or bank reconciliation.
+- Admin-only POS supports in-person checkout, payment capture, cash change calculation, receipt, and inventory movement.
+- Cancellation is restricted by order/payment state and restores reserved stock exactly once when eligible. Refund processing is not supported.
+
+## API route groups
+
+The following are the main implemented route groups; consult the Django URL configuration and frontend API client for exact request/response schemas.
+
+- Health: `GET /api/health/`.
+- Authentication: `/api/auth/csrf/`, `/api/auth/login/`, `/api/auth/logout/`, `/api/auth/me/`, `/api/auth/register/`, `/api/auth/change-password/`.
+- Products: `/api/products/` and `/api/products/<id>/`.
+- Orders: `/api/orders/`, `/api/orders/<code>/`, `/api/orders/<code>/cancel/`, and payment-submission routes.
+- Delivery estimate: `POST /api/delivery/quote/`.
+- Admin users, orders, inventory movements, payment decisions, delivery-fee updates, POS checkout, dashboard, and reports are grouped under `/api/admin/`.
+- Store settings: `/api/storefront/settings/` (public-safe read; admin-only write).
+- Notifications: `/api/notifications/` and recipient-scoped read actions.
+- Audit events: written by the backend for sensitive operations. There is no Admin audit-log screen in this release.
 
 ## Checkout integrity
 
-Online and POS checkout require an `Idempotency-Key` header of 8–64 characters. The frontend reuses a key when retrying the same submission. The backend recalculates prices and stock from database records and commits order/items/stock movements atomically.
+Online and POS checkout require an `Idempotency-Key` header (8–64 characters). Retrying the same submission must reuse the same key. The backend recalculates prices and totals from database records and applies stock/order changes transactionally.
 
-For GoSend, external address geocoding is performed before the order/stock transaction starts. If address lookup is unavailable, the order may be created with an unconfirmed manual delivery fee; Admin must set that fee before accepting or collecting payment.
+## Tests and operations
 
-## Data and backup
+CI installs dependencies, runs Django checks and migration consistency checks, validates production configuration guards, and runs backend tests against MySQL. Run `python manage.py check --deploy` against the intended production environment before release.
 
-Back up MySQL/TiDB before migrations and on a scheduled basis. Product photo data, QRIS images, and store logo data are stored in database text fields/settings and must be included in the same database backup. Test restoration into a separate database. Never restore directly over production without a recovery plan.
-
-The backend test suite runs against MySQL in CI. SQLite is intended for local development only.
+Back up TiDB/MySQL before migrations and on a schedule. Product photos, QRIS images, and the cooperative logo are stored in database fields/settings and must be included in database backups. Test restore into a separate database. Do not restore over production without a recovery plan.
