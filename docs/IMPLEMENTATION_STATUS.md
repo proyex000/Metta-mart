@@ -1,94 +1,126 @@
-# Metta-Mart Implementation Status
+# Metta-Mart — Implementation Status
 
-This document describes the current implementation in the deploy-readiness branch. It supersedes the earlier Phase 0 prototype audit.
+**Last aligned with repository:** 25 November 2026  
+**Scope:** current `main` application behaviour. This document is not a claim that the live deployment has passed end-to-end testing.
 
-## Roles and operating model
+## 1. Operating model
 
-- Admin is the cooperative staff member and the only in-person POS operator; there is no separate cashier role.
-- Student and parent accounts can browse the catalogue, place independent orders, view their own orders, and receive in-app notifications.
-- Parents order for their own account. There is no parent-to-student beneficiary flow in the current checkout.
-- Authenticated users can change their own password after confirming the current password. Admin can reset an active user password; the generated temporary password is shown once and the user must replace it at next login.
-- Online ordering is available at any time; physical pickup uses configured operating hours. POS remains Admin-only and is not restricted by the operating-hours gate in this release.
-- Buyers can choose pickup or GoSend when delivery is enabled. GoSend distance and fees are estimates; staff books the courier manually.
+- Metta-Mart serves one school cooperative.
+- Admin is the cooperative staff role and the only role with access to in-person POS. There is no separate cashier role or cashier-shift workflow.
+- Student and parent accounts can self-register, browse the catalogue, place independent orders, view their own orders, and receive in-app notifications.
+- Parents place orders for their own accounts. Parent-to-student beneficiary checkout is not supported.
+- Online ordering can be used outside cooperative opening hours. Configured hours govern physical pickup.
+- Fulfilment options are pickup and GoSend. GoSend fees are estimates; staff books the courier manually.
 
-## Implemented modules
+## 2. Implemented functionality
 
 ### Authentication and accounts
-- Session-cookie authentication with CSRF protection and role-based server-side permissions.
-- Public self-registration for student/parent accounts; admins create and manage accounts.
-- Student NISN format is checked (10 digits), but it is not verified against an official school roster.
-- Parent login uses email. Email ownership verification is not implemented.
-- Admin can deactivate/reactivate accounts, while protections prevent self-deactivation and deactivation of the last active admin.
-- Profile editing, authenticated password change, and admin-assisted one-time password reset with mandatory password rotation.
+
+- Django session-cookie authentication with CSRF protection and server-side role/ownership checks.
+- Student and parent self-registration; Admin account management.
+- Student NISN format check (10 digits), without official school-roster verification.
+- Parent email login without email-ownership verification.
+- Own-profile editing and password change with current-password confirmation.
+- Admin account deactivation/reactivation, with safeguards against self-deactivation and deactivation of the last active Admin.
+- Admin-assisted password reset: temporary password is displayed once and must be changed at next login.
+- Rate limiting on login, registration, and password-change endpoints.
 
 ### Catalogue and inventory
-- Persistent product catalogue with the configured categories, search, create/edit, and delete.
-- Product photos are compressed in the browser to JPEG (maximum 640 px longest edge) and stored as Base64 text in the MySQL/TiDB product row. No persistent media disk or external image service is required for new uploads.
-- Products with stock/order history are retained internally rather than physically deleted, preserving historical order and inventory references.
-- The backend validates the image data URL, format, decoded size, and image contents. Legacy file paths remain readable only while their old media files are available.
-- Stock receipts/adjustments require an attributable reason and create inventory-movement records.
-- Online checkout reserves stock atomically; eligible cancellation restores stock exactly once. POS checkout uses the same authoritative stock records.
 
-### Online orders and payment
+- Database-backed product catalogue, categories, search, create/edit, deactivate, and delete handling.
+- Optional product images. Products without a photo display the default category illustration.
+- New images are browser-compressed to JPEG (maximum 640 px longest edge), sent as Base64 data URLs, validated by the backend, and stored in the product row.
+- Cooperative logo and QRIS image data are stored in database settings.
+- New uploads do not require persistent media disk. Legacy file-path images still depend on their old media files being available.
+- Stock receipts/adjustments require a reason and create inventory movement records.
+- Products with historical order/stock references are retained internally when needed to preserve history.
+- Online and POS checkout use authoritative database stock, transactional safeguards, and idempotency protection.
+
+### Online orders and payments
+
 - Server-authoritative product prices, totals, availability, and stock checks.
-- Order item snapshots preserve purchased names, unit prices, quantities, and line totals.
-- Order and payment status are tracked separately.
-- Idempotency keys protect checkout and POS retries from creating duplicate transactions.
-- Cash is recorded as paid when the admin confirms handover.
-- Bank transfer and QRIS remain manually verified. Customers submit sender/bank/e-wallet details, not proof of payment. Admin must verify that funds actually arrived.
-- Rejection of a payment requires an admin reason that is recorded and sent to the customer.
-- Cancellation is blocked for paid or payment-pending orders; refunds are not supported.
+- Order-item snapshots preserve purchased product names, unit prices, quantities, and line totals.
+- Order fulfilment and payment status are separate.
+- Cash is recorded as paid when Admin confirms handover/receipt.
+- Bank transfer and QRIS are manually verified. Customer reference details are not proof of payment.
+- Payment rejection requires an Admin reason and is recorded/notified.
+- Payment methods are enabled by default in the current settings and can be configured by Admin.
+- Eligible cancellation restores reserved stock exactly once. Paid orders and payment-pending orders cannot use the ordinary cancellation flow.
+- Refunds are not supported. Automatic unpaid-order expiry is disabled by default.
 
-### Delivery and pickup
-- Pickup and GoSend are supported.
-- Pickup handover is confirmed by Admin after the order is ready and during configured operating hours.
-- GoSend address lookup uses Nominatim best-effort geocoding and a distance-based estimate, not an official courier quote.
-- If destination geocoding fails, the order can remain pending manual admin fee assignment. The order cannot be accepted or paid until the final fee is set.
-- GoSend payment uses transfer/QRIS; staff books the courier outside Metta-Mart. No automated booking or live courier tracking.
+### Pickup and GoSend
+
+- Pickup is available after Admin marks an order ready and during configured operating hours. Admin confirms physical handover.
+- GoSend uses best-effort Nominatim geocoding and distance-based fee estimates from the configured cooperative origin.
+- The estimate is not an official courier quote. Staff books GoSend manually; there is no automated booking or live tracking.
+- If address geocoding/estimation fails, Admin can set a manual delivery fee. The fee must be set before the order can be accepted or payment submitted.
 
 ### Admin POS, dashboard, and reports
+
 - Admin-only POS checkout, payment capture, cash change calculation, receipt, and stock movement.
-- Dashboard metrics and sales reports use persisted completed-and-paid orders, including POS transactions.
-- Reports include 1-day, 7-day, 1-month, 3-month, 1-year, and custom date ranges.
+- Dashboard and sales reports use persisted completed-and-paid transactions, including POS.
+- Reporting periods include 1 day, 7 days, 1 month, 3 months, 1 year, and custom ranges.
 - Transaction filters and CSV export are available.
-- Sales values exclude GoSend fees passed through to the courier; the reports are not profit reports.
+- Sales values exclude GoSend fees passed through to the courier. Reports are not profit reports.
 
 ### Notifications and settings
+
 - Notifications are persisted per recipient and can be marked read by that recipient.
-- Admin can broadcast announcements to student and parent accounts. Announcements are on by default and reach every active student/parent account, except accounts that switched off promo notifications in their own settings.
-- Notifications are fetched when relevant pages load; realtime polling/push is not enabled.
-- Cooperative profile, payment methods/instructions, operating hours, pickup instructions, delivery estimate settings, and order policy persist in the database.
-- Logo and QRIS images are stored as Base64 text in settings and therefore count toward database storage.
+- Admin announcements are sent to active student and parent accounts. Announcements are enabled by default; accounts opting out of promotional notifications are excluded.
+- Notifications are fetched when relevant pages load. Realtime polling/push is not enabled.
+- Cooperative profile/contact, operating hours, payment methods/instructions, pickup instructions, delivery estimate settings, and order policy persist in the database.
 
-### Operational safeguards
-- Audit events are written for authentication, profile/account changes, orders, payment actions, settings changes, and POS transactions. Admin audit-log UI is not included.
-- Login, registration, and password-change endpoints are rate-limited.
+### Audit and operations
+
+- Backend audit events are recorded for authentication, account/profile changes, orders, payment actions, settings changes, and POS transactions.
+- Admin audit-log UI is not included.
 - Health endpoint checks database connectivity.
-- MySQL-backed backend tests, frontend TypeScript check, and production build are run in CI.
+- CI runs frontend TypeScript checking/build, Django checks, migration consistency checks, production configuration guards, and backend tests against MySQL.
 
-## Explicit exclusions / accepted operating decisions
+## 3. Explicitly not included in this release
 
-- Admin audit-log UI.
-- Parent placing an order for a student.
+These are intentional scope exclusions, not missing features that should be assumed available:
+
+- Parent checkout on behalf of a student.
+- Separate cashier role, cashier shifts, or cashier cash-drawer management.
+- Supplier receiving/procurement workflows.
+- Product returns and refund processing.
+- Purchase-cost and gross-profit reporting.
+- Admin audit-log screen (backend audit events are recorded).
+- Payment gateway, automatic bank/QRIS settlement verification, bank reconciliation, or payment-proof image upload.
+- Automated GoSend booking, courier payment, or live tracking.
 - Realtime notification polling/push.
-- Official GoSend pricing, automated courier booking, courier payment, and live tracking.
-- Automatic payment verification, bank reconciliation, and payment gateway.
-- Payment receipt image upload.
-- Supplier receiving workflow and purchase-cost/gross-profit reporting.
-- Student class/grade fields and external student-roster verification.
-- Automatic expiry/cancellation remains disabled by default. Only enable it when the cooperative has approved a policy and a scheduler is installed.
-- Price-change history and refund workflow.
+- Official student-roster/NISN verification.
+- Parent email ownership verification.
+- Student class/grade fields and external roster integration.
 
-## Still requires production verification
+## 4. Production configuration still required
 
-CI checks validate repository code, not the Hostless/Vercel environment. Before production use:
-- Configure all production secrets, MySQL/TiDB TLS credentials, exact CORS/CSRF origins, and secure cookies.
-- Back up the production database, apply all migrations, and verify health.
-- Create/review real admin, student, and parent accounts according to school policy.
-- Set actual store profile/contact, operating hours, bank/QRIS instructions, delivery origin and fees.
-- Test login persistence across browser reloads on the deployed Vercel/Hostless origins.
-- Test online pickup, GoSend (normal estimate and manual fee fallback), transfer/QRIS verification/rejection, cash handover, POS, cancellation, stock restoration, receipts, image upload/update/delete, and CSV reports.
-- Confirm database backup and restore includes product photos, QRIS image, and store logo.
-- Confirm the host's request-body limits accept the supported image payload sizes.
+Before deployment, configure:
+- Unique Django secret, DEBUG off, explicit allowed hosts, and exact HTTPS CORS/CSRF origins.
+- TiDB/MySQL credentials and TLS.
+- Secure session/CSRF cookies and the correct SameSite setting for the split Vercel/Hostless origins.
+- Vercel `VITE_API_BASE_URL` pointing to the Hostless API.
+- Actual cooperative profile/contact, operating hours, pickup instructions, bank account details, QRIS image, school delivery origin, and delivery settings.
+- Database backup and restore procedure, including product images, logo, and QRIS data.
 
-Do not describe the system as production-verified until these checks have passed against the live deployment.
+See [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## 5. Required live acceptance testing
+
+CI checks repository code; it does not test the deployed browser session, actual TiDB data, or mobile usability. Before taking real orders, verify on the deployed origins:
+
+1. Admin, student, and parent login, reload persistence, logout, and access isolation.
+2. Registration and account-management policies.
+3. Product/category CRUD, image upload/replace/remove, and stock movements.
+4. Pickup checkout and handover.
+5. GoSend normal estimate and manual-fee fallback.
+6. Cash, transfer, and QRIS flows, including manual verification and rejection.
+7. POS checkout, cash change, receipt, and reporting.
+8. Cancellation and exactly-once stock restoration.
+9. Notifications, read state, announcement preferences, and recipient isolation.
+10. CSV export and all supported report periods.
+11. Mobile browser layout and workflows for student, parent, and Admin.
+12. Health endpoint, database backup, and successful restore into a separate database.
+
+Do not describe the system as production-verified until these checks pass against the live deployment.
