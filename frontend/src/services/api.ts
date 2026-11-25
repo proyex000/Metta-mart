@@ -4,21 +4,28 @@ type ApiUser = {
   full_name: string;
   email: string;
   role: "admin" | "student" | "parent";
+  must_change_password: boolean;
 };
 
 export type AuthSession = {
+  id: number;
+  identifier: string;
   role: ApiUser["role"];
   name: string;
   email: string;
+  mustChangePassword: boolean;
 };
 
 const API_BASE = ((import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
 function toSession(user: ApiUser): AuthSession {
   return {
+    id: user.id,
+    identifier: user.identifier,
     role: user.role,
     name: user.full_name,
     email: user.email,
+    mustChangePassword: user.must_change_password,
   };
 }
 
