@@ -84,6 +84,17 @@ class OrderPolicyTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["customer_name"], "Policy Student")
 
+    def test_checkout_rejects_fractional_and_boolean_quantities(self):
+        for index, quantity in enumerate((1.5, True), start=1):
+            response = self.create_checkout(f"invalid-quantity-{index}") if False else self.client.post(
+                "/api/orders/",
+                {"payment_method": "cash", "items": [{"product_id": self.product.pk, "quantity": quantity}]},
+                format="json",
+                HTTP_IDEMPOTENCY_KEY=f"invalid-quantity-{index}",
+            )
+            self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(Order.objects.count(), 0)
+
     def test_default_policy_limits_five_active_orders(self):
         for _ in range(5):
             self.create_order_record()
