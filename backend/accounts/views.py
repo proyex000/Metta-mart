@@ -1,5 +1,7 @@
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
+import secrets
+import string
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.middleware.csrf import get_token
@@ -71,7 +73,8 @@ class ChangePasswordView(APIView):
         except DjangoValidationError as exc:
             raise ValidationError({"new_password": list(exc.messages)})
         user.set_password(new_password)
-        user.save(update_fields=["password"])
+        user.must_change_password = False
+        user.save(update_fields=["password", "must_change_password"])
         update_session_auth_hash(request, user)
         AuditLog.objects.create(actor=user, event="user.password_changed", target_type="user", target_id=str(user.pk))
         return Response({"detail": "Password berhasil diperbarui."})
@@ -170,6 +173,47 @@ class AdminUserDetailView(generics.RetrieveUpdateAPIView):
             target_id=str(user.pk),
             metadata=metadata,
         )
+
+
+class AdminUserPasswordResetView(APIView):
+    permission_classes = [IsAdminRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        user = User.objects.select_for_update().filter(pk=pk).first()
+        if user is None:
+            return Response({"detail": "Akun tidak ditemukan."}, status=status.HTTP_404_NOT_FOUND)
+        if user.pk == request.user.pk:
+            raise ValidationError({"detail": "Admin tidak dapat mereset password akunnya sendiri dari halaman ini."})
+        if not user.is_active:
+            raise ValidationError({"detail": "Aktifkan akun terlebih dahulu sebelum mereset password."})
+
+        # Generate a one-time password. Only this response contains the plaintext value.
+        alphabet = string.ascii_letters + string.digits + "!@#$%&*+-_"
+        characters = [
+            secrets.choice(string.ascii_lowercase),
+            secrets.choice(string.ascii_uppercase),
+            secrets.choice(string.digits),
+            secrets.choice("!@#$%&*+-_"),
+        ]
+        characters.extend(secrets.choice(alphabet) for _ in range(14))
+        secrets.SystemRandom().shuffle(characters)
+        temporary_password = "".join(characters)
+
+        user.set_password(temporary_password)
+        user.must_change_password = True
+        user.save(update_fields=["password", "must_change_password"])
+        AuditLog.objects.create(
+            actor=request.user,
+            event="user.password_reset_by_admin",
+            target_type="user",
+            target_id=str(user.pk),
+            metadata={"role": user.role, "must_change_password": True},
+        )
+        return Response({
+            "temporary_password": temporary_password,
+            "must_change_password": True,
+        })
 
 class ParentChildrenView(APIView):
     permission_classes = [permissions.IsAuthenticated]
