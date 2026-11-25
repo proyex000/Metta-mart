@@ -568,7 +568,7 @@ export function Stock() {
             </label>
             <label>
               Alasan perubahan stok (wajib jika stok berubah)
-              <input value={form.stockNote} maxLength={80} onChange={(e) => setForm({ ...form, stockNote: e.target.value })} placeholder="Contoh: barang masuk dari pemasok" />
+              <input value={form.stockNote} maxLength={80} onChange={(e) => setForm({ ...form, stockNote: e.target.value })} placeholder="Contoh: koreksi hasil stok opname" />
             </label>
             <button className="primary wide">Simpan Produk</button>
           </form>
