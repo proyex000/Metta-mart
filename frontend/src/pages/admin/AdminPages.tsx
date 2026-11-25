@@ -1112,7 +1112,8 @@ export function POS() {
         ...(paymentMethod === "cash" ? { cash_received: Number(cashReceived) } : {}),
       }, requestId);
       setReceipt(order); setCounts({}); setNote(""); setCashReceived(""); setRequestId(crypto.randomUUID());
-      await refreshProducts();
+      // The sale is already committed; a failed catalogue refresh must not report checkout failure.
+      refreshProducts().catch(() => undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Transaksi POS gagal disimpan.");
     } finally { setWorking(false); }
