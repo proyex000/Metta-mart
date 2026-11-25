@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { createManagedUser, fetchManagedUsers, updateManagedUser, type ManagedUser } from "../../services/accounts";
+import { createManagedUser, fetchManagedUsers, resetManagedUserPassword, updateManagedUser, type ManagedUser } from "../../services/accounts";
+import { useAuth } from "../../hooks/useAuth";
 import "./AdminUsersPage.css";
 
 const roleLabel: Record<ManagedUser["role"], string> = {
@@ -9,6 +10,7 @@ const roleLabel: Record<ManagedUser["role"], string> = {
 };
 
 export function AdminUsersPage() {
+  const { session } = useAuth();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -25,6 +27,9 @@ export function AdminUsersPage() {
   const [role, setRole] = useState<ManagedUser["role"]>("student");
   const [password, setPassword] = useState("");
   const [confirmUser, setConfirmUser] = useState<ManagedUser | null>(null);
+  const [resetTargetUser, setResetTargetUser] = useState<ManagedUser | null>(null);
+  const [resetResult, setResetResult] = useState<{ user: ManagedUser; password: string } | null>(null);
+  const [copyStatus, setCopyStatus] = useState("");
 
   const refresh = async () => {
     const rows = await fetchManagedUsers();
@@ -118,6 +123,47 @@ export function AdminUsersPage() {
   const toggleActive = (user: ManagedUser) => {
     if (working) return;
     setConfirmUser(user);
+  };
+
+  const requestPasswordReset = (user: ManagedUser) => {
+    if (working || !user.is_active || user.identifier === session?.identifier) return;
+    setError("");
+    setNotice("");
+    setResetTargetUser(user);
+  };
+
+  const confirmPasswordReset = async () => {
+    if (!resetTargetUser || working) return;
+    const user = resetTargetUser;
+    setWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await resetManagedUserPassword(user.id);
+      setUsers((current) => current.map((row) => row.id === user.id ? { ...row, must_change_password: true } : row));
+      setResetTargetUser(null);
+      setCopyStatus("");
+      setResetResult({ user, password: result.temporary_password });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Password sementara gagal dibuat.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.password);
+      setCopyStatus("Password berhasil disalin.");
+    } catch {
+      setCopyStatus("Penyalinan otomatis tidak tersedia. Salin password yang tampil secara manual.");
+    }
+  };
+
+  const closePasswordResult = () => {
+    setResetResult(null);
+    setCopyStatus("");
   };
 
   const confirmToggleActive = async () => {
@@ -220,7 +266,10 @@ export function AdminUsersPage() {
                       ) : <span className="admin-users-identifier">{user.identifier}</span>}
                     </td>
                     <td><span className={`admin-users-role admin-users-role--${user.role}`}>{roleLabel[user.role]}</span></td>
-                    <td><span className={`status ${user.is_active ? "status--green" : "status--red"}`}>{user.is_active ? "Aktif" : "Nonaktif"}</span></td>
+                    <td>
+                      <span className={`status ${user.is_active ? "status--green" : "status--red"}`}>{user.is_active ? "Aktif" : "Nonaktif"}</span>
+                      {user.must_change_password && <small className="admin-users-password-pending">Wajib ganti password</small>}
+                    </td>
                     <td>
                       <div className="admin-users-actions">
                         {editingUserId === user.id ? (
@@ -233,7 +282,16 @@ export function AdminUsersPage() {
                             <button type="button" className="secondary small" disabled={working || editingUserId !== null} onClick={() => startEditing(user)}>Edit</button>
                             <button
                               type="button"
-                              className={`admin-users-toggle ${user.is_active ? "is-deactivating" : "is-activating"}`}
+                              className="secondary small admin-users-reset"
+                              disabled={working || editingUserId !== null || !user.is_active || user.identifier === session?.identifier}
+                              title={!user.is_active ? "Aktifkan akun sebelum reset password" : user.identifier === session?.identifier ? "Gunakan Pengaturan untuk mengganti password akun admin sendiri" : "Buat password sementara"}
+                              onClick={() => requestPasswordReset(user)}
+                            >
+                              Reset password
+                            </button>
+                            <button
+                              type="button"
+                              className={`admin-users-toggle ${user.is_active ? "is-deactivating" : "is-activating"}`
                               disabled={working || editingUserId !== null}
                               onClick={() => toggleActive(user)}
                             >
@@ -252,6 +310,62 @@ export function AdminUsersPage() {
         )}
         {!loading && !shown.length && <p className="table-foot">Tidak ada akun yang cocok. Coba ubah kata kunci atau filter.</p>}
       </section>
+
+      {resetTargetUser && (
+        <div className="admin-users-modal-backdrop" onClick={() => !working && setResetTargetUser(null)}>
+          <section
+            className="admin-users-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-users-reset-title"
+            aria-describedby="admin-users-reset-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="admin-users-confirm-icon is-warning" aria-hidden="true">↻</div>
+            <h2 id="admin-users-reset-title">Reset password pengguna?</h2>
+            <p id="admin-users-reset-description">
+              Password akun <strong>{resetTargetUser.full_name}</strong> akan diganti. Password sementara hanya ditampilkan sekali dan pengguna wajib menggantinya saat login berikutnya.
+            </p>
+            <div className="admin-users-confirm-actions">
+              <button type="button" className="secondary" disabled={working} onClick={() => setResetTargetUser(null)}>Batal</button>
+              <button type="button" className="primary" disabled={working} onClick={confirmPasswordReset}>
+                {working ? "Membuat password..." : "Ya, Reset Password"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {resetResult && (
+        <div className="admin-users-modal-backdrop">
+          <section
+            className="admin-users-confirm-modal admin-users-password-result"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-users-password-result-title"
+            aria-describedby="admin-users-password-result-description"
+          >
+            <div className="admin-users-confirm-icon is-success" aria-hidden="true">✓</div>
+            <h2 id="admin-users-password-result-title">Password sementara siap</h2>
+            <p id="admin-users-password-result-description">
+              Password untuk <strong>{resetResult.user.full_name}</strong> hanya tersedia di layar ini. Salin dan sampaikan kepada pengguna melalui jalur yang aman.
+            </p>
+            <div className="admin-users-temp-password" aria-label="Password sementara">
+              {resetResult.password}
+            </div>
+            <button type="button" className="primary admin-users-copy-password" onClick={copyTemporaryPassword}>
+              Salin password
+            </button>
+            {copyStatus && <p className="admin-users-copy-status" role="status">{copyStatus}</p>}
+            <p className="admin-users-password-warning">
+              Setelah ditutup, password ini tidak dapat dilihat kembali. Saat login, pengguna wajib membuat password baru.
+            </p>
+            <div className="admin-users-confirm-actions">
+              <button type="button" className="secondary" onClick={closePasswordResult}>Tutup dan hapus password</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {confirmUser && (
         <div className="admin-users-modal-backdrop" onClick={() => !working && setConfirmUser(null)}>
