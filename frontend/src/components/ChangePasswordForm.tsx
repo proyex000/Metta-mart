@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { changePassword } from "../services/auth";
+import { useAuth } from "../hooks/useAuth";
 
 export function ChangePasswordForm() {
+  const { changePassword } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");

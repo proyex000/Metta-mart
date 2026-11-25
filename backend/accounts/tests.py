@@ -1,6 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from .models import User
+from core.models import AuditLog
 
 class AuthApiTests(TestCase):
     def setUp(self):
@@ -213,22 +214,22 @@ class AuthApiTests(TestCase):
         self.assertEqual(initial.status_code, 200)
         self.assertTrue(initial.data["order_updates"])
         self.assertTrue(initial.data["stock_updates"])
-        self.assertTrue(initial.data["promotions"])
+        self.assertFalse(initial.data["promotions"])
         self.assertFalse(initial.data["weekly_summary"])
 
         updated = self.client.patch("/api/auth/notification-preferences/", {
             "order_updates": False,
-            "promotions": False,
+            "promotions": True,
         }, format="json")
         self.assertEqual(updated.status_code, 200, updated.data)
         self.assertFalse(updated.data["order_updates"])
-        self.assertFalse(updated.data["promotions"])
+        self.assertTrue(updated.data["promotions"])
 
         self.client.force_authenticate(user=parent)
         parent_preferences = self.client.get("/api/auth/notification-preferences/")
         self.assertEqual(parent_preferences.status_code, 200)
         self.assertTrue(parent_preferences.data["order_updates"])
-        self.assertTrue(parent_preferences.data["promotions"])
+        self.assertFalse(parent_preferences.data["promotions"])
         self.assertTrue(parent_preferences.data["weekly_summary"])
 
     def test_student_cannot_update_parent_only_weekly_summary(self):
@@ -242,3 +243,61 @@ class AuthApiTests(TestCase):
         self.client.force_authenticate(user=self.admin)
         response = self.client.get("/api/auth/notification-preferences/")
         self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_reset_password_once_and_requires_change_on_next_login(self):
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.post(f"/api/admin/users/{self.student.pk}/reset-password/")
+        self.assertEqual(response.status_code, 200, response.data)
+        temporary_password = response.data["temporary_password"]
+        self.assertEqual(len(temporary_password), 18)
+        self.assertTrue(response.data["must_change_password"])
+
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.check_password(temporary_password))
+        self.assertTrue(self.student.must_change_password)
+        self.assertFalse(self.student.check_password("TestPassword!2026"))
+
+        audit = AuditLog.objects.get(event="user.password_reset_by_admin", target_id=str(self.student.pk))
+        self.assertNotIn("password", audit.metadata)
+        self.assertNotIn(temporary_password, str(audit.metadata))
+
+    def test_non_admin_cannot_reset_password(self):
+        self.client.force_authenticate(user=self.student)
+        response = self.client.post(f"/api/admin/users/{self.admin.pk}/reset-password/")
+        self.assertEqual(response.status_code, 403)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.check_password("TestPassword!2026"))
+
+    def test_admin_cannot_reset_own_password_or_inactive_account(self):
+        self.client.force_authenticate(user=self.admin)
+        own_account = self.client.post(f"/api/admin/users/{self.admin.pk}/reset-password/")
+        self.assertEqual(own_account.status_code, 400)
+
+        self.student.is_active = False
+        self.student.save(update_fields=["is_active"])
+        inactive = self.client.post(f"/api/admin/users/{self.student.pk}/reset-password/")
+        self.assertEqual(inactive.status_code, 400)
+        self.student.refresh_from_db()
+        self.assertTrue(self.student.check_password("TestPassword!2026"))
+
+    def test_temporary_password_blocks_normal_api_until_changed(self):
+        self.student.must_change_password = True
+        self.student.save(update_fields=["must_change_password"])
+        self.client.force_login(self.student)
+
+        blocked = self.client.get("/api/notifications/")
+        self.assertEqual(blocked.status_code, 403)
+        self.assertEqual(blocked.json()["code"], "password_change_required")
+        current_session = self.client.get("/api/auth/me/")
+        self.assertEqual(current_session.status_code, 200)
+        self.assertTrue(current_session.data["user"]["must_change_password"])
+
+        changed = self.client.post("/api/auth/change-password/", {
+            "current_password": "TestPassword!2026",
+            "new_password": "NewSecurePass!2026",
+        }, format="json")
+        self.assertEqual(changed.status_code, 200, changed.data)
+        self.student.refresh_from_db()
+        self.assertFalse(self.student.must_change_password)
+        self.assertTrue(self.student.check_password("NewSecurePass!2026"))
+        self.assertEqual(self.client.get("/api/notifications/").status_code, 200)

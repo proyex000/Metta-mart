@@ -7,7 +7,7 @@ This document describes the current implementation in the deploy-readiness branc
 - Admin is the cooperative staff member and the only in-person POS operator; there is no separate cashier role.
 - Student and parent accounts can browse the catalogue, place independent orders, view their own orders, and receive in-app notifications.
 - Parents order for their own account. There is no parent-to-student beneficiary flow in the current checkout.
-- Authenticated users can change their own password after confirming the current password. Password reset is not included.
+- Authenticated users can change their own password after confirming the current password. Admin can reset an active user password; the generated temporary password is shown once and the user must replace it at next login.
 - Online ordering is available at any time; physical pickup uses configured operating hours. POS remains Admin-only and is not restricted by the operating-hours gate in this release.
 - Buyers can choose pickup or GoSend when delivery is enabled. GoSend distance and fees are estimates; staff books the courier manually.
 
@@ -19,7 +19,7 @@ This document describes the current implementation in the deploy-readiness branc
 - Student NISN format is checked (10 digits), but it is not verified against an official school roster.
 - Parent login uses email. Email ownership verification is not implemented.
 - Admin can deactivate/reactivate accounts, while protections prevent self-deactivation and deactivation of the last active admin.
-- Profile editing and authenticated password change.
+- Profile editing, authenticated password change, and admin-assisted one-time password reset with mandatory password rotation.
 
 ### Catalogue and inventory
 - Persistent product catalogue with the configured categories, search, create/edit, and delete.
@@ -68,7 +68,6 @@ This document describes the current implementation in the deploy-readiness branc
 
 ## Explicit exclusions / accepted operating decisions
 
-- Password reset flow.
 - Admin audit-log UI.
 - Parent placing an order for a student.
 - Realtime notification polling/push.

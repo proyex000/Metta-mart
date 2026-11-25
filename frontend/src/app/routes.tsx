@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, useLocation } from "react-router";
+import { createBrowserRouter, Navigate, useLocation, useNavigate } from "react-router";
 import {
   Dashboard,
   Notifications,
@@ -9,6 +9,7 @@ import {
   Stock,
 } from "../pages/admin/AdminPages";
 import { Brand } from "../components/ui";
+import { ChangePasswordForm } from "../components/ChangePasswordForm";
 import { useAuth } from "../hooks/useAuth";
 import { RoleLayout } from "../layouts/RoleLayout";
 import { LoginPage, RegisterPage, RoleChooser, SplashPage } from "../pages/auth/AuthPages";
@@ -25,6 +26,31 @@ import { ReceiptPage } from "../pages/shared/ReceiptPage";
 import { AdminUsersPage } from "../pages/admin/AdminUsersPage";
 import type { Role } from "../types";
 
+function PasswordChangeRequired() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const exit = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate("/login", { replace: true });
+    }
+  };
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card password-required-card">
+        <Brand />
+        <h1>Ganti password sementara</h1>
+        <p>Password akun Anda baru saja diatur ulang oleh admin. Buat password pribadi sebelum melanjutkan menggunakan MettaMart.</p>
+        <ChangePasswordForm />
+        <button type="button" className="secondary wide" onClick={exit}>Keluar dari akun</button>
+      </section>
+    </main>
+  );
+}
+
 function ProtectedRole({ role }: { role: Role }) {
   const { session, loading } = useAuth();
   const location = useLocation();
@@ -32,6 +58,7 @@ function ProtectedRole({ role }: { role: Role }) {
   if (!session)
     return <Navigate to={`/login/${role}`} replace state={{ from: location.pathname }} />;
   if (session.role !== role) return <Navigate to={`/${session.role}`} replace />;
+  if (session.mustChangePassword) return <PasswordChangeRequired />;
   return <RoleLayout role={role} />;
 }
 
