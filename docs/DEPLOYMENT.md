@@ -1,94 +1,155 @@
-# MettaMart deployment guide
+# Metta-Mart deployment guide
 
-This guide covers the split deployment used by this project: the Vite frontend is deployed on Vercel and the Django API on Hostless. The backend uses Gunicorn and a production MySQL/TiDB database. Product photos are compressed in the browser and stored as Base64 text in TiDB, so new uploads do not require a persistent disk or an external image-storage service. If the hosting providers change, adapt the platform-specific steps below.
+This guide describes the current split deployment: React/Vite frontend on Vercel, Django API on Hostless, and MySQL-compatible TiDB database. New product photos, cooperative logo, and QRIS image data are stored in the database, so new uploads do not require a persistent media disk. This does not remove the need for database backups.
 
 ## 1. Production environment
 
-The tracked `backend/.env.example` is a **local-development template only**. Do not copy it unchanged into Hostless. Configure the production values directly in Hostless's environment-variable settings. Never commit production secrets.
+The tracked `backend/.env.example` is a **local-development template only**. Do not copy it unchanged into Hostless. Configure production values in Hostless environment settings. Never commit production secrets.
 
-Required:
+Required backend settings:
+
 - `DJANGO_DEBUG=false`
 - `DJANGO_SECRET_KEY`: unique random secret, at least 50 characters
 - `DJANGO_ALLOWED_HOSTS`: comma-separated hostnames, without schemes
-- `DJANGO_CSRF_TRUSTED_ORIGINS`: full HTTPS origins
-- `CORS_ALLOWED_ORIGINS`: full frontend origins
+- `DJANGO_CSRF_TRUSTED_ORIGINS`: explicit HTTPS origins
+- `CORS_ALLOWED_ORIGINS`: explicit HTTPS frontend origins
 - `DB_ENGINE=mysql`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT`
 - `DB_SSL=true` for encrypted MySQL/TiDB connections
 - `SESSION_COOKIE_SECURE=true` and `CSRF_COOKIE_SECURE=true`
-- `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` set to explicit HTTPS origins (no wildcards)
 
-Production startup fails closed if DEBUG is not explicitly disabled safely, the secret is missing/too short, allowed hosts are empty or contain `*`, SQLite is selected, database credentials are missing, database TLS is disabled, origins are missing/wildcarded, or session/CSRF cookies are not Secure.
+Production startup fails closed if DEBUG is not safely disabled, the secret is missing/too short, allowed hosts are empty or contain `*`, SQLite is selected, database credentials are missing, database TLS is disabled, origins are missing/wildcarded, or session/CSRF cookies are not Secure.
 
-For the Vercel project, set **Root Directory** to `frontend`. `frontend/vercel.json` rewrites every path to `index.html`, which the single-page router needs so that reloading or opening a deep link such as `/admin/orders` does not return a 404, and it adds basic security headers.
+### Vercel
 
-For the current split deployment, set Vercel environment variable `VITE_API_BASE_URL` to `https://<hostless-backend-domain>/api`. On Hostless, set `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the exact HTTPS Vercel frontend origin. For the current split deployment, explicitly set `SESSION_COOKIE_SAMESITE=None` and `CSRF_COOKIE_SAMESITE=None` together with both Secure flags. Browsers or privacy settings may still block third-party cookies; if login does not persist in the deployed browser, use a same-site custom domain or proxy `/api/` through the frontend origin rather than weakening cookie security. For a same-domain deployment, proxy `/api/` to Django and use `SameSite=Lax`.
+- Set **Root Directory** to `frontend`.
+- `frontend/vercel.json` rewrites application routes to `index.html`, allowing deep links and browser reloads.
+- Set `VITE_API_BASE_URL` to `https://<hostless-backend-domain>/api`.
 
-## 2. Build and start
+### Hostless cross-origin cookies
 
-From `frontend/`:
+For the split Vercel/Hostless deployment:
+
+- Set `CORS_ALLOWED_ORIGINS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the exact HTTPS Vercel origin.
+- Set `SESSION_COOKIE_SAMESITE=None` and `CSRF_COOKIE_SAMESITE=None`.
+- Keep both Secure cookie flags enabled.
+
+Browsers or privacy settings may block third-party cookies even when the server configuration is correct. Test login persistence after a full browser reload. If cookies are blocked, use a same-site custom domain or proxy `/api/` through the frontend origin; do not weaken cookie security. For a same-site deployment, `SameSite=Lax` may be appropriate.
+
+## 2. Build, migrate, and start
+
+Frontend (from `frontend/`):
+
 ```sh
 npm ci
 npm run typecheck
 npm run build
 ```
 
-From `backend/`:
+Backend (from `backend/`):
+
 ```sh
 python -m pip install -r requirements.txt
 python manage.py check --deploy
 python manage.py makemigrations --check --dry-run
-# Back up the production database before this step.
+# Back up the production database before migrating.
 python manage.py migrate
 python manage.py collectstatic --noinput
 gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 60
 ```
 
-Set `STATIC_ROOT` in your host configuration or serve static assets through the frontend build. For each new product photo, the browser resizes the longest side to at most 640 pixels, converts it to JPEG, and limits the Base64 data URL to 380,000 characters before sending it to Django. Django validates the encoded image and stores it in the product row. No Hostless persistent disk, Cloudinary account, or other media-storage service is required for new uploads. Existing legacy rows that contain file paths can still be served from `MEDIA_ROOT` when legacy media is available and `MEDIA_SERVE_ENABLED=true`; if those files were lost with an ephemeral filesystem, replace the photos from Admin → Kelola Stok.
+Adapt the Gunicorn bind address and static-file serving to Hostless's process contract. Do not assume the example bind command is a universal Hostless start command.
 
-### Shared rate-limit counters (recommended with more than one worker)
+### Image storage
 
-Login, registration, and password-change throttles (and the geocode cache) use Django's default cache, which is per-process memory. With three Gunicorn workers each worker counts separately, so the real limit is roughly three times the configured one and resets on restart. To share the counters through the production database, set `CACHE_DB_TABLE` (for example `mettamart_cache`) and run this once before starting the app:
+For each new product photo, the browser resizes the longest side to at most 640 pixels, converts it to JPEG, and limits the Base64 data URL to 380,000 characters before sending it to Django. Django validates the encoded image and stores it in the product row. Cooperative logo and QRIS image data are also stored in database settings.
+
+No persistent media volume or external image service is required for new uploads. Legacy rows containing file paths still depend on old media files being available and served. If ephemeral storage has lost those files, replace the affected photos from Admin → Kelola Stok.
+
+Because images are stored in TiDB, they consume database storage and must be included in backups. Confirm Hostless request-body limits accept the supported upload size.
+
+### Shared rate-limit counters
+
+Login, registration, and password-change throttles (and the geocode cache) use Django's default cache, which is per-process memory. With multiple Gunicorn workers, each worker counts separately and in-memory counters reset on restart.
+
+For shared counters, configure `CACHE_DB_TABLE` (for example `mettamart_cache`) and create the table before starting the application:
 
 ```sh
 python manage.py createcachetable
 ```
 
-If `CACHE_DB_TABLE` is set but the table has not been created, throttled endpoints will fail, so create the table first. Leaving it unset keeps the per-process behaviour.
+If `CACHE_DB_TABLE` is set but the table does not exist, throttled endpoints can fail. Leaving it unset retains per-process behaviour.
 
 ## 3. HTTPS and proxy headers
 
-Terminate TLS at Nginx or your platform. The supplied Nginx example redirects HTTP to HTTPS and sends the forwarded protocol header. Only enable `SECURE_PROXY_SSL_HEADER_ENABLED=true` when the trusted reverse proxy overwrites inbound `X-Forwarded-Proto` values. Set `SECURE_SSL_REDIRECT=true` after HTTPS is working end-to-end. Enable HSTS only after confirming every relevant subdomain supports HTTPS; begin with `SECURE_HSTS_SECONDS=300`, then increase deliberately.
+Terminate TLS at the hosting platform or trusted reverse proxy. Only enable `SECURE_PROXY_SSL_HEADER_ENABLED=true` when the trusted proxy overwrites inbound `X-Forwarded-Proto` values. Set `SECURE_SSL_REDIRECT=true` only after HTTPS and proxy forwarding work end-to-end; otherwise redirect loops may occur.
 
-Production startup refuses insecure session/CSRF cookies. Keep both Secure flags true. Use `SameSite=None` for separate Vercel/Hostless sites; use `Lax` only when frontend and API are served from the same site. Do not enable `SECURE_SSL_REDIRECT` until the platform's trusted HTTPS-forwarding behavior is confirmed, or the app may enter a redirect loop. Enable `SECURE_PROXY_SSL_HEADER_ENABLED=true` only if the platform strips/overwrites untrusted forwarded-protocol headers.
+Enable HSTS only after confirming every relevant subdomain supports HTTPS. Start with a short `SECURE_HSTS_SECONDS` value and increase it deliberately.
 
-## 4. Order operations
+## 4. Cooperative setup and order operations
 
-- Order policy defaults to 5 active orders per account. Set 0 for no active-order cap.
-- Automatic cancellation is disabled by default. Leave `auto_cancel_unpaid_after_hours=0` unless the school has approved an expiry policy and the host has a scheduled-task facility. If enabled, schedule `python manage.py cancel_stale_orders` every 10 minutes (or an interval approved by the operator). Without that scheduled task, only the account making a new checkout gets stale-order cleanup; the system does not guarantee global expiry in the background. The command is idempotent.
-- Paid orders and payment submissions waiting for admin verification are excluded from automatic cancellation.
-- GoSend fallback: if Nominatim cannot resolve the destination or is temporarily unavailable, the order can still be placed as `ongkir menunggu admin`. The admin must set the fee in the order detail before accepting; the customer receives the final amount notification. No payment can be submitted until the fee is set.
-- Nominatim remains a best-effort public geocoder without an uptime guarantee. Checkout performs address lookup before opening the transaction that reserves stock, so a slow map response does not hold an order/stock database transaction open. The 1.1-second request slot is reserved through a database row lock, so workers sharing the database share the rate limit. The default geocode result cache is process-local, so separate workers may repeat a lookup after a cache miss, but requests still serialize. Keep the manual-fee fallback enabled; do not use public geocoding for bulk lookups. For manually priced deliveries, the admin must verify the address is reachable before accepting the order.
+Before accepting real orders, Admin must configure actual cooperative data:
 
-## 5. Logs, health, backup, and recovery
+- Cooperative name, logo, contact phone/email, and school address.
+- Operating days and opening/closing times.
+- Official bank name, account number, and account holder.
+- Official QRIS image and instructions.
+- Pickup instructions.
+- GoSend origin and delivery-estimate settings.
 
-- `/api/health/` returns HTTP 200 only when Django can query the database; otherwise it returns 503. Point an uptime monitor at this endpoint.
-- Logs always go to stdout/stderr. Set `LOG_DIR` to enable rotating `mettamart.log` files (5 MiB per file, five backups). Ensure the service account can write to that directory and monitor disk usage.
-- Back up the MySQL/TiDB database daily and before every migration. Product photos are stored in the database, so include them in database backups. Test restore to a separate database before go-live.
-- Never restore a backup over the live database without a verified recovery plan.
+Cash, bank transfer, and QRIS are enabled by default in the current application settings. This is only the availability of payment methods: bank transfer and QRIS still require real cooperative instructions and manual Admin verification. No payment gateway or automatic settlement verification is integrated.
+
+Other current operating rules:
+
+- Students and parents place independent orders for their own accounts. Parent checkout for a student is not supported.
+- Online ordering is available outside operating hours; operating hours govern physical pickup.
+- Admin operates POS; there is no separate cashier role.
+- GoSend fees are estimates, not official quotes. Staff books the courier manually. Automated booking and live tracking are not included.
+- If GoSend address lookup cannot calculate a fee, Admin must set the manual fee before accepting the order or allowing payment submission.
+- Paid orders and orders with payment pending verification cannot use ordinary cancellation. Refund processing is not supported.
+- Automatic cancellation is disabled by default. Keep `auto_cancel_unpaid_after_hours=0` unless the school approves an expiry policy and a scheduler is installed.
+
+### Optional automatic expiry
+
+If the school formally approves automatic unpaid-order expiry, set the appropriate policy and schedule:
+
+```sh
+python manage.py cancel_stale_orders
+```
+
+Run it at the approved interval (the guide's suggested interval is every 10 minutes). Without a scheduled task, global background expiry is not guaranteed. The command is idempotent. Paid orders and payment submissions waiting for Admin verification are excluded.
+
+### Geocoding limitations
+
+GoSend address lookup uses the public Nominatim service on a best-effort basis and has no uptime guarantee. Checkout performs address lookup before the stock-reservation transaction. A database row lock reserves the request interval across workers sharing the database; the result cache is process-local. Keep the manual-fee fallback available and do not use the public geocoder for bulk lookups. Admin must verify manually priced addresses are serviceable before accepting the order.
+
+## 5. Health, logs, backup, and recovery
+
+- `/api/health/` returns HTTP 200 only when Django can query the database; otherwise it returns 503.
+- Logs go to stdout/stderr. Set `LOG_DIR` to enable rotating `mettamart.log` files (5 MiB per file, five backups); ensure the service account can write there.
+- Back up TiDB/MySQL daily and before every migration.
+- Database backups must include product photo data, cooperative logo, and QRIS image data.
+- Test restoration into a separate database before go-live. Never restore over the live database without a verified recovery plan.
+- The backend records audit events, but this release does not include an Admin audit-log screen.
 
 ## 6. Go-live checklist
 
-- [ ] Production secrets and explicit hostnames configured
-- [ ] HTTPS active; redirect and HSTS settings reviewed
-- [ ] Database TLS and backups verified
-- [ ] Migrations applied and static assets published
-- [ ] Admin login, student login, registration policy, and role permissions tested
-- [ ] Online checkout, POS checkout, stock restoration, payment verification, and receipt tested
-- [ ] Manual GoSend fee path tested end-to-end
-- [ ] Health endpoint and log collection monitored
-- [ ] Upload, view, replace, and remove a product image; verify it remains available after a backend restart
-- [ ] Database backup and restore verified with product images included
-- [ ] Cross-origin login survives a full browser reload; if third-party cookies are blocked, configure a same-site custom domain or frontend API proxy
-- [ ] Scheduled stale-order task installed and tested only if automatic cancellation is enabled (otherwise keep the setting at 0)
+- [ ] Production secrets configured; no secrets committed
+- [ ] Explicit allowed hosts and HTTPS CORS/CSRF origins configured
+- [ ] HTTPS, proxy headers, and secure cookie settings verified
+- [ ] Vercel API base URL points to the Hostless API
+- [ ] TiDB/MySQL TLS connection verified
+- [ ] Migrations applied and health endpoint returns HTTP 200
+- [ ] Admin, student, and parent login persist after browser reload
+- [ ] Role permissions and account/order data isolation tested
+- [ ] Real cooperative profile, contact details, hours, bank instructions, QRIS, and delivery origin configured
+- [ ] Pickup and GoSend order flows tested, including manual delivery-fee fallback
+- [ ] Cash, transfer, and QRIS flows tested, including Admin verification/rejection
+- [ ] POS checkout, receipt, stock movement, and sales reports tested
+- [ ] Cancellation and stock restoration tested
+- [ ] Product image upload, view, replace, and remove tested after backend restart
+- [ ] Database backup and restore verified with product images, logo, and QRIS included
+- [ ] Host request-body limits accept supported image payloads
+- [ ] Student, parent, and Admin workflows checked on mobile browsers
+- [ ] Automatic expiry remains disabled unless the approved policy and scheduler are both in place
 
-This checklist does not replace the school's approval of its student-data retention and privacy policy.
+This checklist does not replace the school's approval of student-data retention and privacy policy. Passing CI alone does not mean the live deployment is production-verified.
