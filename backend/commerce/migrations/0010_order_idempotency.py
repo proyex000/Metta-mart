@@ -29,12 +29,17 @@ class Migration(migrations.Migration):
                 "DROP INDEX `commerce_order_idempotency_key_uniq` "
                 "ON `commerce_order`"
             ),
+            # Keep Django's migration state identical to Order.idempotency_key
+            # (unique=True) without asking the schema editor to combine DDL.
             state_operations=[
-                migrations.AddConstraint(
+                migrations.AlterField(
                     model_name="order",
-                    constraint=models.UniqueConstraint(
-                        fields=("idempotency_key",),
-                        name="commerce_order_idempotency_key_uniq",
+                    name="idempotency_key",
+                    field=models.CharField(
+                        blank=True,
+                        max_length=64,
+                        null=True,
+                        unique=True,
                     ),
                 ),
             ],
