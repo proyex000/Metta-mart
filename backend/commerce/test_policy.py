@@ -86,7 +86,7 @@ class OrderPolicyTests(TestCase):
 
     def test_checkout_rejects_fractional_and_boolean_quantities(self):
         for index, quantity in enumerate((1.5, True), start=1):
-            response = self.create_checkout(f"invalid-quantity-{index}") if False else self.client.post(
+            response = self.client.post(
                 "/api/orders/",
                 {"payment_method": "cash", "items": [{"product_id": self.product.pk, "quantity": quantity}]},
                 format="json",
