@@ -421,6 +421,19 @@ class CommerceApiTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.stock, 7)
 
+    def test_session_authenticated_pos_checkout_supports_lazy_request_user(self):
+        session_client = APIClient()
+        self.assertTrue(session_client.login(identifier="admin-commerce", password="TestPassword!2026"))
+        response = session_client.post("/api/admin/pos/checkout/", {
+            "payment_method": "cash",
+            "cash_received": 10000,
+            "items": [{"product_id": self.product.id, "quantity": 1}],
+        }, format="json", HTTP_IDEMPOTENCY_KEY="pos-session-auth-0001")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["sales_channel"], "pos")
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 9)
+
     def test_pos_checkout_rejects_fractional_quantity_and_cash_amount(self):
         self.client.force_authenticate(user=self.admin)
         fractional_quantity = self.client.post("/api/admin/pos/checkout/", {
