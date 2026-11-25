@@ -672,8 +672,13 @@ class AdminPOSCheckoutView(APIView):
             total += product.price * row["quantity"]
         cash_received = None
         if method == Order.PaymentMethod.CASH:
+            raw_cash_received = request.data.get("cash_received")
+            if isinstance(raw_cash_received, bool) or not isinstance(raw_cash_received, (int, str)):
+                raise ValidationError({"cash_received": "Jumlah uang harus berupa bilangan bulat."})
+            if isinstance(raw_cash_received, str) and not raw_cash_received.strip().lstrip("+").isdigit():
+                raise ValidationError({"cash_received": "Jumlah uang harus berupa bilangan bulat."})
             try:
-                cash_received = int(request.data.get("cash_received"))
+                cash_received = int(raw_cash_received)
             except (TypeError, ValueError):
                 raise ValidationError({"cash_received": "Masukkan jumlah uang tunai yang diterima."})
             if cash_received < total:
