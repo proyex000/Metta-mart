@@ -6,7 +6,7 @@ from rest_framework import generics, permissions, status
 from accounts.permissions import IsAdminRole
 from commerce.delivery import DEFAULT_DELIVERY_SETTINGS
 from .models import AuditLog, StoreSetting
-from .serializers import AuditLogSerializer, StoreSettingSerializer
+from .serializers import AuditLogSerializer
 from .pagination import OptionalPaginationMixin
 
 class AuditLogListView(OptionalPaginationMixin, generics.ListAPIView):
@@ -14,24 +14,6 @@ class AuditLogListView(OptionalPaginationMixin, generics.ListAPIView):
     permission_classes = [IsAdminRole]
     queryset = AuditLog.objects.select_related("actor").all().order_by("-created_at")
     serializer_class = AuditLogSerializer
-
-class StoreSettingListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAdminRole]
-    queryset = StoreSetting.objects.all()
-    serializer_class = StoreSettingSerializer
-
-    def perform_create(self, serializer):
-        serializer.save(updated_by=self.request.user)
-
-class StoreSettingDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAdminRole]
-    queryset = StoreSetting.objects.all()
-    serializer_class = StoreSettingSerializer
-    lookup_field = "key"
-
-    def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
-
 
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
