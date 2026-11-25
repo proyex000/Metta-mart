@@ -6,8 +6,8 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("id", "identifier", "full_name", "email", "role", "is_active", "date_joined")
-        read_only_fields = ("id", "role", "is_active", "date_joined")
+        fields = ("id", "identifier", "full_name", "email", "role", "is_active", "must_change_password", "date_joined")
+        read_only_fields = ("id", "role", "is_active", "must_change_password", "date_joined")
 
 class RegistrationSerializer(serializers.Serializer):
     identifier = serializers.CharField(max_length=100)
