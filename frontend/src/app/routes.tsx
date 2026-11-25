@@ -27,7 +27,7 @@ import { AdminUsersPage } from "../pages/admin/AdminUsersPage";
 import type { Role } from "../types";
 
 function PasswordChangeRequired() {
-  const { session, logout } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const exit = async () => {
