@@ -79,12 +79,13 @@ if DB_ENGINE == "mysql":
         if not env_bool("DB_SSL", True):
             raise ImproperlyConfigured("Production requires DB_SSL=true for encrypted MySQL/TiDB connections.")
     db_options = {"charset": "utf8mb4"}
-    if env_bool("DB_SSL", True):
-        ssl_options = {}
-        ca_file = os.getenv("DB_SSL_CA", "").strip()
-        if ca_file:
-            ssl_options["ca"] = ca_file
-        db_options["ssl"] = ssl_options
+    # TiDB Serverless requires encrypted transport. Always enable TLS for MySQL;
+    # DB_SSL must never silently disable encryption for a deployed database.
+    ssl_options = {}
+    ca_file = os.getenv("DB_SSL_CA", "").strip()
+    if ca_file:
+        ssl_options["ca"] = ca_file
+    db_options["ssl"] = ssl_options
     DATABASES = {"default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": os.getenv("DB_NAME", "mettamart"),
