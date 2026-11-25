@@ -149,8 +149,9 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                 instance.is_active = False
                 instance.save(update_fields=["is_active", "updated_at"])
             return
-        if instance.image:
-            instance.image.delete(save=False)
+        # `image` is a plain text column (Base64 data URL, or a legacy media path), not a
+        # FileField, so there is no file-storage object to clean up here. Deleting the row
+        # also removes the stored image data.
         instance.delete()
 
 

@@ -159,6 +159,15 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {"login": "5/min", "register": "3/hour", "password_change": "5/hour"},
 }
 
+# Login/register/password-change throttles and the geocode cache use Django's default cache,
+# which is per-process memory. With several Gunicorn workers each worker keeps its own counters,
+# so the effective limit is multiplied by the worker count and resets on every restart.
+# Set CACHE_DB_TABLE (then run `python manage.py createcachetable`) to share them through the
+# database. When unset, the previous per-process behaviour is kept unchanged.
+CACHE_DB_TABLE = os.getenv("CACHE_DB_TABLE", "").strip()
+if CACHE_DB_TABLE:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": CACHE_DB_TABLE}}
+
 # Console logging is always enabled. Set LOG_DIR to also write rotating log files.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOGGING = {

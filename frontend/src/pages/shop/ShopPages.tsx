@@ -8,7 +8,7 @@ import {
   isCategoryId,
   type CategoryId,
 } from "../../data/categories";
-import { money } from "../../data/mock";
+import { money } from "../../lib/format";
 import { useAuth } from "../../hooks/useAuth";
 import { refreshProducts, stockLabel, useProductLoadState, useProducts } from "../../services/products";
 import type { Role } from "../../types";

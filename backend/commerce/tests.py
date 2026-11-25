@@ -457,6 +457,22 @@ class CommerceApiTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Product.objects.filter(pk=clean.id).exists())
 
+    def test_delete_product_with_image_and_without_history_is_removed(self):
+        # Regression: images are Base64 text, so deleting must not try to call file-storage APIs.
+        self.client.force_authenticate(user=self.admin)
+        with_photo = Product.objects.create(
+            name="Foto Hapus", category="buku", price=1000, stock=0,
+            image=self.make_product_image_data(),
+        )
+        legacy = Product.objects.create(
+            name="Foto Lama Hapus", category="buku", price=1000, stock=0,
+            image="product_images/legacy.jpg",
+        )
+        for product in (with_photo, legacy):
+            response = self.client.delete(f"/api/products/{product.id}/")
+            self.assertEqual(response.status_code, 204, response.data if hasattr(response, "data") else None)
+            self.assertFalse(Product.objects.filter(pk=product.id).exists())
+
 
     def test_gosend_order_has_separate_ready_delivering_and_completed_states(self):
         from django.utils import timezone
