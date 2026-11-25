@@ -1,7 +1,6 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { ChangePasswordForm } from "../../components/ChangePasswordForm";
-import { Brand } from "../../components/ui";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
 import { productService, refreshProducts, stockLabel, useProductLoadState, useProducts } from "../../services/products";
 import type { Product } from "../../types";
@@ -9,7 +8,6 @@ import { adminOrderAction, adminPaymentAction, adminSetDeliveryFee, createPOSOrd
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
 
-type View = "dashboard" | "stock" | "orders" | "notifications" | "reports" | "settings";
 type IconName =
   | "home"
   | "box"
@@ -25,7 +23,6 @@ type IconName =
   | "plus"
   | "edit"
   | "trash"
-  | "logout"
   | "chevron"
   | "shirt";
 
@@ -109,11 +106,6 @@ const iconPaths: Record<IconName, ReactNode> = {
       <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" />
     </>
   ),
-  logout: (
-    <>
-      <path d="M10 4H4v16h6M15 8l4 4-4 4M19 12H9" />
-    </>
-  ),
   chevron: <path d="m9 5 7 7-7 7" />,
   shirt: <path d="m8 3-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0Z" />,
 };
@@ -135,77 +127,6 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     </svg>
   );
 }
-
-const orders = [
-  {
-    code: "MTM-0128",
-    date: "12 Okt 2025, 09:45",
-    customer: "Andi Pratama",
-    total: 45000,
-    status: "Menunggu Konfirmasi",
-  },
-  {
-    code: "MTM-0127",
-    date: "12 Okt 2025, 09:32",
-    customer: "Siti Nurhaliza",
-    total: 78000,
-    status: "Diproses",
-  },
-  {
-    code: "MTM-0126",
-    date: "12 Okt 2025, 08:50",
-    customer: "Budi Santoso",
-    total: 120000,
-    status: "Siap Diambil",
-  },
-  {
-    code: "MTM-0125",
-    date: "12 Okt 2025, 08:20",
-    customer: "Citra Dewi",
-    total: 62000,
-    status: "Selesai",
-  },
-  {
-    code: "MTM-0124",
-    date: "12 Okt 2025, 07:55",
-    customer: "Rizky Maulana",
-    total: 33000,
-    status: "Menunggu Konfirmasi",
-  },
-];
-
-const notifications = [
-  {
-    title: "Pesanan #MTM-0128 telah diterima",
-    text: "Pesanan Anda sedang diproses oleh admin.",
-    time: "12 Okt 2025, 09:45",
-    type: "Pesan",
-  },
-  {
-    title: "Stok Buku Tulis tersedia kembali",
-    text: "Buku Tulis kembali tersedia. Yuk, segera pesan!",
-    time: "12 Okt 2025, 08:30",
-    type: "Info",
-  },
-  {
-    title: "Diskon 10% untuk alat tulis",
-    text: "Jangan lewatkan promo spesial bulan ini!",
-    time: "11 Okt 2025, 15:20",
-    type: "Promo",
-  },
-  {
-    title: "Pesanan #MTM-0126 telah dikirim",
-    text: "Pesanan Anda sudah dalam perjalanan.",
-    time: "10 Okt 2025, 16:30",
-    type: "Pesan",
-  },
-  {
-    title: "Terima kasih telah berbelanja!",
-    text: "Semoga Anda puas dengan layanan MettaMart.",
-    time: "9 Okt 2025, 14:00",
-    type: "Pesan",
-  },
-];
 
 const money = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
@@ -236,6 +157,9 @@ function Status({ children }: { children: ReactNode }) {
 }
 
 function Header({ title, subtitle }: { title: string; subtitle: string }) {
+  const { session } = useAuth();
+  const displayName = session?.name?.trim() || "Admin";
+  const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   return (
     <header className="topbar">
       <div>
@@ -249,49 +173,10 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
         <span className="topbar__time">
           <Icon name="clock" size={15} /> {new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
         </span>
-        <span className="avatar" aria-label="Avatar Admin">A</span>
-        <b>Admin</b>
+        <span className="avatar" aria-label={`Avatar ${displayName}`}>{initials}</span>
+        <b>{displayName}</b>
       </div>
     </header>
-  );
-}
-
-function Sidebar({ view, setView }: { view: View; setView: (view: View) => void }) {
-  const nav: { id: View; label: string; icon: IconName }[] = [
-    { id: "dashboard", label: "Dashboard", icon: "home" },
-    { id: "stock", label: "Kelola Stok", icon: "box" },
-    { id: "orders", label: "Pesanan", icon: "bag" },
-    { id: "notifications", label: "Notifikasi", icon: "bell" },
-    { id: "reports", label: "Laporan", icon: "chart" },
-    { id: "settings", label: "Pengaturan", icon: "settings" },
-  ];
-  return (
-    <aside className="sidebar">
-      <Brand />
-      <nav>
-        {nav.map((item) => (
-          <button
-            key={item.id}
-            className={view === item.id ? "active" : ""}
-            onClick={() => setView(item.id)}
-          >
-            <Icon name={item.icon} />
-            <span>{item.label}</span>
-            {item.id === "orders" && <em>5</em>}
-          </button>
-        ))}
-      </nav>
-      <div className="sidebar__account">
-        <div className="avatar">A</div>
-        <div>
-          <b>Admin</b>
-          <small>admin@mettamart.id</small>
-        </div>
-        <button title="Keluar">
-          <Icon name="logout" />
-        </button>
-      </div>
-    </aside>
   );
 }
 
@@ -1274,7 +1159,7 @@ export function Settings() {
     email: "",
     phone: "",
     adminName: session?.name || "Admin",
-    adminEmail: session?.email && session.email !== "admin@mettamart.id" ? session.email : "richardalvarowu2010@gmail.com",
+    adminEmail: session?.email || "",
     cash: true, qris: true, bankTransfer: true, bankName: "", bankAccountName: "", bankAccountNumber: "",
     operatingDays: "mon,tue,wed,thu,fri", openTime: "", closeTime: "", pickupMessage: "Pengambilan dilakukan di koperasi sekolah setelah pesanan siap." ,
     orderAlerts: true, lowStockAlerts: true, promoAlerts: true,
@@ -1283,21 +1168,11 @@ export function Settings() {
   };
   const [tab, setTab] = useState<SettingsTab>("store");
   const [settingsLoadError, setSettingsLoadError] = useState("");
-  const [values, setValues] = useState<Preferences>(() => {
-    let saved: Partial<Preferences> = {};
-    try {
-      saved = JSON.parse(localStorage.getItem("mettamart-admin-settings") || "{}") as Partial<Preferences>;
-    } catch {
-      // Ignore malformed cached settings and use current account/server defaults.
-    }
-    return {
-      ...defaults,
-      ...saved,
-      // Account identity must come from the authenticated server session, not stale localStorage.
-      adminName: session?.name || defaults.adminName,
-      adminEmail: session?.email && session.email !== "admin@mettamart.id" ? session.email : "richardalvarowu2010@gmail.com",
-    };
-  });
+  const [values, setValues] = useState<Preferences>(() => ({
+    ...defaults,
+    adminName: session?.name || defaults.adminName,
+    adminEmail: session?.email || "",
+  }));
   useEffect(() => {
     fetchStorefrontSettings().then((settings) => setValues((current) => ({
       ...current,
@@ -1476,7 +1351,6 @@ export function Settings() {
           pickup_instructions: { message: values.pickupMessage },
         });
       }
-      localStorage.setItem("mettamart-admin-settings", JSON.stringify(values));
       setSaved(true);
     } catch (reason) {
       setSaved(false);
@@ -1613,7 +1487,7 @@ export function Settings() {
           <div className="settings-form-footer">
             <button type="submit" className="primary">Simpan Pengaturan</button>
             {profileSaveError && <span className="logo-upload__error" role="alert">{profileSaveError}</span>}
-            {saved && <span role="status">{tab === "store" || tab === "payment" || tab === "pickup" || tab === "delivery" || tab === "order-policy" || tab === "notifications" ? "Pengaturan tersimpan di server." : "Pengaturan tersimpan di browser ini."}</span>}
+            {saved && <span role="status">Perubahan tersimpan di server.</span>}
           </div>
         </form>
         <div className="logo-upload">
@@ -1654,266 +1528,5 @@ function Modal({
         {children}
       </div>
     </div>
-  );
-}
-
-function MobileApp({ view, setView }: { view: View; setView: (v: View) => void }) {
-  const products = useProducts();
-  const [query, setQuery] = useState("");
-  const [mobileCategory, setMobileCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(
-    ALL_CATEGORIES,
-  );
-  const [cart, setCart] = useState<number[]>([]);
-  const [mobileNotice, setMobileNotice] = useState<(typeof notifications)[number] | null>(null);
-  const mobileView =
-    view === "dashboard"
-      ? "dashboard"
-      : view === "stock"
-        ? "stock"
-        : view === "notifications"
-          ? "notifications"
-          : "orders";
-  const visible = useMemo(
-    () =>
-      products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query.toLowerCase()) &&
-          (mobileCategory === ALL_CATEGORIES || p.category === mobileCategory),
-      ),
-    [products, query, mobileCategory],
-  );
-  return (
-    <div className="mobile-app">
-      <div className="mobile-head">
-        <Brand compact />
-        <button onClick={() => setView("notifications")}>
-          <Icon name="bell" />
-          <em>{notifications.length}</em>
-        </button>
-      </div>
-      {mobileView === "dashboard" && (
-        <main className="mobile-home">
-          <h1>Halo, Andi Pratama!</h1>
-          <p>Semangat belajar hari ini!</p>
-          <button className="profile-card">
-            <span className="avatar">AP</span>
-            <div>
-              <b>Andi Pratama</b>
-              <small>Kelas 8A</small>
-            </div>
-            <Icon name="chevron" />
-          </button>
-          <label className="search">
-            <Icon name="search" />
-            <input
-              placeholder="Cari barang, buku, atau kebutuhan sekolah..."
-              onFocus={() => setView("stock")}
-            />
-          </label>
-          <div className="mobile-title">
-            <h2>Kategori</h2>
-            <button onClick={() => setView("stock")}>Lihat Semua ›</button>
-          </div>
-          <div className="category-grid">
-            {categories.map((item) => (
-              <button
-                onClick={() => {
-                  setMobileCategory(item.id);
-                  setView("stock");
-                }}
-                key={item.id}
-              >
-                <span>
-                  <Icon name={item.icon === "shirt" ? "shirt" : "box"} />
-                </span>
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <div className="mobile-title">
-            <h2>Stok Tersedia</h2>
-            <button onClick={() => setView("stock")}>Lihat Semua ›</button>
-          </div>
-          <div className="product-strip">
-            {products.slice(0, 3).map((p) => (
-              <article key={p.id}>
-                <ProductArt type={p.art} />
-                <b>{p.name}</b>
-                <span>{money(p.price)}</span>
-                <Status>Tersedia</Status>
-                <button onClick={() => setCart([...cart, p.id])}>Pesan</button>
-              </article>
-            ))}
-          </div>
-          <div className="promo">
-            <span className="mini-icon">
-              <Icon name="bag" />
-            </span>
-            <div>
-              <b>Pesan sekarang dan dapatkan</b>
-              <br />
-              harga terbaik!
-            </div>
-          </div>
-        </main>
-      )}
-      {mobileView === "stock" && (
-        <main>
-          <div className="mobile-page-title">
-            <button onClick={() => setView("dashboard")}>‹</button>
-            <h1>Stok Barang</h1>
-          </div>
-          <label className="search">
-            <Icon name="search" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari produk..."
-            />
-          </label>
-          <div className="tabs mobile-tabs">
-            {[{ id: ALL_CATEGORIES, label: "Semua" }, ...categories].map((item) => (
-              <button
-                key={item.id}
-                className={mobileCategory === item.id ? "active" : ""}
-                onClick={() => setMobileCategory(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <div className="mobile-products">
-            {visible.map((p) => (
-              <article key={p.id}>
-                <ProductArt type={p.art} />
-                <div>
-                  <b>{p.name}</b>
-                  <span>{money(p.price)}</span>
-                  <small>Stok: {p.stock}</small>
-                </div>
-                <Status>{p.stock ? "Tersedia" : "Habis"}</Status>
-                <button disabled={!p.stock} onClick={() => setCart([...cart, p.id])}>
-                  {cart.includes(p.id) ? "Ditambah" : "Pesan"}
-                </button>
-              </article>
-            ))}
-          </div>
-        </main>
-      )}
-      {mobileView === "orders" && (
-        <main>
-          <div className="mobile-page-title">
-            <button onClick={() => setView("dashboard")}>‹</button>
-            <h1>Pesanan Saya</h1>
-          </div>
-          <div className="tabs mobile-tabs">
-            <button className="active">Semua</button>
-            <button>Diproses</button>
-            <button>Siap Diambil</button>
-            <button>Selesai</button>
-          </div>
-          <div className="mobile-orders">
-            {orders.slice(0, 3).map((o) => (
-              <article key={o.code}>
-                <div>
-                  <b>#{o.code}</b>
-                  <Status>{o.status}</Status>
-                </div>
-                <small>{o.date}</small>
-                <p>
-                  <ProductArt type={o.code === "MTM-0127" ? "bottle" : "book"} />{" "}
-                  {o.code === "MTM-0127" ? "Minuman Botol × 2" : "Buku Tulis & Pensil 2B"}
-                </p>
-                <footer>
-                  <span>Total</span>
-                  <b>{money(o.total)}</b>
-                </footer>
-              </article>
-            ))}
-          </div>
-        </main>
-      )}
-      {mobileView === "notifications" && (
-        <main>
-          <div className="mobile-page-title">
-            <button onClick={() => setView("dashboard")}>‹</button>
-            <h1>Notifikasi</h1>
-          </div>
-          <div className="mobile-notifications">
-            {notifications.map((n, i) => (
-              <button type="button" key={n.title} onClick={() => setMobileNotice(n)}>
-                <span className="mini-icon">
-                  <Icon name={i % 2 ? "box" : "bell"} />
-                </span>
-                <span>
-                  <b>{n.title}</b>
-                  <small>{n.text}</small>
-                  <time>{n.time}</time>
-                </span>
-                <Icon name="chevron" />
-              </button>
-            ))}
-          </div>
-        </main>
-      )}
-      {mobileNotice && (
-        <Modal title="Detail Notifikasi" close={() => setMobileNotice(null)}>
-          <div className="notification-detail">
-            <h3>{mobileNotice.title}</h3>
-            <p>{mobileNotice.text}</p>
-            <time>{mobileNotice.time}</time>
-            <button className="primary wide" onClick={() => setMobileNotice(null)}>Tutup</button>
-          </div>
-        </Modal>
-      )}
-      <nav className="bottom-nav">
-        <button
-          className={mobileView === "dashboard" ? "active" : ""}
-          onClick={() => setView("dashboard")}
-        >
-          <Icon name="home" />
-          Beranda
-        </button>
-        <button className={mobileView === "stock" ? "active" : ""} onClick={() => setView("stock")}>
-          <Icon name="box" />
-          Stok
-        </button>
-        <button
-          className={mobileView === "orders" ? "active" : ""}
-          onClick={() => setView("orders")}
-        >
-          <Icon name="bag" />
-          Pesanan
-        </button>
-        <button
-          className={mobileView === "notifications" ? "active" : ""}
-          onClick={() => setView("notifications")}
-        >
-          <Icon name="bell" />
-          Notifikasi
-        </button>
-      </nav>
-    </div>
-  );
-}
-
-export default function App() {
-  const [view, setView] = useState<View>("dashboard");
-  const pages: Record<View, ReactNode> = {
-    dashboard: <Dashboard />,
-    stock: <Stock />,
-    orders: <Orders />,
-    notifications: <Notifications />,
-    reports: <Reports />,
-    settings: <Settings />,
-  };
-  return (
-    <>
-      <div className="desktop-app">
-        <Sidebar view={view} setView={setView} />
-        <main className="workspace">{pages[view]}</main>
-      </div>
-      <MobileApp view={view} setView={setView} />
-    </>
   );
 }
