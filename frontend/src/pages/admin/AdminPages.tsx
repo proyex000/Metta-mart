@@ -192,7 +192,10 @@ function AdminGlobalSearch() {
       .map((item) => ({ id: "menu-" + item.path, label: item.label, detail: item.detail, path: item.path, kind: "Menu" }));
 
     setResults(menuResults);
-    if (needle.length < 2) return () => { active = false; };
+    if (needle.length < 2) {
+      setLoading(false);
+      return () => { active = false; };
+    }
 
     setLoading(true);
     const timer = window.setTimeout(async () => {
