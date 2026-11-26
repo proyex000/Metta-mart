@@ -5713,3 +5713,35 @@ a.order-submit {
   font-weight: 600;
   text-decoration: none;
 }
+
+
+/* Mobile horizontal category sliders: keep tabs separated instead of stretching together. */
+@media (max-width: 767px) {
+  .shop-tabs,
+  .mobile-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    max-width: 100%;
+    padding: 4px 2px 9px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+  }
+
+  .shop-tabs button,
+  .mobile-tabs button {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    margin: 0;
+    padding-inline: 14px;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+}
