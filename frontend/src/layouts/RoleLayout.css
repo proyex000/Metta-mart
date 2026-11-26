@@ -1,57 +1,128 @@
-.role-account-link { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; border-radius: 8px; }
-.role-account-link:hover { background: #fff6f3; }
-.role-account-link:focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
-.role-account-link .role-avatar { flex: none; }
-.role-account-hint { margin-top: 3px; color: var(--red) !important; font-weight: 600; }
-
-/* Keep the account row anchored and aligned across the desktop sidebar. */
-.role-account {
+/* Account/profile layout overrides.
+   These selectors intentionally outrank the generic .role-account rules in index.css. */
+.role-sidebar .role-account {
+  display: flex;
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+.role-sidebar .role-account .role-account-link {
+  display: flex;
+  flex: 1 1 0;
   align-items: center;
-}
-.role-account-link > div {
+  justify-content: flex-start;
+  gap: 8px;
   min-width: 0;
-  flex: 1;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
 }
-.role-account-link b,
-.role-account-link small {
+
+.role-sidebar .role-account .role-account-link:hover {
+  background: #fff6f3;
+}
+
+.role-sidebar .role-account .role-account-link:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+
+.role-sidebar .role-account .role-account-link .role-avatar {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+}
+
+.role-sidebar .role-account .role-account-link > div {
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.role-sidebar .role-account .role-account-link b,
+.role-sidebar .role-account .role-account-link small {
   display: block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.role-account .role-logout {
-  flex: none;
+
+.role-sidebar .role-account .role-account-link b {
+  font-size: 13px;
 }
 
-@media (max-width: 1023px) {
-  .role-account-link { justify-content: center; }
-  .role-account-link div { display: none; }
+.role-sidebar .role-account .role-account-link small {
+  font-size: 11px;
+}
+
+.role-sidebar .role-account .role-account-link .role-account-hint {
+  margin-top: 3px;
+  color: var(--red);
+  font-weight: 600;
+}
+
+.role-sidebar .role-account .role-logout {
+  display: grid;
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.role-sidebar .role-account .role-logout:hover {
+  background: #fff0ef;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .role-sidebar .role-account {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .role-sidebar .role-account .role-account-link {
+    flex: 0 0 auto;
+    justify-content: center;
+  }
+
+  .role-sidebar .role-account .role-account-link > div,
+  .role-sidebar .role-account .role-logout {
+    display: none;
+  }
 }
 
 @media (max-width: 767px) {
-  /* The mobile drawer must use one horizontal profile/logout row,
-     rather than inheriting the collapsed tablet column layout. */
-  .role-account {
+  .role-sidebar .role-account {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
   }
-  .role-account-link {
-    min-width: 0;
-    flex: 1;
+
+  .role-sidebar .role-account .role-account-link {
+    flex: 1 1 0;
     justify-content: flex-start;
+    min-width: 0;
     padding: 7px 6px;
   }
-  .role-account-link div {
+
+  .role-sidebar .role-account .role-account-link > div {
     display: block;
   }
-  .role-account .role-logout {
+
+  .role-sidebar .role-account .role-logout {
     display: grid;
-    margin-left: 0;
+    flex: 0 0 44px;
+    margin: 0;
   }
 }
