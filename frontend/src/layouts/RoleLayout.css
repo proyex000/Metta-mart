@@ -149,3 +149,39 @@
     margin: 0;
   }
 }
+
+/* Parent sidebar: keep the account block inside the viewport while the menu scrolls. */
+.role-shell--parent .role-sidebar {
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+.role-shell--parent .role-sidebar nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.role-shell--parent .role-sidebar .role-account {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.role-shell--parent .role-sidebar .role-account .role-account-link {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .role-shell--parent .role-sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+}
+
