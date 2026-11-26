@@ -293,3 +293,100 @@
     flex-shrink: 0;
   }
 }
+
+
+/* Device-aware routed shell: all roles use the same tablet proportions.
+   Sidebar navigation scrolls independently on short displays. */
+.role-shell.role-shell {
+  width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+.role-shell .role-sidebar {
+  box-sizing: border-box;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  min-width: 0;
+}
+.role-shell .role-sidebar nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.role-shell .role-sidebar .role-account {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+  .role-shell.role-shell {
+    grid-template-columns: clamp(198px, 23vw, 232px) minmax(0, 1fr);
+  }
+  .role-shell .role-sidebar {
+    padding-inline: clamp(12px, 1.8vw, 18px);
+  }
+  .role-shell .role-sidebar .brand div,
+  .role-shell .role-sidebar .role-label,
+  .role-shell .role-sidebar nav span,
+  .role-shell .role-sidebar nav em,
+  .role-shell .role-sidebar .role-account div,
+  .role-shell .role-sidebar .role-account button {
+    display: block;
+  }
+  .role-shell .role-sidebar nav a {
+    justify-content: flex-start;
+    padding-inline: 10px;
+    gap: 9px;
+    font-size: 13px;
+  }
+  .role-shell .role-sidebar .role-account {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+@media (max-width: 767px) {
+  .role-shell.role-shell {
+    display: block;
+    min-height: 100dvh;
+  }
+  .role-shell .role-sidebar {
+    box-sizing: border-box;
+    width: min(300px, 88vw);
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-top: max(28px, env(safe-area-inset-top));
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+  .role-shell .role-sidebar nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .role-shell .role-sidebar .role-account {
+    flex: 0 0 auto;
+  }
+  .role-shell .role-content {
+    width: 100%;
+    min-height: calc(100dvh - 64px);
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+}
+@media (max-height: 700px) and (min-width: 768px) {
+  .role-shell .role-sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-top: 16px;
+    padding-bottom: 12px;
+  }
+  .role-shell .role-sidebar .brand {
+    margin-bottom: 8px;
+  }
+  .role-shell .role-sidebar .role-label {
+    margin-bottom: 10px;
+  }
+}
