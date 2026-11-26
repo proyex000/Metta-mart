@@ -5622,3 +5622,13 @@ a.order-submit {
   .report-range input { width: 125px; }
   .report-chart { grid-template-columns: 57px minmax(0, 1fr); gap: 5px; }
 }
+
+/* Admin notifications: keep the announcement composer panel fitted to its content. */
+.role-shell--admin .notification-compose-panel {
+  min-height: 0;
+  height: auto;
+  align-self: start;
+}
+.role-shell--admin .notification-compose-panel .notification-compose {
+  width: 100%;
+}
