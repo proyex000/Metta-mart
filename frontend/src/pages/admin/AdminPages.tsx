@@ -1007,7 +1007,7 @@ export function Notifications() {
     <>
       <Header title="Notifikasi" subtitle="Pantau aktivitas pesanan dan kirim pengumuman kepada siswa serta orang tua." />
       {error && <p className="auth-error" role="alert">{error}</p>}
-      <section className="panel table-panel">
+      <section className="panel table-panel notification-compose-panel">
         <div className="panel__title"><h2>Kirim Pengumuman</h2></div>
         <form className="notification-compose" onSubmit={send}>
           <label>Judul<input value={title} maxLength={180} onChange={(event) => setTitle(event.target.value)} required placeholder="Contoh: Jadwal koperasi selama ujian" /></label>
