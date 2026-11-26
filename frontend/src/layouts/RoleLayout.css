@@ -185,3 +185,111 @@
   }
 }
 
+/* Parent and student sidebars share the same bounded layout at every width.
+   Keep navigation scrollable and pin the complete account row inside the sidebar. */
+.role-shell--parent .role-sidebar,
+.role-shell--student .role-sidebar {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.role-shell--parent .role-sidebar nav,
+.role-shell--student .role-sidebar nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.role-shell--parent .role-sidebar .role-account,
+.role-shell--student .role-sidebar .role-account {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin-top: auto;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.role-shell--parent .role-sidebar .role-account .role-account-link,
+.role-shell--student .role-sidebar .role-account .role-account-link {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.role-shell--parent .role-sidebar .role-account .role-account-link > div,
+.role-shell--student .role-sidebar .role-account .role-account-link > div {
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.role-shell--parent .role-sidebar .role-account .role-logout,
+.role-shell--student .role-sidebar .role-account .role-logout {
+  display: grid;
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet uses the same complete sidebar/profile treatment as desktop. */
+  .role-shell--parent.role-shell,
+  .role-shell--student.role-shell {
+    grid-template-columns: 244px minmax(0, 1fr);
+  }
+
+  .role-shell--parent .role-sidebar,
+  .role-shell--student .role-sidebar {
+    padding-inline: 20px;
+  }
+
+  .role-shell--parent .role-sidebar .brand div,
+  .role-shell--parent .role-sidebar .role-label,
+  .role-shell--parent .role-sidebar nav span,
+  .role-shell--parent .role-sidebar nav em,
+  .role-shell--student .role-sidebar .brand div,
+  .role-shell--student .role-sidebar .role-label,
+  .role-shell--student .role-sidebar nav span,
+  .role-shell--student .role-sidebar nav em {
+    display: block;
+  }
+
+  .role-shell--parent .role-sidebar nav a,
+  .role-shell--student .role-sidebar nav a {
+    justify-content: flex-start;
+    padding-inline: 14px;
+  }
+}
+
+@media (max-width: 767px) {
+  .role-shell--parent .role-sidebar,
+  .role-shell--student .role-sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .role-shell--parent .role-sidebar .role-account,
+  .role-shell--student .role-sidebar .role-account {
+    flex-direction: row;
+    flex-shrink: 0;
+  }
+}
