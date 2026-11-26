@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../../hooks/useAuth";
 import { ChangePasswordForm } from "../../components/ChangePasswordForm";
 import { ALL_CATEGORIES, categories, categoryLabel, isCategoryId, type CategoryId } from "../../data/categories";
@@ -7,6 +8,8 @@ import type { Product } from "../../types";
 import { adminOrderAction, adminPaymentAction, adminSetDeliveryFee, createPOSOrder, fetchAdminDashboard, fetchAdminSalesReport, fetchInventoryMovements, fetchOrders, type AdminDashboardSummary, type InventoryMovementRow, type AdminSalesReport, type CommerceOrder } from "../../services/commerce";
 import { fetchStorefrontSettings, updateStorefrontSettings } from "../../services/settings";
 import { broadcastNotification, fetchNotifications, markNotificationRead, type AppNotification } from "../../services/notifications";
+import { fetchManagedUsers } from "../../services/accounts";
+import "./AdminGlobalSearch.css";
 
 type IconName =
   | "home"
@@ -156,6 +159,121 @@ function Status({ children }: { children: ReactNode }) {
   return <span className={`status status--${tone}`}>{children}</span>;
 }
 
+type GlobalSearchResult = { id: string; label: string; detail: string; path: string; kind: string };
+
+function AdminGlobalSearch() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<GlobalSearchResult[]>([]);
+  const needle = query.trim().toLocaleLowerCase("id-ID");
+
+  useEffect(() => {
+    let active = true;
+    if (!needle) {
+      setResults([]);
+      setLoading(false);
+      return () => { active = false; };
+    }
+
+    const destinations = [
+      { label: "Dashboard", detail: "Ringkasan koperasi", path: "/admin", aliases: "beranda ringkasan" },
+      { label: "Kelola Stok", detail: "Produk, kategori, dan persediaan", path: "/admin/stock", aliases: "produk barang persediaan stok" },
+      { label: "POS Koperasi", detail: "Transaksi langsung di koperasi", path: "/admin/pos", aliases: "kasir penjualan transaksi langsung" },
+      { label: "Pesanan", detail: "Pesanan online dan status transaksi", path: "/admin/orders", aliases: "order transaksi pelanggan" },
+      { label: "Notifikasi", detail: "Pemberitahuan koperasi", path: "/admin/notifications", aliases: "pengumuman pemberitahuan" },
+      { label: "Laporan", detail: "Rekap penjualan", path: "/admin/reports", aliases: "rekap omzet penjualan" },
+      { label: "Pengaturan", detail: "Pengaturan koperasi", path: "/admin/settings", aliases: "konfigurasi toko" },
+      { label: "Pengguna", detail: "Akun admin, siswa, dan orang tua", path: "/admin/users", aliases: "akun user siswa murid orang tua wali" },
+    ];
+    const menuResults: GlobalSearchResult[] = destinations
+      .filter((item) => (item.label + " " + item.aliases).toLocaleLowerCase("id-ID").includes(needle))
+      .map((item) => ({ id: "menu-" + item.path, label: item.label, detail: item.detail, path: item.path, kind: "Menu" }));
+
+    setResults(menuResults);
+    if (needle.length < 2) return () => { active = false; };
+
+    setLoading(true);
+    const timer = window.setTimeout(async () => {
+      const [productResult, orderResult, userResult] = await Promise.allSettled([
+        refreshProducts().then(() => productService.list()),
+        fetchOrders(),
+        fetchManagedUsers(),
+      ]);
+      if (!active) return;
+
+      const productMatches: GlobalSearchResult[] = productResult.status === "fulfilled"
+        ? productResult.value.filter((item) =>
+            [item.name, categoryLabel(item.category), stockLabel(item.stock), String(item.price)]
+              .some((value) => value.toLocaleLowerCase("id-ID").includes(needle)))
+          .slice(0, 4)
+          .map((item) => ({ id: "product-" + item.id, label: item.name, detail: `Produk · ${categoryLabel(item.category)} · Stok ${item.stock}`, path: `/admin/stock?q=${encodeURIComponent(item.name)}`, kind: "Produk" }))
+        : [];
+      const orderMatches: GlobalSearchResult[] = orderResult.status === "fulfilled"
+        ? orderResult.value.filter((item) =>
+            [item.code, item.customer_name, item.beneficiary_name || "", ...item.items.map((line) => line.product_name)]
+              .some((value) => value.toLocaleLowerCase("id-ID").includes(needle)))
+          .slice(0, 4)
+          .map((item) => ({ id: "order-" + item.id, label: "#" + item.code, detail: `Pesanan · ${item.customer_name} · ${adminOrderStatus(item.status, item.delivery_method)}`, path: `/admin/orders?q=${encodeURIComponent(item.code)}`, kind: "Pesanan" }))
+        : [];
+      const userMatches: GlobalSearchResult[] = userResult.status === "fulfilled"
+        ? userResult.value.filter((item) =>
+            [item.full_name, item.identifier, item.role === "student" ? "siswa murid" : item.role === "parent" ? "orang tua wali" : "admin"]
+              .some((value) => value.toLocaleLowerCase("id-ID").includes(needle)))
+          .slice(0, 4)
+          .map((item) => ({ id: "user-" + item.id, label: item.full_name, detail: `Pengguna · ${item.role === "student" ? "Siswa" : item.role === "parent" ? "Orang tua" : "Admin"}`, path: `/admin/users?q=${encodeURIComponent(item.full_name)}`, kind: "Pengguna" }))
+        : [];
+
+      setResults([...menuResults, ...productMatches, ...orderMatches, ...userMatches].slice(0, 10));
+      setLoading(false);
+    }, 300);
+
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [needle]);
+
+  const choose = (result: GlobalSearchResult) => {
+    setOpen(false);
+    setQuery("");
+    navigate(result.path);
+  };
+
+  return (
+    <div className="admin-global-search">
+      <label className="admin-global-search__field">
+        <Icon name="search" size={17} />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Enter" && results[0]) choose(results[0]);
+          }}
+          placeholder="Cari produk, pesanan, pengguna, atau menu..."
+          aria-label="Pencarian global admin"
+          aria-expanded={open && Boolean(needle)}
+          aria-controls="admin-global-search-results"
+        />
+        {query && <button type="button" aria-label="Hapus pencarian" onClick={() => setQuery("")}>×</button>}
+      </label>
+      {open && needle && (
+        <div className="admin-global-search__results" id="admin-global-search-results" role="listbox">
+          {loading && <p className="admin-global-search__message">Mencari di data koperasi...</p>}
+          {!loading && results.length === 0 && <p className="admin-global-search__message">Tidak ada hasil untuk “{query}”.</p>}
+          {!loading && results.map((result) => (
+            <button type="button" role="option" aria-selected="false" key={result.id} onClick={() => choose(result)}>
+              <span className="admin-global-search__kind">{result.kind}</span>
+              <span><b>{result.label}</b><small>{result.detail}</small></span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Header({ title, subtitle }: { title: string; subtitle: string }) {
   const { session } = useAuth();
   const displayName = session?.name?.trim() || "Admin";
@@ -166,6 +284,7 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
+      <AdminGlobalSearch />
       <div className="topbar__meta">
         <span className="topbar__date">
           <Icon name="calendar" size={15} /> {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
@@ -277,9 +396,10 @@ const emptyProductForm: ProductForm = {
 type StockFilter = "Semua Stok" | "Tersedia" | "Hampir Habis" | "Habis";
 
 export function Stock() {
+  const [searchParams] = useSearchParams();
   const items = useProducts();
   const productLoad = useProductLoadState();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") || "");
   const [category, setCategory] = useState<CategoryId | typeof ALL_CATEGORIES>(ALL_CATEGORIES);
   const [stockFilter, setStockFilter] = useState<StockFilter>("Semua Stok");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
@@ -634,10 +754,11 @@ function adminPaymentStatus(status: CommerceOrder["payment_status"]) {
 }
 
 export function Orders() {
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState("Semua");
   const [items, setItems] = useState<CommerceOrder[]>([]);
   const [selected, setSelected] = useState<CommerceOrder | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") || "");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
