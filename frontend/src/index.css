@@ -5632,3 +5632,84 @@ a.order-submit {
 .role-shell--admin .notification-compose-panel .notification-compose {
   width: 100%;
 }
+
+
+/* Student/parent product search suggestions */
+.shop-search-wrap {
+  position: relative;
+  width: 100%;
+  z-index: 20;
+}
+.shop-search-wrap .shop-search {
+  display: flex;
+  align-items: center;
+}
+.shop-search-clear {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #788078;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.shop-search-results {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  max-height: min(360px, 55vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #e8ece8;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(28, 44, 34, .14);
+}
+.shop-search-results > a:not(.shop-search-all) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border-radius: 9px;
+  color: inherit;
+  text-decoration: none;
+}
+.shop-search-results > a:not(.shop-search-all):hover {
+  background: #f5f8f5;
+}
+.shop-search-results .product-art {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+}
+.shop-search-results > a > span {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+.shop-search-results b,
+.shop-search-results small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shop-search-results b { font-size: 13px; }
+.shop-search-results small { color: #788078; font-size: 11px; }
+.shop-search-results p {
+  margin: 0;
+  padding: 13px 10px;
+  color: #788078;
+  font-size: 12px;
+}
+.shop-search-results .shop-search-all {
+  display: block;
+  margin-top: 4px;
+  padding: 10px;
+  border-top: 1px solid #edf0ed;
+  color: var(--green, #397b55);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
