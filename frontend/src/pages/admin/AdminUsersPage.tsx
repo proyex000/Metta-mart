@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { createManagedUser, fetchManagedUsers, resetManagedUserPassword, updateManagedUser, type ManagedUser } from "../../services/accounts";
 import { useAuth } from "../../hooks/useAuth";
 import "./AdminUsersPage.css";
@@ -10,12 +11,13 @@ const roleLabel: Record<ManagedUser["role"], string> = {
 };
 
 export function AdminUsersPage() {
+  const [searchParams] = useSearchParams();
   const { session } = useAuth();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editIdentifier, setEditIdentifier] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") || "");
   const [roleFilter, setRoleFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
