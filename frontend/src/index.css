@@ -6050,3 +6050,55 @@ body {
     min-height: 260px;
   }
 }
+
+/* Keep sidebar menu rows content-sized on phones and compact tablets.
+   The nav may scroll, but its grid tracks must never stretch to fill the viewport. */
+@media (max-width: 900px) {
+  .role-shell .role-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .role-shell .role-sidebar nav {
+    display: grid;
+    grid-template-rows: repeat(8, max-content);
+    grid-auto-rows: max-content;
+    align-content: start;
+    align-items: start;
+    justify-content: stretch;
+    flex: 0 1 auto;
+    min-height: 0;
+    height: auto;
+    gap: 7px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .role-shell .role-sidebar nav a {
+    box-sizing: border-box;
+    height: auto;
+    min-height: 43px;
+    align-self: start;
+  }
+
+  .role-shell .role-sidebar .role-account {
+    flex: 0 0 auto;
+    margin-top: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .role-shell .role-sidebar {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .role-shell .role-sidebar nav {
+    max-height: calc(100dvh - 220px);
+    flex: 0 1 auto;
+  }
+}
