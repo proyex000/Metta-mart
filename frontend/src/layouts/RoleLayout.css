@@ -390,3 +390,66 @@
     margin-bottom: 10px;
   }
 }
+
+/* Mobile drawer: compact width, compact menu rhythm, and a pinned account row. */
+@media (max-width: 767px) {
+  .role-shell .role-sidebar {
+    box-sizing: border-box;
+    width: min(260px, 82vw);
+    max-width: 260px;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* The lower decorative shape was overlapping the account divider/profile. */
+  .role-shell .role-sidebar::after {
+    display: none;
+  }
+
+  /* Grid rows must keep their natural height instead of stretching to fill the drawer. */
+  .role-shell .role-sidebar nav {
+    display: grid;
+    flex: 1 1 auto;
+    grid-auto-rows: max-content;
+    align-content: start;
+    gap: 8px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 0 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .role-shell .role-sidebar nav a {
+    min-height: 46px;
+    flex: none;
+  }
+
+  .role-shell .role-sidebar .role-account {
+    flex: 0 0 auto;
+    min-height: 58px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+    background: #fff;
+    position: relative;
+    z-index: 2;
+  }
+
+  .role-shell .role-sidebar .role-account .role-account-link {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .role-shell .role-sidebar .role-account .role-account-link > div {
+    min-width: 0;
+    overflow: hidden;
+  }
+}
