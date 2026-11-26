@@ -3,11 +3,55 @@
 .role-account-link:focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
 .role-account-link .role-avatar { flex: none; }
 .role-account-hint { margin-top: 3px; color: var(--red) !important; font-weight: 600; }
+
+/* Keep the account row anchored and aligned across the desktop sidebar. */
+.role-account {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-items: center;
+}
+.role-account-link > div {
+  min-width: 0;
+  flex: 1;
+}
+.role-account-link b,
+.role-account-link small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-account .role-logout {
+  flex: none;
+}
+
 @media (max-width: 1023px) {
   .role-account-link { justify-content: center; }
   .role-account-link div { display: none; }
 }
+
 @media (max-width: 767px) {
-  .role-account-link { justify-content: flex-start; }
-  .role-account-link div { display: block; }
+  /* The mobile drawer must use one horizontal profile/logout row,
+     rather than inheriting the collapsed tablet column layout. */
+  .role-account {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .role-account-link {
+    min-width: 0;
+    flex: 1;
+    justify-content: flex-start;
+    padding: 7px 6px;
+  }
+  .role-account-link div {
+    display: block;
+  }
+  .role-account .role-logout {
+    display: grid;
+    margin-left: 0;
+  }
 }
