@@ -5790,3 +5790,263 @@ a.order-submit {
     white-space: nowrap;
   }
 }
+
+
+/* =========================================================
+   Cross-device responsive guardrails (admin, student, parent)
+   Keep page content scrollable; constrain only overflowing
+   components, never clip the full page vertically.
+   ========================================================= */
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+#root {
+  min-height: 100dvh;
+}
+.role-shell,
+.role-content {
+  box-sizing: border-box;
+  min-width: 0;
+}
+.role-shell {
+  width: 100%;
+  min-height: 100dvh;
+  align-items: start;
+}
+.role-content {
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  padding-bottom: max(38px, env(safe-area-inset-bottom));
+}
+.role-content > *,
+.role-content section,
+.role-content article,
+.role-content form,
+.role-content header,
+.role-content footer {
+  min-width: 0;
+  max-width: 100%;
+}
+.role-content img,
+.role-content video,
+.role-content canvas,
+.role-content svg {
+  max-width: 100%;
+}
+.role-content input,
+.role-content select,
+.role-content textarea,
+.role-content button {
+  max-width: 100%;
+}
+.role-content input:not([type="checkbox"]):not([type="radio"]),
+.role-content select,
+.role-content textarea {
+  box-sizing: border-box;
+}
+.role-content h1,
+.role-content h2,
+.role-content h3,
+.role-content p,
+.role-content b,
+.role-content strong,
+.role-content small,
+.role-content span {
+  overflow-wrap: anywhere;
+}
+.role-content .panel,
+.role-content .card,
+.role-content .table-panel,
+.role-content .settings-layout,
+.role-content .notification-layout,
+.role-content .shop-settings-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.role-content .desktop-table,
+.role-content .table-scroll,
+.role-content .table-responsive {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.role-content table {
+  max-width: 100%;
+}
+.modal-backdrop {
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+}
+.modal-backdrop > .modal,
+.modal-backdrop > [role="dialog"],
+.modal-backdrop .confirm-modal {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+  .role-content {
+    padding: 24px clamp(16px, 2.2vw, 26px) 34px;
+  }
+  .role-shell--admin .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .role-shell--admin .dashboard-grid,
+  .role-shell--admin .report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .role-shell--admin .settings-layout {
+    grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  }
+  .role-shell--admin .settings-layout .logo-upload {
+    display: none;
+  }
+  .role-content .shop-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .role-content .shop-product-grid,
+  .role-content .shop-orders {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+  .role-content {
+    min-height: calc(100dvh - 64px);
+    padding: 18px 14px calc(88px + env(safe-area-inset-bottom));
+  }
+  .role-page-title {
+    min-height: 0;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px 12px;
+  }
+  .role-page-title > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .role-content .stat-grid,
+  .role-content .dashboard-grid,
+  .role-content .report-grid,
+  .role-content .report-summary,
+  .role-content .shop-product-grid,
+  .role-content .shop-orders,
+  .role-content .shop-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .role-content .form-row,
+  .role-content .password-change__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .role-content .toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .role-content .notification-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .role-content .notification-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .role-content .settings-layout {
+    display: block;
+    min-height: 0;
+    overflow: visible;
+  }
+  .role-content .settings-layout form {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .role-content .chart-panel,
+  .role-content .latest,
+  .role-content .report-grid > article {
+    height: auto;
+    min-height: 0;
+  }
+  .role-content .shop-profile,
+  .role-content .monthly-card,
+  .role-content .payment-heading,
+  .role-content .detail-head {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .role-content .shop-profile > *,
+  .role-content .monthly-card > *,
+  .role-content .payment-heading > * {
+    min-width: 0;
+  }
+  .role-bottom-nav {
+    padding-bottom: max(7px, env(safe-area-inset-bottom));
+  }
+  .role-content .desktop-table,
+  .role-content .table-scroll,
+  .role-content .table-responsive {
+    margin-inline: 0;
+  }
+}
+@media (max-width: 420px) {
+  .role-content {
+    padding-inline: 12px;
+  }
+  .role-content .panel,
+  .role-content .table-panel,
+  .role-content .notification-list,
+  .role-content .detail-card,
+  .role-content .payment-section {
+    padding: 12px;
+  }
+  .role-content .stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .role-content .shop-product-grid article {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .role-content .confirm-modal > div,
+  .role-content .delete-confirm__actions {
+    flex-wrap: wrap;
+  }
+}
+@media (max-height: 700px) and (min-width: 768px) {
+  .role-content {
+    padding-top: 18px;
+    padding-bottom: 24px;
+  }
+  .role-page-title {
+    margin-bottom: 14px;
+  }
+  .role-sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+  .role-sidebar nav {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .role-sidebar .role-account {
+    flex: 0 0 auto;
+  }
+  .role-content .chart-panel,
+  .role-content .latest {
+    height: auto;
+    min-height: 260px;
+  }
+}
