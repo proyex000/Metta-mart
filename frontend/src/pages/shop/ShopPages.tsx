@@ -24,6 +24,16 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
   const base = `/${role}`;
   const [orders, setOrders] = useState<CommerceOrder[]>([]);
   const [dataError, setDataError] = useState("");
+  const [productQuery, setProductQuery] = useState("");
+  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const matchingProducts = useMemo(() => {
+    const needle = productQuery.trim().toLocaleLowerCase("id-ID");
+    if (!needle) return [];
+    return products.filter((product) =>
+      product.name.toLocaleLowerCase("id-ID").includes(needle) ||
+      categoryLabel(product.category).toLocaleLowerCase("id-ID").includes(needle)
+    ).slice(0, 5);
+  }, [products, productQuery]);
   useEffect(() => {
     fetchOrders().then(setOrders).catch((reason) => setDataError(reason instanceof Error ? reason.message : "Ringkasan pesanan gagal dimuat."));
   }, [role]);
@@ -53,10 +63,44 @@ export function ShopDashboard({ role }: { role: Exclude<Role, "admin"> }) {
         </>
       )}
       {dataError && <p className="payment-unavailable" role="alert">{dataError}</p>}
-      <label className="search shop-search">
-        <Icon name="search" />
-        <input placeholder="Cari barang, buku, atau kebutuhan sekolah..." onFocus={() => navigate(`${base}/stock`)} />
-      </label>
+      <div className="shop-search-wrap">
+        <form className="search shop-search" role="search" onSubmit={(event) => {
+          event.preventDefault();
+          const value = productQuery.trim();
+          if (value) navigate(`${base}/stock?q=${encodeURIComponent(value)}`);
+          else navigate(`${base}/stock`);
+          setProductSearchOpen(false);
+        }}>
+          <Icon name="search" />
+          <input
+            value={productQuery}
+            onChange={(event) => { setProductQuery(event.target.value); setProductSearchOpen(true); }}
+            onFocus={() => setProductSearchOpen(true)}
+            onKeyDown={(event) => { if (event.key === "Escape") setProductSearchOpen(false); }}
+            placeholder="Cari produk sekolah..."
+            aria-label="Cari produk"
+            aria-expanded={productSearchOpen && Boolean(productQuery.trim())}
+            aria-controls="shop-product-search-results"
+          />
+          {productQuery && <button type="button" className="shop-search-clear" aria-label="Hapus pencarian" onClick={() => setProductQuery("")}>×</button>}
+        </form>
+        {productSearchOpen && productQuery.trim() && (
+          <div className="shop-search-results" id="shop-product-search-results">
+            {matchingProducts.length ? matchingProducts.map((product) => (
+              <Link key={product.id} to={`${base}/order?product=${product.id}`} onClick={() => setProductSearchOpen(false)}>
+                <ProductArt type={product.art} imageUrl={product.image_url} />
+                <span><b>{product.name}</b><small>{categoryLabel(product.category)} · {money(product.price)}</small></span>
+                <small>{stockLabel(product.stock)}</small>
+              </Link>
+            )) : (
+              <p>{productLoad.loading ? "Memuat katalog produk..." : "Produk tidak ditemukan."}</p>
+            )}
+            <Link className="shop-search-all" to={`${base}/stock?q=${encodeURIComponent(productQuery.trim())}`} onClick={() => setProductSearchOpen(false)}>
+              Lihat semua hasil untuk “{productQuery.trim()}”
+            </Link>
+          </div>
+        )}
+      </div>
       <div className="section-heading"><h2>{role === "parent" ? "Kebutuhan Sekolah" : "Kategori"}</h2><Link to={`${base}/stock`}>Lihat Semua ›</Link></div>
       <section className="category-grid">
         {categories.map((item) => <Link to={`${base}/stock?category=${item.id}`} key={item.id}><span><Icon name={item.icon} /></span>{item.label}</Link>)}
@@ -80,13 +124,17 @@ export function ShopStock({ role }: { role: Exclude<Role, "admin"> }) {
   const products = useProducts();
   const productLoad = useProductLoadState();
   const [params, setParams] = useSearchParams();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => params.get("q") || "");
   const requested = params.get("category");
   const category: CategoryId | typeof ALL_CATEGORIES = isCategoryId(requested)
     ? requested
     : ALL_CATEGORIES;
-  const selectCategory = (next: CategoryId | typeof ALL_CATEGORIES) =>
-    setParams(next === ALL_CATEGORIES ? {} : { category: next }, { replace: true });
+  const selectCategory = (next: CategoryId | typeof ALL_CATEGORIES) => {
+    const nextParams = new URLSearchParams(params);
+    if (next === ALL_CATEGORIES) nextParams.delete("category");
+    else nextParams.set("category", next);
+    setParams(nextParams, { replace: true });
+  };
   const list = useMemo(
     () =>
       products.filter((p) => {
