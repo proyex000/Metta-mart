@@ -5745,3 +5745,48 @@ a.order-submit {
     scroll-snap-align: start;
   }
 }
+
+
+/* Keep the other mobile horizontal navigation strips separated and scrollable. */
+@media (max-width: 767px) {
+  .role-shell--admin .settings-layout > aside {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .role-shell--admin .settings-layout > aside button {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .role-shell--admin .tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    max-width: 100%;
+    padding: 4px 2px 9px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .role-shell--admin .tabs button {
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: max-content;
+    white-space: nowrap;
+  }
+}
