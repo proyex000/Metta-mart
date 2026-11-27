@@ -205,6 +205,12 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Menu rows keep their natural height and sit at the top, like the admin menu,
+     instead of stretching to fill the whole sidebar. */
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: start;
 }
 
 .role-shell--parent .role-sidebar .role-account,
