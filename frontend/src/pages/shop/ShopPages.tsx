@@ -336,6 +336,7 @@ export function CreateOrder({ role }: { role: Exclude<Role, "admin"> }) {
       setCreatedCode(order.code);
       setRequestId(crypto.randomUUID());
       setSent(true);
+      window.dispatchEvent(new Event("mettamart:success-sound"));
       // Keep the catalogue stock in sync without turning a successful order into a false error.
       refreshProducts().catch(() => undefined);
     } catch (error) {
