@@ -459,3 +459,22 @@
     overflow: hidden;
   }
 }
+
+/* Parent and student account row: the divider spans exactly the row, so the avatar
+   lines up with its left edge, and only one divider is drawn at every width
+   (phones previously drew a second border-top on top of the pseudo-element line). */
+.role-shell--parent .role-account::before,
+.role-shell--student .role-account::before {
+  left: 0;
+  right: 0;
+}
+
+.role-shell--parent.role-shell .role-sidebar .role-account,
+.role-shell--student.role-shell .role-sidebar .role-account {
+  border-top: 0;
+}
+
+.role-shell--parent.role-shell .role-sidebar .role-account .role-account-link,
+.role-shell--student.role-shell .role-sidebar .role-account .role-account-link {
+  padding-inline: 0;
+}
