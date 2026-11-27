@@ -16,7 +16,11 @@ export type IconName =
   | "plus"
   | "menu"
   | "lock"
-  | "shirt";
+  | "shirt"
+  | "pencil"
+  | "bottle"
+  | "book"
+  | "grid";
 
 const paths: Record<IconName, ReactNode> = {
   home: (
@@ -89,6 +93,33 @@ const paths: Record<IconName, ReactNode> = {
     </>
   ),
   shirt: <path d="m8 3-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0Z" />,
+  pencil: (
+    <>
+      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" />
+      <path d="m15 5 4 4" />
+    </>
+  ),
+  bottle: (
+    <>
+      <path d="M10 2h4v3h-4Z" />
+      <path d="M10 5v2.5L8 10v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V10l-2-2.5V5" />
+      <path d="M8 14h8" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 19 }: { name: IconName; size?: number }) {
