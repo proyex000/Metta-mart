@@ -459,3 +459,68 @@
     overflow: hidden;
   }
 }
+
+/* Parent and student account row: the divider spans exactly the row, so the avatar
+   lines up with its left edge, and only one divider is drawn at every width
+   (phones previously drew a second border-top on top of the pseudo-element line). */
+.role-shell--parent .role-account::before,
+.role-shell--student .role-account::before {
+  left: 0;
+  right: 0;
+}
+
+.role-shell--parent.role-shell .role-sidebar .role-account,
+.role-shell--student.role-shell .role-sidebar .role-account {
+  border-top: 0;
+}
+
+.role-shell--parent.role-shell .role-sidebar .role-account .role-account-link,
+.role-shell--student.role-shell .role-sidebar .role-account .role-account-link {
+  padding-inline: 0;
+}
+
+/* Admin on phones: same single divider as parent/student. Desktop admin is unchanged. */
+@media (max-width: 767px) {
+  .role-shell--admin.role-shell .role-sidebar .role-account {
+    border-top: 0;
+  }
+
+  .role-shell--admin .role-account::before {
+    top: 6px;
+    left: 0;
+    right: 0;
+  }
+
+  .role-shell--admin.role-shell .role-sidebar .role-account .role-account-link {
+    padding-inline: 0;
+  }
+}
+
+/* Narrow tablets (sidebar 198-230px): tighten the account row a little so the full
+   "Pengaturan akun" hint is not cut off. */
+@media (min-width: 768px) and (max-width: 999px) {
+  .role-shell.role-shell .role-sidebar .role-account {
+    gap: 4px;
+  }
+
+  .role-shell.role-shell .role-sidebar .role-account .role-account-link {
+    gap: 4px;
+  }
+
+  .role-shell.role-shell .role-sidebar .role-account .role-account-link .role-avatar {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .role-shell.role-shell .role-sidebar .role-account .role-logout {
+    flex: 0 0 36px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .role-shell.role-shell .role-sidebar .role-account .role-account-link .role-account-hint {
+    font-size: 10px;
+  }
+}
