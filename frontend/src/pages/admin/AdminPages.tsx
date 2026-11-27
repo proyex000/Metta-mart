@@ -1112,6 +1112,7 @@ export function POS() {
         ...(paymentMethod === "cash" ? { cash_received: Number(cashReceived) } : {}),
       }, requestId);
       setReceipt(order); setCounts({}); setNote(""); setCashReceived(""); setRequestId(crypto.randomUUID());
+      window.dispatchEvent(new Event("mettamart:success-sound"));
       // The sale is already committed; a failed catalogue refresh must not report checkout failure.
       refreshProducts().catch(() => undefined);
     } catch (reason) {
