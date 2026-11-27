@@ -6,11 +6,11 @@ import type { IconName } from "../components/ui";
  * hardcoding their own lists. To add a category, append one entry below.
  */
 export const categories = [
-  { id: "alat-tulis", label: "Alat Tulis", icon: "box", legacy: ["ATK"] },
-  { id: "buku", label: "Buku", icon: "bag", legacy: [] },
-  { id: "minuman", label: "Minuman", icon: "box", legacy: [] },
+  { id: "alat-tulis", label: "Alat Tulis", icon: "pencil", legacy: ["ATK"] },
+  { id: "buku", label: "Buku", icon: "book", legacy: [] },
+  { id: "minuman", label: "Minuman", icon: "bottle", legacy: [] },
   { id: "seragam-sekolah", label: "Seragam Sekolah", icon: "shirt", legacy: ["Seragam"] },
-  { id: "lainnya", label: "Lainnya", icon: "box", legacy: [] },
+  { id: "lainnya", label: "Lainnya", icon: "grid", legacy: [] },
 ] as const satisfies readonly {
   id: string;
   label: string;
