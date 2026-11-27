@@ -524,3 +524,15 @@
     font-size: 10px;
   }
 }
+
+/* Shared navigation rhythm for admin, parent, and student on every viewport.
+   Keep each menu item at its natural height while stretching links to the
+   full sidebar width; the nav itself remains the independently scrollable area. */
+.role-shell .role-sidebar nav {
+  display: grid;
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+  align-content: start;
+  align-items: stretch;
+  gap: 8px;
+}
