@@ -67,16 +67,16 @@ function SoundEffects() {
       const button = target.closest("button, input[type='button'], input[type='submit'], input[type='reset']");
       if (!button || button.hasAttribute("disabled") || button.getAttribute("aria-disabled") === "true" || button.hasAttribute("data-sound-off")) return;
       const context = getAudioContext();
-      if (context) playTone(660, context.currentTime, 0.045, 0.035);
+      if (context) playTone(660, context.currentTime, 0.055, 0.11);
     };
 
     const onSuccess = () => {
       const context = getAudioContext();
       if (!context) return;
       const start = context.currentTime + 0.015;
-      playTone(523.25, start, 0.13, 0.065);
-      playTone(659.25, start + 0.105, 0.13, 0.065);
-      playTone(783.99, start + 0.21, 0.19, 0.065);
+      playTone(523.25, start, 0.15, 0.18);
+      playTone(659.25, start + 0.12, 0.15, 0.18);
+      playTone(783.99, start + 0.24, 0.22, 0.18);
     };
 
     document.addEventListener("click", onClick, true);
